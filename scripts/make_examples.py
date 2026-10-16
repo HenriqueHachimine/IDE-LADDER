@@ -96,9 +96,34 @@ def counters() -> Project:
     return p
 
 
+def relay_chase() -> Project:
+    """Teste de hardware: liga um rele por vez, 1 s cada, em sequencia (Q0.0 ... Q0.7)."""
+    p = Project(name="Teste de reles", description=(
+        "Liga cada rele por 1 s, em sequencia, enquanto I0.0 estiver ativo. Verifica mapeamento e polaridade "
+        "das 8 saidas (docs/hardware-test-procedure.md, ensaio H2)."))
+    p.rungs = [Rung([Contact("XIC", "I0.0"), Contact("XIO", "T7.DN")], [TimerBox("TON", "T0", 1000)],
+                    "T0..T7 em cascata; T7 reinicia o ciclo")]
+    for k in range(1, 8):
+        p.rungs.append(Rung([Contact("XIC", f"T{k - 1}.DN")], [TimerBox("TON", f"T{k}", 1000)]))
+    p.rungs.append(Rung([Contact("XIC", "I0.0"), Contact("XIO", "T0.DN")], [Coil("OTE", "Q0.0")]))
+    for k in range(1, 8):
+        p.rungs.append(Rung([Contact("XIC", f"T{k - 1}.DN"), Contact("XIO", f"T{k}.DN")],
+                            [Coil("OTE", f"Q0.{k}")]))
+    return p
+
+
+def input_mirror() -> Project:
+    """Teste de hardware: cada entrada Ik aciona o rele Qk."""
+    p = Project(name="Espelho de entradas", description=(
+        "Ik -> Qk. Verifica mapeamento e polaridade das 8 entradas (ensaio H1)."))
+    p.rungs = [Rung([Contact("XIC", f"I0.{k}")], [Coil("OTE", f"Q0.{k}")]) for k in range(8)]
+    return p
+
+
 def main() -> int:
     targets = {"demo/demonstracao.ladproj": demo(), "combinational/portas_logicas.ladproj": combinational(),
-               "timers/temporizadores.ladproj": timers(), "counters/contadores.ladproj": counters()}
+               "timers/temporizadores.ladproj": timers(), "counters/contadores.ladproj": counters(),
+               "hardware/teste_reles.ladproj": relay_chase(), "hardware/espelho_entradas.ladproj": input_mirror()}
     for rel, project in targets.items():
         result = compile_project(project)
         if not result.ok:

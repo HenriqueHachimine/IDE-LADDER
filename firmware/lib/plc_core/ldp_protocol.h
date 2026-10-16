@@ -1,0 +1,55 @@
+/* ARQUIVO GERADO por scripts/gen_isa_header.py a partir de
+ * shared/specifications/protocol.json. NAO EDITE MANUALMENTE. */
+#ifndef LDP_PROTOCOL_H
+#define LDP_PROTOCOL_H
+
+#define LDP_VERSION 1u
+#define LDP_SOF0 0xA5u
+#define LDP_SOF1 0x5Au
+#define LDP_MAX_PAYLOAD 1024u
+#define LDP_MAX_CHUNK 512u
+#define LDP_FRAME_TIMEOUT_MS 100u
+#define LDP_LOAD_SESSION_TIMEOUT_MS 5000u
+#define LDP_RESPONSE_FLAG 0x80u
+#define LDP_ERROR_FLAG 0x01u
+
+#define LDP_CMD_INFO 1u
+#define LDP_CMD_STATUS 2u
+#define LDP_CMD_SET_MODE 3u
+#define LDP_CMD_CLEAR_FAULT 4u
+#define LDP_CMD_LOAD_BEGIN 16u
+#define LDP_CMD_LOAD_CHUNK 17u
+#define LDP_CMD_LOAD_END 18u
+#define LDP_CMD_LOAD_COMMIT 19u
+#define LDP_CMD_LOAD_ABORT 20u
+#define LDP_CMD_READ_IO 32u
+#define LDP_CMD_READ_VARS 33u
+#define LDP_CMD_WRITE_MARKER 34u
+#define LDP_CMD_TEST_BEGIN 48u
+#define LDP_CMD_TEST_SCAN 49u
+#define LDP_CMD_SIM_SET_INPUTS 126u
+
+#define LDP_ERR_UNKNOWN_COMMAND 1u
+#define LDP_ERR_BAD_LENGTH 2u
+#define LDP_ERR_BAD_STATE 3u
+#define LDP_ERR_NO_PROGRAM 4u
+#define LDP_ERR_LOAD_TOO_LARGE 5u
+#define LDP_ERR_BAD_OFFSET 6u
+#define LDP_ERR_IMAGE_CRC 7u
+#define LDP_ERR_IMAGE_INVALID 8u
+#define LDP_ERR_INCOMPATIBLE 9u
+#define LDP_ERR_STORAGE 10u
+#define LDP_ERR_FAULT_ACTIVE 11u
+#define LDP_ERR_BAD_ARGUMENT 12u
+
+#define PLC_STATE_STOP 0u
+#define PLC_STATE_RUN 1u
+#define PLC_STATE_PROGRAM_LOADING 2u
+#define PLC_STATE_FAULT 3u
+
+#define PLC_FAULT_NONE 0u
+#define PLC_FAULT_SCAN_TIMEOUT 1u
+#define PLC_FAULT_PROGRAM_CORRUPT 2u
+#define PLC_FAULT_INTERNAL 3u
+
+#endif /* LDP_PROTOCOL_H */

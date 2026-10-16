@@ -18,6 +18,9 @@ from ..model import edit
 from ..model.project import (Contact, CounterBox, Project, ProjectFormatError, ResetBox, Symbol,
                              TimerBox, Coil)
 from ..sim.simulator import SimState, Simulator
+from ..comm.monitor import MonitorSource
+from ..comm.protocol import DevState
+from .device_panel import DevicePanel, DeviceSession
 from .dialogs import ElementDialog, ProjectDialog
 from .ladder_view import COND_TOOLS, OUTPUT_TOOLS, LadderView
 from .palette import Palette
@@ -58,6 +61,11 @@ class MainWindow(QMainWindow):
         self.timer.setInterval(30)
         self.timer.timeout.connect(self.tick)
         self.timer.start()
+        self.device_ticks = 0
+        self.device_timer = QTimer(self)
+        self.device_timer.setInterval(200)
+        self.device_timer.timeout.connect(self.device_tick)
+        self.device_timer.start()
         self.refresh()
 
     # ================================================================ acoes
@@ -98,6 +106,7 @@ class MainWindow(QMainWindow):
         A("zoom_in", "Aproximar", lambda: self.view.set_zoom(self.view.zoom * 1.2), QKeySequence.ZoomIn)
         A("zoom_out", "Afastar", lambda: self.view.set_zoom(self.view.zoom / 1.2), QKeySequence.ZoomOut)
         A("zoom_reset", "Zoom 100%", lambda: self.view.set_zoom(1.0), "Ctrl+0")
+        A("device_transfer", "Transferir programa ao dispositivo", lambda: self.device_transfer(), "F8")
         A("about", "Sobre", self.about)
         A("help", "Referencia das instrucoes", self.instruction_help, "F1")
 
@@ -123,6 +132,8 @@ class MainWindow(QMainWindow):
         for k in ("sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop"):
             m.addAction(a[k])
         self.device_menu = mb.addMenu("&Dispositivo")
+        self.device_menu.addAction(a["device_transfer"])
+        self.device_menu.addAction(self.device_dock.toggleViewAction())
         m = mb.addMenu("E&xibir")
         for k in ("zoom_in", "zoom_out", "zoom_reset"):
             m.addAction(a[k])
@@ -173,6 +184,22 @@ class MainWindow(QMainWindow):
         self.bottom_tabs.addTab(self.messages, "Mensagens")
         self.bottom_tabs.addTab(sym_box, "Variaveis (simbolos)")
         self.bottom_dock = self._dock("Projeto", self.bottom_tabs, Qt.BottomDockWidgetArea)
+
+        self.session = DeviceSession(self)
+        self.device_panel = DevicePanel(self.session)
+        self.device_dock = self._dock("Dispositivo", self.device_panel, Qt.RightDockWidgetArea)
+        self.tabifyDockWidget(self.sim_dock, self.device_dock)
+        self.sim_dock.raise_()
+        self.device_panel.transferRequested.connect(self.device_transfer)
+        self.device_panel.monitorToggled.connect(self.on_monitor_toggled)
+        self.session.snapshot.connect(self.on_snapshot)
+        self.session.jobDone.connect(self.on_job_done)
+        self.session.jobFailed.connect(self.on_job_failed)
+        self.session.disconnected.connect(lambda _: self._update_live())
+        self.session.progress.connect(self.on_transfer_progress)
+        self.monitoring = False
+        self.last_snapshot = None
+        self.progress_dialog = None
         self.resizeDocks([self.palette_dock, self.sim_dock], [180, 380], Qt.Horizontal)
         self.resizeDocks([self.bottom_dock], [150], Qt.Vertical)
 
@@ -189,6 +216,8 @@ class MainWindow(QMainWindow):
         self.view.set_errors({d.element_id for d in (self.result.errors if self.result else []) if d.element_id})
         self._fill_symbols()
         self.sim_panel.io.configure(self.project, self.sim.result if self.sim else self.result)
+        self.device_panel.io.configure(self.project, self.result)
+        self.device_panel.expected_build_id = self.result.build_id if self.result and self.result.ok else None
         self._update_live()
         self._update_title()
         self._update_actions()
@@ -227,9 +256,18 @@ class MainWindow(QMainWindow):
         else:
             self.status_compile.setText(f"{len(self.result.errors)} erro(s) de compilacao")
 
+    def _monitor_source(self) -> MonitorSource | None:
+        snap, r = self.last_snapshot, self.result
+        if (self.monitoring and self.device_panel.connected and snap is not None and r is not None and r.ok
+                and snap.build_id == r.build_id):
+            return MonitorSource(snap, r)
+        return None
+
     def _update_live(self) -> None:
         if self.sim is not None and self.sim.active:
             self.view.update_live(self.sim)
+        elif (src := self._monitor_source()) is not None:
+            self.view.update_live(src, rail=src.s.state == DevState.RUN)
         else:
             self.view.update_live(None)
         self.sim_panel.refresh(self.sim)
@@ -469,6 +507,7 @@ class MainWindow(QMainWindow):
                 f"{TARGET_FORMAT}, id 0x{self.result.build_id:08x}."))
         self.bottom_tabs.setCurrentIndex(0)
         self.view.set_errors({d.element_id for d in self.result.errors if d.element_id})
+        self.device_panel.expected_build_id = self.result.build_id if self.result.ok else None
         self._update_actions()
         return self.result.ok
 
@@ -545,6 +584,90 @@ class MainWindow(QMainWindow):
             ms = self.clock.restart()
             self.sim.advance(ms, self.sim_panel.speed_factor)
             self._update_live()
+
+    # ============================================================ dispositivo
+    def device_tick(self) -> None:
+        """Polling: 200 ms com monitor ligado, 1 s sem monitor, reconexao a cada 2 s."""
+        self.device_ticks += 1
+        if self.device_panel.connected:
+            if self.monitoring or self.device_ticks % 5 == 0:
+                self.session.poll()
+        elif self.session.auto_reconnect and self.device_ticks % 10 == 0:
+            self.session.poll()
+
+    def on_monitor_toggled(self, on: bool) -> None:
+        self.monitoring = on
+        if on and (self.result is None or not self.result.ok):
+            self.compile()
+        self._update_live()
+
+    def on_snapshot(self, snap) -> None:
+        self.last_snapshot = snap
+        src = MonitorSource(snap, self.result or CompileResult())
+        self.device_panel.io.update_values(snap.inputs, snap.q_logical, snap.q_commanded, src.timer_state,
+                                           src.counter_state, src.read_bit)
+        if self.monitoring:
+            self._update_live()
+
+    def device_transfer(self) -> None:
+        if not self.device_panel.connected:
+            QMessageBox.information(self, "Transferir", "Conecte-se a um dispositivo no painel Dispositivo.")
+            self.device_dock.show()
+            self.device_dock.raise_()
+            return
+        if not self.compile():
+            QMessageBox.warning(self, "Transferir", "O programa tem erros e nao sera transferido.\n"
+                                                    "Veja a aba Mensagens.")
+            return
+        st = self.device_panel.last_status
+        if st is not None and st.state == DevState.RUN:
+            answer = QMessageBox.question(
+                self, "Transferir", "O dispositivo esta em RUN. Ele sera colocado em STOP (saidas no estado "
+                                    "seguro) antes da transferencia. Continuar?")
+            if answer != QMessageBox.Yes:
+                return
+        image = self.result.image
+        from PySide6.QtWidgets import QProgressDialog
+        self.progress_dialog = QProgressDialog("Transferindo programa...", None, 0, len(image), self)
+        self.progress_dialog.setWindowTitle("Transferencia")
+        self.progress_dialog.setMinimumDuration(0)
+        self.progress_dialog.setValue(0)
+        session = self.session
+        self.session.run_on_client("transfer", lambda c: c.download(
+            image, progress=lambda a, b: session.progress.emit(a, b), stop_if_running=True))
+
+    def on_transfer_progress(self, sent: int, total: int) -> None:
+        if self.progress_dialog is not None:
+            self.progress_dialog.setMaximum(total)
+            self.progress_dialog.setValue(sent)
+
+    def _close_progress(self) -> None:
+        if self.progress_dialog is not None:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+    def on_job_done(self, tag: str, result) -> None:
+        if tag == "transfer":
+            self._close_progress()
+            QMessageBox.information(self, "Transferencia concluida", (
+                f"Programa transferido, validado pelo firmware e ativado.\n\n"
+                f"{result.bytes_sent} bytes em {result.chunks} bloco(s), {result.retries} retransmissao(oes)\n"
+                f"build_id 0x{result.build_id:08x}, CRC-32 0x{result.crc:08x}\n\n"
+                f"O dispositivo esta em STOP. Use RUN para executar."))
+        if tag in ("transfer", "mode", "connect"):
+            self.session.poll()
+
+    def on_job_failed(self, tag: str, message: str) -> None:
+        if tag == "transfer":
+            self._close_progress()
+            QMessageBox.critical(self, "Transferencia falhou",
+                                 f"{message}\n\nO programa anterior do dispositivo foi preservado.")
+        elif tag == "connect":
+            self.device_panel.link.setText(f"Falha ao conectar: {message}")
+            self.session.auto_reconnect = False
+            self.device_panel._update_buttons()
+        elif tag not in ("poll",):
+            self.statusBar().showMessage(f"Dispositivo: {message}", 6000)
 
     # =============================================================== arquivos
     def maybe_save(self) -> bool:
@@ -648,6 +771,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         if self.maybe_save():
+            self.session.close()
             event.accept()
         else:
             event.ignore()

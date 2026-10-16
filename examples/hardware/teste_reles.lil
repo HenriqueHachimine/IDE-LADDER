@@ -1,0 +1,87 @@
+; Teste de reles - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0x7074030f
+.timer T0 TON 1000
+.timer T1 TON 1000
+.timer T2 TON 1000
+.timer T3 TON 1000
+.timer T4 TON 1000
+.timer T5 TON 1000
+.timer T6 TON 1000
+.timer T7 TON 1000
+SOR ; rede 0
+XIC I0.0
+XIO T7.DN
+TON T0
+EOR
+SOR ; rede 1
+XIC T0.DN
+TON T1
+EOR
+SOR ; rede 2
+XIC T1.DN
+TON T2
+EOR
+SOR ; rede 3
+XIC T2.DN
+TON T3
+EOR
+SOR ; rede 4
+XIC T3.DN
+TON T4
+EOR
+SOR ; rede 5
+XIC T4.DN
+TON T5
+EOR
+SOR ; rede 6
+XIC T5.DN
+TON T6
+EOR
+SOR ; rede 7
+XIC T6.DN
+TON T7
+EOR
+SOR ; rede 8
+XIC I0.0
+XIO T0.DN
+OTE Q0.0
+EOR
+SOR ; rede 9
+XIC T0.DN
+XIO T1.DN
+OTE Q0.1
+EOR
+SOR ; rede 10
+XIC T1.DN
+XIO T2.DN
+OTE Q0.2
+EOR
+SOR ; rede 11
+XIC T2.DN
+XIO T3.DN
+OTE Q0.3
+EOR
+SOR ; rede 12
+XIC T3.DN
+XIO T4.DN
+OTE Q0.4
+EOR
+SOR ; rede 13
+XIC T4.DN
+XIO T5.DN
+OTE Q0.5
+EOR
+SOR ; rede 14
+XIC T5.DN
+XIO T6.DN
+OTE Q0.6
+EOR
+SOR ; rede 15
+XIC T6.DN
+XIO T7.DN
+OTE Q0.7
+EOR

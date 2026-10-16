@@ -1,0 +1,367 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Teste de reles",
+  "description": "Liga cada rele por 1 s, em sequencia, enquanto I0.0 estiver ativo. Verifica mapeamento e polaridade das 8 saidas (docs/hardware-test-procedure.md, ensaio H2).",
+  "version": "0.1.0",
+  "created": "2026-10-16T12:10:56",
+  "modified": "2026-10-16T12:10:56",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [],
+  "rungs": [
+    {
+      "comment": "T0..T7 em cascata; T7 reinicia o ciclo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.0"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T7.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T0",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T0.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T1",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T2",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T2.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T3",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T3.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T4",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T4.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T5",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T5.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T6",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T6.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T7",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.0"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T0.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.0"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T0.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T1.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T2.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T2.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T3.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.3"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T3.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T4.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.4"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T4.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T5.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.5"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T5.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T6.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.6"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T6.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T7.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.7"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-16T12:10:56",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 16
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0x7074030f",
+    "size": 392,
+    "instructions": 73,
+    "date": "2026-10-16T12:10:56"
+  }
+}

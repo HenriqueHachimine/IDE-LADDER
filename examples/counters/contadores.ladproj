@@ -4,8 +4,8 @@
   "name": "Contadores",
   "description": "CTU, CTD e reset.",
   "version": "0.1.0",
-  "created": "2026-10-16T11:54:15",
-  "modified": "2026-10-16T11:54:15",
+  "created": "2026-10-16T12:10:56",
+  "modified": "2026-10-16T12:10:56",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -116,7 +116,7 @@
   ],
   "history": [
     {
-      "date": "2026-10-16T11:54:15",
+      "date": "2026-10-16T12:10:56",
       "action": "gerado por scripts/make_examples.py",
       "rungs": 5
     }
@@ -127,6 +127,6 @@
     "build_id": "0xe8d4c0b6",
     "size": 148,
     "instructions": 24,
-    "date": "2026-10-16T11:54:15"
+    "date": "2026-10-16T12:10:56"
   }
 }

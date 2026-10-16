@@ -1,0 +1,54 @@
+{
+  "$comment": "Contrato do protocolo LDP (docs/communication-protocol.md). Desktop le este arquivo; o firmware usa ldp_protocol.h gerado por scripts/gen_isa_header.py.",
+  "version": 1,
+  "sof": [165, 90],
+  "max_payload": 1024,
+  "max_chunk": 512,
+  "frame_timeout_ms": 100,
+  "load_session_timeout_ms": 5000,
+  "response_flag": 128,
+  "error_flag": 1,
+  "commands": [
+    {"code": 1,  "name": "INFO"},
+    {"code": 2,  "name": "STATUS"},
+    {"code": 3,  "name": "SET_MODE"},
+    {"code": 4,  "name": "CLEAR_FAULT"},
+    {"code": 16, "name": "LOAD_BEGIN"},
+    {"code": 17, "name": "LOAD_CHUNK"},
+    {"code": 18, "name": "LOAD_END"},
+    {"code": 19, "name": "LOAD_COMMIT"},
+    {"code": 20, "name": "LOAD_ABORT"},
+    {"code": 32, "name": "READ_IO"},
+    {"code": 33, "name": "READ_VARS"},
+    {"code": 34, "name": "WRITE_MARKER"},
+    {"code": 48, "name": "TEST_BEGIN"},
+    {"code": 49, "name": "TEST_SCAN"},
+    {"code": 126, "name": "SIM_SET_INPUTS"}
+  ],
+  "errors": [
+    {"code": 1,  "name": "UNKNOWN_COMMAND", "description": "Comando desconhecido"},
+    {"code": 2,  "name": "BAD_LENGTH",      "description": "Payload com tamanho invalido"},
+    {"code": 3,  "name": "BAD_STATE",       "description": "Comando nao permitido no estado atual"},
+    {"code": 4,  "name": "NO_PROGRAM",      "description": "Nao ha programa valido no dispositivo"},
+    {"code": 5,  "name": "LOAD_TOO_LARGE",  "description": "Programa maior que o maximo suportado"},
+    {"code": 6,  "name": "BAD_OFFSET",      "description": "Bloco fora de ordem ou transferencia incompleta"},
+    {"code": 7,  "name": "IMAGE_CRC",       "description": "CRC-32 do programa recebido nao confere"},
+    {"code": 8,  "name": "IMAGE_INVALID",   "description": "Programa rejeitado pela validacao LDRB"},
+    {"code": 9,  "name": "INCOMPATIBLE",    "description": "Programa usa mais E/S do que o hardware possui"},
+    {"code": 10, "name": "STORAGE",         "description": "Falha ao gravar o programa na memoria flash"},
+    {"code": 11, "name": "FAULT_ACTIVE",    "description": "Dispositivo em FAULT; limpe a falha primeiro"},
+    {"code": 12, "name": "BAD_ARGUMENT",    "description": "Argumento fora da faixa"}
+  ],
+  "states": [
+    {"code": 0, "name": "STOP"},
+    {"code": 1, "name": "RUN"},
+    {"code": 2, "name": "PROGRAM_LOADING"},
+    {"code": 3, "name": "FAULT"}
+  ],
+  "faults": [
+    {"code": 0, "name": "NONE",            "description": "Sem falha"},
+    {"code": 1, "name": "SCAN_TIMEOUT",    "description": "Varredura excedeu o tempo maximo (watchdog)"},
+    {"code": 2, "name": "PROGRAM_CORRUPT", "description": "Programa gravado na flash e invalido"},
+    {"code": 3, "name": "INTERNAL",        "description": "Erro interno do firmware"}
+  ]
+}

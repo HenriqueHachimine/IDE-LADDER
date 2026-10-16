@@ -1,118 +1,132 @@
-# Protocolo de comunicação Desktop ↔ ESP32 — LDP v0.1 (rascunho)
+# Protocolo de comunicação Desktop ↔ ESP32 — LDP v1
 
-> **Estado:** contrato proposto na Etapa 1; será implementado e testado na
-> Etapa 6. Mudanças até lá devem atualizar este documento primeiro.
+Implementação: firmware `firmware/lib/plc_core/` (`ldp_frame.c`, `plc_runtime.c`),
+Desktop `desktop/src/ladderide/comm/`. Constantes: `shared/specifications/protocol.json`
+(gera `ldp_protocol.h`). Verificado pelos testes `desktop/tests/test_comm.py`
+contra o dispositivo virtual (o mesmo código C do firmware rodando no PC).
 
 ## 1. Meios físicos
 
 | Meio | Uso | Situação |
 |---|---|---|
-| USB-C → UART0 do ESP32 (115 200 bps, 8N1) | programação, transferência, monitor | **principal** |
-| Wi-Fi, TCP porta 5020 | mesmos quadros LDP sobre TCP | extensão (Etapa 7+) |
-| RS-485 (UART2, GPIO18/19, DE no GPIO32) | **Modbus RTU escravo, somente leitura** para supervisórios | opcional |
+| USB-C → UART0 (115 200 bps, 8N1) | transferência, controle, monitor | implementado |
+| Processo local (stdin/stdout) | dispositivo virtual para testes e aulas sem placa | implementado |
+| TCP (mesmos quadros) | transporte pronto no Desktop (`TcpTransport`) | **firmware ainda não implementa Wi-Fi** |
+| RS-485 (UART2) | Modbus RTU **somente leitura** para supervisórios | implementado (não testado em hardware) |
 
-Modbus é usado **apenas** para monitoramento por terceiros (entradas, saídas,
-acumuladores). A transferência de programas usa exclusivamente o LDP: Modbus
-não tem semântica transacional para carga e ativação de programa.
+Modbus **não** é usado para transferir programas (não tem semântica de carga,
+validação e ativação). Ver §7.
 
-### 1.1 Cuidados específicos da UART0
+### 1.1 Cuidados com a UART0
 
-- O conversor USB-serial da placa normalmente liga **DTR/RTS a EN/GPIO0**
-  (auto-reset). Abrir a porta com DTR/RTS ativos **reinicia o ESP32**. O Desktop
-  deve abrir a porta com `dtr=False, rts=False` (pyserial: configurar antes de
-  `open()`). *Pendente confirmar no hardware.*
-- A ROM do ESP32 imprime mensagens de boot em 115 200 bps na UART0. O
-  firmware desliga logs na UART0 após o boot; o enquadramento abaixo descarta
-  qualquer lixo até o próximo cabeçalho válido.
+- Abrir a porta com DTR/RTS ativos reinicia o ESP32 (circuito de auto-reset).
+  `SerialTransport` configura `dtr=False, rts=False` **antes** de abrir.
+- A ROM imprime mensagens no boot; o firmware desliga os logs
+  (`CORE_DEBUG_LEVEL=0`, `esp_log_level_set(NONE)`) e o analisador descarta
+  bytes até o próximo cabeçalho válido.
 
 ## 2. Quadro
 
 ```
-+------+------+-----+------+-----+-------+--------+-----------+-----------+
-| 0xA5 | 0x5A | ver | type | seq | flags | len16  | payload   | crc16     |
-+------+------+-----+------+-----+-------+--------+-----------+-----------+
-   1      1     1     1      1     1       2 (LE)   0..1024     2 (LE)
+A5 5A | ver | type | seq | flags | len (u16 LE) | payload (0..1024) | crc16 (LE)
 ```
 
-- `ver` = 1. `crc16` = CRC-16/MODBUS sobre `ver … payload`.
-- Resposta: `type | 0x80`, mesmo `seq`. `flags` bit 0 = erro; nesse caso
-  `payload = [codigo_erro u8, detalhe...]`.
-- Quadro com CRC inválido, `len > 1024` ou cabeçalho truncado por mais de
-  100 ms é descartado **sem resposta** (o Desktop detecta por timeout).
-- **Idempotência:** o dispositivo guarda a última resposta; um pedido com o
-  mesmo `seq` do anterior é respondido novamente **sem reexecutar** (seguro
-  para retransmissões após timeout).
+- `ver` = 1. CRC-16/MODBUS sobre `ver … payload`.
+- Resposta: `type | 0x80`, mesmo `seq`. `flags` bit 0 = erro, com
+  `payload = [código u8, detalhe...]`.
+- Quadros com CRC errado, versão diferente, `len > 1024` ou pausa > 100 ms no
+  meio são descartados **sem resposta**; o Desktop detecta por timeout.
+- **Idempotência:** o dispositivo guarda a última resposta. Pedido com o mesmo
+  `seq` e `type` do anterior é respondido de novo **sem reexecutar**. O Desktop
+  inicia `seq` em valor aleatório e reenvia com o mesmo `seq` após timeout
+  (timeout 300–600 ms, 3 retransmissões).
 
-Temporização do Desktop: timeout de resposta 300 ms; até 3 retransmissões;
-falha → estado "desconectado" na interface.
+## 3. Comandos (todos os inteiros little-endian)
 
-## 3. Comandos
+| type | Nome | Pedido | Resposta |
+|---|---|---|---|
+| 0x01 | INFO | — | `u8 protocolo, u8 ldrb_major, u8 ldrb_minor, u8 n_in, u8 n_out, u16 max_imagem, u16 max_bloco, u16 periodo_ms, str firmware, str hardware` (str = u8 tamanho + ASCII) |
+| 0x02 | STATUS | — | `u8 estado, u8 falha, u8 tem_programa, u8 modo_teste, u32 build_id, u32 crc, u32 varreduras, u32 exec_us, u32 exec_max_us, u32 atrasos, u32 uptime_ms, u16 periodo_ms, u32 intervalo_max_us` |
+| 0x03 | SET_MODE | `u8 0=STOP 1=RUN` | `u8 estado` |
+| 0x04 | CLEAR_FAULT | — | `u8 estado` |
+| 0x10 | LOAD_BEGIN | `u32 tamanho, u32 crc32` | `u16 max_bloco` |
+| 0x11 | LOAD_CHUNK | `u32 offset, dados (≤ 512)` | `u32 bytes_recebidos` |
+| 0x12 | LOAD_END | — | vazio (validado) |
+| 0x13 | LOAD_COMMIT | — | `u32 build_id, u32 crc` |
+| 0x14 | LOAD_ABORT | — | `u8 estado` |
+| 0x20 | READ_IO | — | `u8 estado, u16 entradas, u16 Q_lógico, u16 Q_comandado` |
+| 0x21 | READ_VARS | — | instantâneo (§4) |
+| 0x22 | WRITE_MARKER | `u16 índice, u8 valor` | vazio — **somente área M** |
+| 0x30 | TEST_BEGIN | — | vazio — partida a frio da VM em modo teste (exige STOP) |
+| 0x31 | TEST_SCAN | `u16 entradas, u32 dt_ms` | instantâneo (§4) após uma varredura |
+| 0x7E | SIM_SET_INPUTS | `u16 entradas` | vazio — **só no dispositivo virtual** |
 
-| type | Nome | Payload do pedido | Resposta | Estados permitidos |
-|---|---|---|---|---|
-| 0x01 | INFO | — | versões de firmware/protocolo/LDRB, id do hardware, nº de E/S, limites | todos |
-| 0x02 | STATUS | — | estado, código de falha, `build_id` e CRC do programa ativo, nº de varreduras, tempo de varredura (último/máx), *uptime* | todos |
-| 0x03 | SET_MODE | u8: 0 STOP, 1 RUN | estado resultante | RUN exige programa válido e sem FAULT |
-| 0x04 | CLEAR_FAULT | — | estado | FAULT → STOP |
-| 0x10 | LOAD_BEGIN | u32 tamanho, u32 crc32, u32 build_id | tamanho máximo de bloco | STOP → PROGRAM_LOADING |
-| 0x11 | LOAD_CHUNK | u32 offset, dados | próximo offset esperado | PROGRAM_LOADING |
-| 0x12 | LOAD_END | — | OK, ou erro + código LDRB + índice | PROGRAM_LOADING |
-| 0x13 | LOAD_COMMIT | — | `build_id`, CRC ativo | após LOAD_END OK |
-| 0x14 | LOAD_ABORT | — | estado | PROGRAM_LOADING → STOP |
-| 0x20 | READ_IO | — | máscaras I, Q lógicas, Q comandadas ao hardware, estado | todos |
-| 0x21 | READ_VARS | u16 offset, u16 qtd por seção | M, temporizadores, contadores, `power[]` paginados | todos |
-| 0x22 | WRITE_MARKER | u16 índice, u8 valor | — | RUN/STOP; **somente área M** |
+Estados permitidos: RUN exige programa válido e não estar em FAULT; carga
+exige STOP; TEST_* exigem STOP (as saídas físicas permanecem no estado seguro).
+Não existe comando para forçar entradas ou saídas físicas.
 
-Não há comando para forçar entradas ou saídas físicas na v1 (separação entre
-monitoramento e controle; ver `docs/architecture.md`).
-
-## 4. Transferência transacional
+## 4. Instantâneo (READ_VARS / TEST_SCAN), ≤ 630 bytes
 
 ```
-Desktop                                   ESP32
-  INFO  ─────────────────────────────────▶  confere versão LDRB/E/S
-  SET_MODE STOP ─────────────────────────▶  saídas → estado seguro
-  LOAD_BEGIN(size, crc, id) ─────────────▶  PROGRAM_LOADING, buffer de staging zerado
-  LOAD_CHUNK(0, …) ──────────────────────▶  grava no staging, responde próximo offset
-  …                                         (offset repetido = reconfirmado; fora de ordem = erro BAD_OFFSET)
-  LOAD_END ──────────────────────────────▶  confere tamanho e CRC-32; lv_image_validate();
-                                            confere n_inputs/n_outputs ≤ hardware
-  LOAD_COMMIT ───────────────────────────▶  grava /prog.new, fsync, renomeia → /prog.bin,
-                                            ativa; estado STOP
-  STATUS ────────────────────────────────▶  Desktop confirma build_id e CRC
+u8 estado, u8 falha, u32 varreduras, u16 entradas, u16 Q_lógico, u16 Q_comandado,
+u32 build_id, u32 crc, u8 modo_teste, u8 reservado,
+u16 n_M,  ceil(n_M/8) bytes de bits M
+u8 n_T,   n_T × (u32 ACC, u8 EN|TT<<1|DN<<2)
+u8 n_C,   n_C × (i32 ACC, u8 DN|OV<<1|UN<<2|borda<<3)
+u16 n_instr, ceil(n_instr/8) bytes de energia por instrução (RLO)
 ```
 
-- O programa ativo **só é substituído no COMMIT**; qualquer falha anterior
-  (timeout, CRC, validação, desconexão) mantém o programa anterior.
-- Sessão de carga sem tráfego por 5 s → aborto automático, volta a STOP.
-- Reinício do ESP32 durante a carga: o staging (RAM) é perdido; o programa
-  anterior em flash permanece.
+O Desktop converte o instantâneo para o mesmo texto de `LadderVM.dump_line()`
+(`Snapshot.dump_line`) para as comparações de equivalência.
 
-## 5. Códigos de erro do protocolo
+## 5. Transferência transacional
+
+```
+INFO        → confere versão LDRB e nº de E/S (o cliente recusa antes de enviar)
+STATUS      → se RUN: SET_MODE STOP (com confirmação do usuário)
+LOAD_BEGIN  → PROGRAM_LOADING; staging em RAM
+LOAD_CHUNK* → blocos sequenciais; reenvio do último bloco é aceito; fora de ordem → BAD_OFFSET
+LOAD_END    → tamanho completo? CRC-32 confere? lv_image_validate()? E/S compatíveis?
+LOAD_COMMIT → grava /prog.new, renomeia sobre /prog.bin (atômico), ativa; estado STOP
+STATUS      → o Desktop confirma build_id e CRC
+```
+
+- O programa ativo só muda no COMMIT; qualquer falha anterior o preserva
+  (testes: CRC errado, imagem inválida, queda de energia no meio da carga).
+- Sessão de carga sem tráfego por 5 s volta a STOP automaticamente.
+- Em falha, o cliente envia LOAD_ABORT (melhor esforço).
+
+## 6. Códigos de erro
 
 | Código | Nome | Significado |
 |---|---|---|
-| 1 | UNKNOWN_COMMAND | `type` desconhecido |
-| 2 | BAD_LENGTH | payload com tamanho errado |
+| 1 | UNKNOWN_COMMAND | comando desconhecido |
+| 2 | BAD_LENGTH | payload com tamanho inválido |
 | 3 | BAD_STATE | comando não permitido no estado atual |
-| 4 | NO_PROGRAM | RUN sem programa válido |
-| 5 | LOAD_TOO_LARGE | tamanho > `LV_MAX_IMAGE_SIZE` |
-| 6 | BAD_OFFSET | bloco fora de ordem ou além do tamanho |
-| 7 | IMAGE_CRC | CRC-32 recebido ≠ declarado |
-| 8 | IMAGE_INVALID | validação LDRB falhou (detalhe: código + índice) |
+| 4 | NO_PROGRAM | não há programa válido |
+| 5 | LOAD_TOO_LARGE | programa maior que 8 740 bytes |
+| 6 | BAD_OFFSET | bloco fora de ordem / transferência incompleta |
+| 7 | IMAGE_CRC | CRC-32 do programa recebido não confere |
+| 8 | IMAGE_INVALID | validação LDRB falhou (detalhe: `u8 código LDRB, i32 índice`) |
 | 9 | INCOMPATIBLE | programa usa mais E/S que o hardware |
-| 10 | STORAGE | falha de gravação em flash |
-| 11 | FAULT_ACTIVE | comando bloqueado por falha ativa |
+| 10 | STORAGE | falha ao gravar na flash |
+| 11 | FAULT_ACTIVE | dispositivo em FAULT |
+| 12 | BAD_ARGUMENT | argumento fora da faixa |
 
-## 6. Modbus RTU (opcional, somente leitura)
+Falhas do dispositivo (`STATUS.falha`): 1 SCAN_TIMEOUT (varredura > 50 ms),
+2 PROGRAM_CORRUPT (programa na flash inválido no boot), 3 INTERNAL.
 
-| Tabela | Endereços | Conteúdo |
+## 7. Modbus RTU (RS-485, somente leitura)
+
+Endereço 11, 9 600 bps 8N1 (`firmware/src/board_config.h`).
+
+| Função | Endereços | Conteúdo |
 |---|---|---|
-| Discrete inputs (FC02) | 0–7 | entradas I0.0–I0.7 |
-| Coils (FC01, só leitura) | 0–7 | saídas lógicas Q0.0–Q0.7 |
-| Input registers (FC04) | 0 | estado (0 STOP, 1 RUN, 2 LOADING, 3 FAULT) |
-| | 1–2 | nº de varreduras (u32) |
-| | 100+2n | ACC do temporizador n (u32, ms) |
-| | 200+2n | ACC do contador n (i32) |
+| FC01 coils | 0–7 | saídas lógicas Q0.0–Q0.7 |
+| FC02 discrete inputs | 0–7 | entradas I0.0–I0.7 |
+| FC04 input registers | 0 | estado (0 STOP, 1 RUN, 2 LOADING, 3 FAULT) |
+| | 1–2 | nº de varreduras (u32, palavra alta primeiro) |
+| | 100+2n, 101+2n | ACC do temporizador n (u32, ms) |
+| | 200+2n, 201+2n | ACC do contador n (i32) |
 
-Escritas Modbus (FC05/06/15/16) respondem exceção 01 (função ilegal) na v1.
+Demais funções: exceção 01. Endereço fora da faixa: exceção 02.

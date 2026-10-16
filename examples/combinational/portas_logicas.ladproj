@@ -4,8 +4,8 @@
   "name": "Portas logicas",
   "description": "AND, OR, NOT, XOR, NAND e SET/RESET com contatos.",
   "version": "0.1.0",
-  "created": "2026-10-16T11:54:15",
-  "modified": "2026-10-16T11:54:15",
+  "created": "2026-10-16T12:10:56",
+  "modified": "2026-10-16T12:10:56",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -207,7 +207,7 @@
   ],
   "history": [
     {
-      "date": "2026-10-16T11:54:15",
+      "date": "2026-10-16T12:10:56",
       "action": "gerado por scripts/make_examples.py",
       "rungs": 7
     }
@@ -218,6 +218,6 @@
     "build_id": "0x474d7ea8",
     "size": 200,
     "instructions": 41,
-    "date": "2026-10-16T11:54:15"
+    "date": "2026-10-16T12:10:56"
   }
 }
