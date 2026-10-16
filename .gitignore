@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+
+# Compilações locais (executor C dos testes, PyInstaller)
+build/
+
+# PlatformIO
+firmware/.pio/
+firmware/.vscode/
+
+# Editores / SO
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

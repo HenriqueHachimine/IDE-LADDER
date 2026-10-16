@@ -1,0 +1,107 @@
+[
+  {
+    "name": "ton_basico",
+    "description": "TON 100 ms com varredura de 10 ms. A varredura que habilita nao acumula; DN apos 10 varreduras adicionais. Desabilitar zera tudo.",
+    "program": [".inputs 8", ".outputs 8", ".timer T0 TON 100",
+                "SOR", "XIC I0.0", "TON T0", "EOR",
+                "SOR", "XIC T0.DN", "OTE Q0.0", "EOR",
+                "SOR", "XIC T0.TT", "OTE Q0.1", "EOR"],
+    "steps": [
+      {"expect": {"T0.ACC": 0, "T0.EN": 0, "T0.DN": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"T0.ACC": 0, "T0.EN": 1, "T0.TT": 1, "T0.DN": 0, "Q0.1": 1}},
+      {"repeat": 9, "expect": {"T0.ACC": 90, "T0.DN": 0, "Q0.0": 0}},
+      {"expect": {"T0.ACC": 100, "T0.DN": 1, "T0.TT": 0, "Q0.0": 1, "Q0.1": 0}},
+      {"repeat": 5, "expect": {"T0.ACC": 100, "T0.DN": 1}},
+      {"inputs": {"I0.0": 0}, "expect": {"T0.ACC": 0, "T0.EN": 0, "T0.DN": 0, "Q0.0": 0}}
+    ]
+  },
+  {
+    "name": "ton_interrompido",
+    "description": "TON que perde a habilitacao antes do preset reinicia do zero",
+    "program": [".inputs 8", ".outputs 8", ".timer T0 TON 50",
+                "SOR", "XIC I0.0", "TON T0", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "repeat": 4, "expect": {"T0.ACC": 30}},
+      {"inputs": {"I0.0": 0}, "expect": {"T0.ACC": 0}},
+      {"inputs": {"I0.0": 1}, "repeat": 5, "expect": {"T0.ACC": 40, "T0.DN": 0}},
+      {"expect": {"T0.ACC": 50, "T0.DN": 1}}
+    ]
+  },
+  {
+    "name": "ton_preset_zero_e_dt_grande",
+    "description": "Preset 0 conclui na primeira varredura habilitada; dt enorme satura o acumulador no preset",
+    "program": [".inputs 8", ".outputs 8", ".timer T0 TON 0", ".timer T1 TON 1000",
+                "SOR", "XIC I0.0", "TON T0", "EOR",
+                "SOR", "XIC I0.0", "TON T1", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "expect": {"T0.DN": 1, "T0.ACC": 0, "T1.DN": 0, "T1.ACC": 0}},
+      {"dt": 4294967295, "expect": {"T1.ACC": 1000, "T1.DN": 1}},
+      {"dt": 4294967295, "expect": {"T1.ACC": 1000, "T1.DN": 1}}
+    ]
+  },
+  {
+    "name": "tof_basico_e_reativacao",
+    "description": "TOF 50 ms: DN segue a habilitacao, mantem-se 50 ms apos a queda; reativacao durante a temporizacao zera o acumulado",
+    "program": [".inputs 8", ".outputs 8", ".timer T0 TOF 50",
+                "SOR", "XIC I0.0", "TOF T0", "EOR",
+                "SOR", "XIC T0.DN", "OTE Q0.0", "EOR"],
+    "steps": [
+      {"expect": {"T0.DN": 0, "Q0.0": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"T0.DN": 1, "T0.ACC": 0, "Q0.0": 1}},
+      {"inputs": {"I0.0": 0}, "expect": {"T0.DN": 1, "T0.TT": 1, "T0.ACC": 0, "Q0.0": 1}},
+      {"repeat": 4, "expect": {"T0.ACC": 40, "T0.TT": 1, "Q0.0": 1}},
+      {"expect": {"T0.ACC": 50, "T0.DN": 0, "T0.TT": 0, "Q0.0": 0}},
+      {"repeat": 3, "expect": {"T0.ACC": 50, "T0.DN": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"T0.ACC": 0, "T0.DN": 1}},
+      {"inputs": {"I0.0": 0}, "repeat": 3, "expect": {"T0.ACC": 20, "T0.TT": 1}},
+      {"inputs": {"I0.0": 1}, "expect": {"T0.ACC": 0, "T0.DN": 1, "T0.TT": 0}},
+      {"inputs": {"I0.0": 0}, "repeat": 5, "expect": {"T0.ACC": 40, "T0.DN": 1}},
+      {"expect": {"T0.ACC": 50, "T0.DN": 0, "Q0.0": 0}}
+    ]
+  },
+  {
+    "name": "rto_retencao_e_reset",
+    "description": "RTO 100 ms preserva o acumulado sem habilitacao e so zera com RES",
+    "program": [".inputs 8", ".outputs 8", ".timer T0 RTO 100",
+                "SOR", "XIC I0.0", "RTO T0", "EOR",
+                "SOR", "XIC I0.1", "RES T0", "EOR",
+                "SOR", "XIC T0.DN", "OTE Q0.0", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "expect": {"T0.ACC": 0, "T0.TT": 1}},
+      {"repeat": 6, "expect": {"T0.ACC": 60}},
+      {"inputs": {"I0.0": 0}, "repeat": 4, "expect": {"T0.ACC": 60, "T0.TT": 0, "T0.EN": 0, "T0.DN": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"T0.ACC": 60, "T0.TT": 1}},
+      {"repeat": 3, "expect": {"T0.ACC": 90, "Q0.0": 0}},
+      {"expect": {"T0.ACC": 100, "T0.DN": 1, "Q0.0": 1}},
+      {"inputs": {"I0.0": 0}, "repeat": 3, "expect": {"T0.ACC": 100, "T0.DN": 1, "Q0.0": 1}},
+      {"inputs": {"I0.1": 1}, "expect": {"T0.ACC": 0, "T0.DN": 0, "Q0.0": 0}}
+    ]
+  },
+  {
+    "name": "res_temporizador_mesma_varredura",
+    "description": "RES apos o TON na mesma varredura prevalece; na varredura seguinte o TON recomeca sem acumular",
+    "program": [".inputs 8", ".outputs 8", ".timer T0 TON 30",
+                "SOR", "XIC I0.0", "TON T0", "EOR",
+                "SOR", "XIC I0.1", "RES T0", "EOR",
+                "SOR", "XIC T0.DN", "OTE Q0.0", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "repeat": 3, "expect": {"T0.ACC": 20}},
+      {"inputs": {"I0.1": 1}, "expect": {"T0.ACC": 0, "T0.DN": 0, "T0.EN": 0, "Q0.0": 0}},
+      {"inputs": {"I0.1": 0}, "expect": {"T0.ACC": 0, "T0.EN": 1, "T0.TT": 1}},
+      {"expect": {"T0.ACC": 10}}
+    ]
+  },
+  {
+    "name": "res_tof_e_ton",
+    "description": "RES em TOF durante a temporizacao desliga DN imediatamente",
+    "program": [".inputs 8", ".outputs 8", ".timer T0 TOF 100",
+                "SOR", "XIC I0.0", "TOF T0", "EOR",
+                "SOR", "XIC I0.1", "RES T0", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "expect": {"T0.DN": 1}},
+      {"inputs": {"I0.0": 0}, "repeat": 3, "expect": {"T0.DN": 1, "T0.ACC": 20}},
+      {"inputs": {"I0.1": 1}, "expect": {"T0.DN": 0, "T0.ACC": 0, "T0.TT": 0}},
+      {"inputs": {"I0.1": 0}, "repeat": 3, "expect": {"T0.DN": 0, "T0.ACC": 0}}
+    ]
+  }
+]

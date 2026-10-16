@@ -1,0 +1,79 @@
+[
+  {
+    "name": "ctu_borda_e_reset_com_entrada_mantida",
+    "description": "CTU conta apenas bordas de subida; RES com a entrada de contagem mantida nao gera nova contagem",
+    "program": [".inputs 8", ".outputs 8", ".counter C0 UP 3",
+                "SOR", "XIC I0.0", "CTU C0", "EOR",
+                "SOR", "XIC I0.1", "RES C0", "EOR",
+                "SOR", "XIC C0.DN", "OTE Q0.0", "EOR"],
+    "steps": [
+      {"expect": {"C0.ACC": 0, "C0.DN": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 1}},
+      {"repeat": 5, "expect": {"C0.ACC": 1}},
+      {"inputs": {"I0.0": 0}, "expect": {"C0.ACC": 1}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 2, "Q0.0": 0}},
+      {"inputs": {"I0.0": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 3, "C0.DN": 1, "Q0.0": 1}},
+      {"inputs": {"I0.0": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 4, "C0.DN": 1}},
+      {"inputs": {"I0.1": 1}, "expect": {"C0.ACC": 0, "C0.DN": 0, "Q0.0": 0}},
+      {"inputs": {"I0.1": 0}, "repeat": 3, "expect": {"C0.ACC": 0}},
+      {"inputs": {"I0.0": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 1}}
+    ]
+  },
+  {
+    "name": "ctu_entrada_ativa_na_partida",
+    "description": "A memoria de borda parte em 0: entrada ja ativa na primeira varredura conta uma vez",
+    "program": [".inputs 8", ".outputs 8", ".counter C0 UP 10",
+                "SOR", "XIC I0.0", "CTU C0", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 1}},
+      {"repeat": 3, "expect": {"C0.ACC": 1}}
+    ]
+  },
+  {
+    "name": "ctd_decrescente",
+    "description": "CTD parte do preset, DN quando ACC <= 0, continua abaixo de zero; RES recarrega o preset",
+    "program": [".inputs 8", ".outputs 8", ".counter C0 DOWN 2",
+                "SOR", "XIC I0.0", "CTD C0", "EOR",
+                "SOR", "XIC C0.DN", "OTE Q0.0", "EOR",
+                "SOR", "XIC I0.1", "RES C0", "EOR"],
+    "steps": [
+      {"expect": {"C0.ACC": 2, "C0.DN": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 1, "Q0.0": 0}},
+      {"inputs": {"I0.0": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 0, "C0.DN": 1, "Q0.0": 1}},
+      {"inputs": {"I0.0": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": -1, "C0.DN": 1}},
+      {"inputs": {"I0.1": 1}, "expect": {"C0.ACC": 2, "C0.DN": 0, "Q0.0": 1}},
+      {"expect": {"Q0.0": 0}}
+    ]
+  },
+  {
+    "name": "res_contador_mesma_varredura",
+    "description": "Ordem das redes decide: CTU->RES termina em 0; RES->CTU termina em 1",
+    "program": [".inputs 8", ".outputs 8", ".counter C0 UP 5", ".counter C1 UP 5",
+                "SOR", "XIC I0.0", "CTU C0", "EOR",
+                "SOR", "XIC I0.0", "RES C0", "EOR",
+                "SOR", "XIC I0.0", "RES C1", "EOR",
+                "SOR", "XIC I0.0", "CTU C1", "EOR"],
+    "steps": [
+      {"expect": {"C0.ACC": 0, "C1.ACC": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 0, "C1.ACC": 1}},
+      {"inputs": {"I0.0": 0}, "expect": {"C0.ACC": 0, "C1.ACC": 1}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 0, "C1.ACC": 1}}
+    ]
+  },
+  {
+    "name": "contador_preset_zero",
+    "description": "CTU com preset 0 ja inicia com DN=1; CTD com preset 0 tambem",
+    "program": [".inputs 8", ".outputs 8", ".counter C0 UP 0", ".counter C1 DOWN 0",
+                "SOR", "XIC I0.0", "CTU C0", "EOR",
+                "SOR", "XIC I0.0", "CTD C1", "EOR"],
+    "steps": [
+      {"expect": {"C0.DN": 1, "C1.DN": 1, "C1.ACC": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"C0.ACC": 1, "C1.ACC": -1}}
+    ]
+  }
+]

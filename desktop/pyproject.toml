@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ladderide"
+version = "0.1.0"
+description = "IDE LADDER para CLP com ESP32: editor, compilador, simulador, transferencia e monitor"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+dependencies = []
+
+[project.optional-dependencies]
+# A interface grafica (Etapa 4) usara PySide6 e a comunicacao (Etapa 6) pyserial.
+gui = ["PySide6>=6.6"]
+comm = ["pyserial>=3.5"]
+dev = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

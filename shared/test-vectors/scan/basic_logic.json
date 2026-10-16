@@ -1,0 +1,93 @@
+[
+  {
+    "name": "contatos_na_nf",
+    "description": "XIC (NA) e XIO (NF) em serie: Q0.0 = I0.0 AND NOT I0.1",
+    "program": [".inputs 8", ".outputs 8",
+                "SOR", "XIC I0.0", "XIO I0.1", "OTE Q0.0", "EOR"],
+    "steps": [
+      {"expect": {"Q0.0": 0, "SCAN": 1}},
+      {"inputs": {"I0.0": 1}, "expect": {"Q0.0": 1}},
+      {"inputs": {"I0.1": 1}, "expect": {"Q0.0": 0}},
+      {"inputs": {"I0.0": 0, "I0.1": 0}, "expect": {"Q0.0": 0}}
+    ]
+  },
+  {
+    "name": "selo_partida_parada",
+    "description": "Circuito de selo: liga em I0.0, mantem por Q0.0, desliga em I0.1 (NF)",
+    "program": [".inputs 8", ".outputs 8",
+                "SOR", "BST", "XIC I0.0", "NXB", "XIC Q0.0", "BND", "XIO I0.1", "OTE Q0.0", "EOR"],
+    "steps": [
+      {"expect": {"Q0.0": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"Q0.0": 1}},
+      {"inputs": {"I0.0": 0}, "repeat": 5, "expect": {"Q0.0": 1}},
+      {"inputs": {"I0.1": 1}, "expect": {"Q0.0": 0}},
+      {"inputs": {"I0.1": 0}, "repeat": 3, "expect": {"Q0.0": 0}},
+      {"inputs": {"I0.0": 1, "I0.1": 1}, "expect": {"Q0.0": 0}}
+    ]
+  },
+  {
+    "name": "ramos_aninhados_not_e_saidas_paralelas",
+    "description": "Q0.0 = I0.0 AND (I0.1 OR (I0.2 AND (I0.3 OR I0.4))); Q0.1 = NOT(I0.0 AND I0.1); I0.5 aciona Q0.2 e Q0.3 em paralelo",
+    "program": [".inputs 8", ".outputs 8",
+                "SOR", "XIC I0.0", "BST", "XIC I0.1", "NXB", "XIC I0.2", "BST", "XIC I0.3", "NXB", "XIC I0.4", "BND", "BND", "OTE Q0.0", "EOR",
+                "SOR", "XIC I0.0", "XIC I0.1", "NOT", "OTE Q0.1", "EOR",
+                "SOR", "XIC I0.5", "BST", "OTE Q0.2", "NXB", "OTE Q0.3", "BND", "EOR"],
+    "steps": [
+      {"expect": {"Q0.0": 0, "Q0.1": 1, "Q0.2": 0, "Q0.3": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"Q0.0": 0, "Q0.1": 1}},
+      {"inputs": {"I0.1": 1}, "expect": {"Q0.0": 1, "Q0.1": 0}},
+      {"inputs": {"I0.1": 0, "I0.2": 1}, "expect": {"Q0.0": 0, "Q0.1": 1}},
+      {"inputs": {"I0.4": 1}, "expect": {"Q0.0": 1, "Q0.1": 1}},
+      {"inputs": {"I0.0": 0}, "expect": {"Q0.0": 0}},
+      {"inputs": {"I0.5": 1}, "expect": {"Q0.2": 1, "Q0.3": 1}}
+    ]
+  },
+  {
+    "name": "set_reset_mesmo_endereco",
+    "description": "OTL/OTU no mesmo endereco: vence a ultima instrucao executada na varredura",
+    "program": [".inputs 8", ".outputs 8",
+                "SOR", "XIC I0.0", "OTL Q0.0", "EOR",
+                "SOR", "XIC I0.1", "OTU Q0.0", "EOR",
+                "SOR", "XIC I0.1", "OTU Q0.1", "EOR",
+                "SOR", "XIC I0.0", "OTL Q0.1", "EOR"],
+    "steps": [
+      {"expect": {"Q0.0": 0, "Q0.1": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"Q0.0": 1, "Q0.1": 1}},
+      {"inputs": {"I0.0": 0}, "repeat": 3, "expect": {"Q0.0": 1, "Q0.1": 1}},
+      {"inputs": {"I0.1": 1}, "expect": {"Q0.0": 0, "Q0.1": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"Q0.0": 0, "Q0.1": 1}},
+      {"inputs": {"I0.0": 0, "I0.1": 0}, "expect": {"Q0.0": 0, "Q0.1": 1}}
+    ]
+  },
+  {
+    "name": "bobina_duplicada_ordem_sequencial",
+    "description": "Duas OTE em M0.0: redes intermediarias enxergam o valor ja escrito; ao fim vale a ultima",
+    "program": [".inputs 8", ".outputs 8", ".markers 8",
+                "SOR", "XIC I0.0", "OTE M0.0", "EOR",
+                "SOR", "XIC M0.0", "OTE Q0.0", "EOR",
+                "SOR", "XIC I0.1", "OTE M0.0", "EOR",
+                "SOR", "XIC M0.0", "OTE Q0.1", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "expect": {"M0.0": 0, "Q0.0": 1, "Q0.1": 0}},
+      {"inputs": {"I0.0": 0, "I0.1": 1}, "expect": {"M0.0": 1, "Q0.0": 0, "Q0.1": 1}}
+    ]
+  },
+  {
+    "name": "bits_de_sistema",
+    "description": "FIRST_SCAN (S0.0), CLOCK_1S (S0.3), ALWAYS_ON (S0.1), ALWAYS_OFF (S0.2)",
+    "program": [".inputs 8", ".outputs 8", ".markers 8",
+                "SOR", "XIC S0.0", "OTL M0.0", "EOR",
+                "SOR", "XIC S0.0", "OTE M0.1", "EOR",
+                "SOR", "XIC S0.3", "OTE Q0.0", "EOR",
+                "SOR", "XIC S0.1", "OTE Q0.1", "EOR",
+                "SOR", "XIC S0.2", "OTE Q0.2", "EOR"],
+    "steps": [
+      {"dt": 100, "expect": {"M0.0": 1, "M0.1": 1, "Q0.0": 1, "Q0.1": 1, "Q0.2": 0}},
+      {"dt": 100, "repeat": 4, "expect": {"M0.0": 1, "M0.1": 0, "S0.0": 0, "Q0.0": 1}},
+      {"dt": 100, "expect": {"Q0.0": 0}},
+      {"dt": 100, "repeat": 4, "expect": {"Q0.0": 0}},
+      {"dt": 100, "expect": {"Q0.0": 1}},
+      {"dt": 2500, "expect": {"Q0.0": 0}}
+    ]
+  }
+]

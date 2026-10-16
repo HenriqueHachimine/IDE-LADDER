@@ -1,0 +1,101 @@
+{
+  "$comment": "Fonte unica da verdade do conjunto de instrucoes (ISA) e do formato LDRB. Desktop (Python) le este arquivo em tempo de execucao; o firmware (C) usa ladder_isa.h, gerado por scripts/gen_isa_header.py. Nao edite o header gerado manualmente.",
+  "format": {
+    "magic": "LDRB",
+    "major": 1,
+    "minor": 0,
+    "header_size": 32,
+    "timer_entry_size": 8,
+    "counter_entry_size": 8,
+    "instruction_size": 4,
+    "crc_size": 4
+  },
+  "limits": {
+    "max_inputs": 16,
+    "max_outputs": 16,
+    "max_markers": 256,
+    "max_timers": 32,
+    "max_counters": 32,
+    "max_rungs": 256,
+    "max_instructions": 2048,
+    "max_branch_depth": 8,
+    "max_preset": 2147483647,
+    "system_bits": 4
+  },
+  "areas": [
+    {"code": 0,  "name": "NONE",    "kind": "none"},
+    {"code": 1,  "name": "I",       "kind": "bit",     "size": "n_inputs"},
+    {"code": 2,  "name": "Q",       "kind": "bit",     "size": "n_outputs"},
+    {"code": 3,  "name": "M",       "kind": "bit",     "size": "n_markers"},
+    {"code": 4,  "name": "S",       "kind": "bit",     "size": "system_bits"},
+    {"code": 5,  "name": "T_EN",    "kind": "bit",     "size": "n_timers"},
+    {"code": 6,  "name": "T_TT",    "kind": "bit",     "size": "n_timers"},
+    {"code": 7,  "name": "T_DN",    "kind": "bit",     "size": "n_timers"},
+    {"code": 8,  "name": "C_DN",    "kind": "bit",     "size": "n_counters"},
+    {"code": 9,  "name": "C_OV",    "kind": "bit",     "size": "n_counters"},
+    {"code": 10, "name": "C_UN",    "kind": "bit",     "size": "n_counters"},
+    {"code": 11, "name": "TIMER",   "kind": "element", "size": "n_timers"},
+    {"code": 12, "name": "COUNTER", "kind": "element", "size": "n_counters"}
+  ],
+  "system_bits": [
+    {"index": 0, "name": "FIRST_SCAN", "description": "1 somente na primeira varredura apos entrar em RUN"},
+    {"index": 1, "name": "ALWAYS_ON",  "description": "Sempre 1"},
+    {"index": 2, "name": "ALWAYS_OFF", "description": "Sempre 0"},
+    {"index": 3, "name": "CLOCK_1S",   "description": "Relogio de 1 s (500 ms em 1, 500 ms em 0) derivado do tempo de varredura"}
+  ],
+  "operand_classes": {
+    "none":     "area=NONE e index=0 (exceto SOR, cujo index e o numero da rede)",
+    "bit_read": "area em {I,Q,M,S,T_EN,T_TT,T_DN,C_DN,C_OV,C_UN} e index < tamanho da area",
+    "bit_write":"area em {Q,M} e index < tamanho da area",
+    "timer":    "area=TIMER e index < n_timers",
+    "counter":  "area=COUNTER e index < n_counters",
+    "timer_or_counter": "area em {TIMER,COUNTER} e index valido"
+  },
+  "opcodes": [
+    {"code": 1,  "name": "SOR", "operand": "none",     "description": "Inicio de rede: RLO=1, pilha de ramos vazia"},
+    {"code": 2,  "name": "EOR", "operand": "none",     "description": "Fim de rede: exige pilha de ramos vazia"},
+    {"code": 16, "name": "XIC", "operand": "bit_read", "description": "Contato normalmente aberto (NA): RLO = RLO AND bit"},
+    {"code": 17, "name": "XIO", "operand": "bit_read", "description": "Contato normalmente fechado (NF): RLO = RLO AND NOT bit"},
+    {"code": 18, "name": "NOT", "operand": "none",     "description": "Inverte o RLO"},
+    {"code": 32, "name": "BST", "operand": "none",     "description": "Inicio de ramificacao paralela"},
+    {"code": 33, "name": "NXB", "operand": "none",     "description": "Proximo ramo paralelo"},
+    {"code": 34, "name": "BND", "operand": "none",     "description": "Fim de ramificacao paralela (OR dos ramos)"},
+    {"code": 48, "name": "OTE", "operand": "bit_write","description": "Bobina convencional: bit = RLO"},
+    {"code": 49, "name": "OTL", "operand": "bit_write","description": "Bobina SET (latch): se RLO entao bit = 1"},
+    {"code": 50, "name": "OTU", "operand": "bit_write","description": "Bobina RESET (unlatch): se RLO entao bit = 0"},
+    {"code": 64, "name": "TON", "operand": "timer",    "description": "Temporizador com retardo na energizacao"},
+    {"code": 65, "name": "TOF", "operand": "timer",    "description": "Temporizador com retardo na desenergizacao"},
+    {"code": 66, "name": "RTO", "operand": "timer",    "description": "Temporizador retentivo"},
+    {"code": 72, "name": "CTU", "operand": "counter",  "description": "Contador crescente (borda de subida)"},
+    {"code": 73, "name": "CTD", "operand": "counter",  "description": "Contador decrescente (borda de subida)"},
+    {"code": 80, "name": "RES", "operand": "timer_or_counter", "description": "Reset de temporizador ou contador"}
+  ],
+  "timer_types": [
+    {"code": 0, "name": "TON", "opcode": "TON"},
+    {"code": 1, "name": "TOF", "opcode": "TOF"},
+    {"code": 2, "name": "RTO", "opcode": "RTO"}
+  ],
+  "counter_types": [
+    {"code": 0, "name": "UP",   "opcode": "CTU"},
+    {"code": 1, "name": "DOWN", "opcode": "CTD"}
+  ],
+  "image_errors": [
+    {"code": 0,  "name": "OK",               "description": "Imagem valida"},
+    {"code": 1,  "name": "TOO_SHORT",        "description": "Menos bytes que o cabecalho"},
+    {"code": 2,  "name": "BAD_MAGIC",        "description": "Assinatura diferente de 'LDRB'"},
+    {"code": 3,  "name": "UNSUPPORTED_VERSION", "description": "Versao maior diferente ou versao menor superior a suportada"},
+    {"code": 4,  "name": "BAD_HEADER_SIZE",  "description": "header_size diferente do esperado"},
+    {"code": 5,  "name": "SIZE_MISMATCH",    "description": "total_size inconsistente com o buffer ou com as contagens"},
+    {"code": 6,  "name": "BAD_CRC",          "description": "CRC-32 nao confere"},
+    {"code": 7,  "name": "LIMIT_EXCEEDED",   "description": "Alguma contagem excede os limites da ISA"},
+    {"code": 8,  "name": "BAD_TIMER_TABLE",  "description": "Tipo, campo reservado ou preset invalido na tabela de temporizadores"},
+    {"code": 9,  "name": "BAD_COUNTER_TABLE","description": "Tipo, campo reservado ou preset invalido na tabela de contadores"},
+    {"code": 10, "name": "BAD_OPCODE",       "description": "Opcode desconhecido"},
+    {"code": 11, "name": "BAD_OPERAND",      "description": "Area ou indice de operando invalido para o opcode"},
+    {"code": 12, "name": "BAD_STRUCTURE",    "description": "Sequencia SOR/EOR invalida ou numeracao de redes incorreta"},
+    {"code": 13, "name": "BRANCH_ERROR",     "description": "Ramificacoes desbalanceadas ou profundidade excedida"},
+    {"code": 14, "name": "DUPLICATE_DRIVER", "description": "Temporizador/contador acionado por mais de uma instrucao"},
+    {"code": 15, "name": "TYPE_MISMATCH",    "description": "Instrucao incompativel com o tipo declarado do temporizador/contador"},
+    {"code": 16, "name": "RESERVED_NONZERO", "description": "Campo reservado ou bits de saida segura fora da faixa"}
+  ]
+}
