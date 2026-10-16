@@ -1,0 +1,51 @@
+; Temporizadores - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0xe30cdca3
+.timer T0 TON 1000
+.timer T1 TOF 1500
+.timer T2 RTO 3000
+.timer T3 TON 500
+.counter C0 UP 1000000
+SOR ; rede 0
+XIC I0.0
+TON T0
+EOR
+SOR ; rede 1
+XIC T0.DN
+OTE Q0.0
+EOR
+SOR ; rede 2
+XIC I0.1
+TOF T1
+EOR
+SOR ; rede 3
+XIC T1.DN
+OTE Q0.1
+EOR
+SOR ; rede 4
+XIC I0.2
+RTO T2
+EOR
+SOR ; rede 5
+XIC T2.DN
+OTE Q0.2
+EOR
+SOR ; rede 6
+XIC I0.3
+RES T2
+EOR
+SOR ; rede 7
+XIO T3.DN
+TON T3
+EOR
+SOR ; rede 8
+XIC T3.DN
+CTU C0
+EOR
+SOR ; rede 9
+XIC S0.3
+OTE Q0.3
+EOR

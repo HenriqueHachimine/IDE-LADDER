@@ -1,0 +1,132 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Contadores",
+  "description": "CTU, CTD e reset.",
+  "version": "0.1.0",
+  "created": "2026-10-16T11:54:15",
+  "modified": "2026-10-16T11:54:15",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [],
+  "rungs": [
+    {
+      "comment": "Conta 3 pulsos",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.0"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "C0",
+          "preset": 3
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "C0.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.0"
+        }
+      ]
+    },
+    {
+      "comment": "Decrementa de 4 ate 0",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTD",
+          "operand": "C1",
+          "preset": 4
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "C1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.1"
+        }
+      ]
+    },
+    {
+      "comment": "Reset dos dois contadores",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "C0"
+        },
+        {
+          "type": "reset",
+          "operand": "C1"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-16T11:54:15",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 5
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0xe8d4c0b6",
+    "size": 148,
+    "instructions": 24,
+    "date": "2026-10-16T11:54:15"
+  }
+}

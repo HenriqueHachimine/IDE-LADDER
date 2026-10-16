@@ -1,0 +1,216 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Temporizadores",
+  "description": "TON, TOF e RTO com RES.",
+  "version": "0.1.0",
+  "created": "2026-10-16T11:54:15",
+  "modified": "2026-10-16T11:54:15",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [],
+  "rungs": [
+    {
+      "comment": "TON 1 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.0"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T0",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T0.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.0"
+        }
+      ]
+    },
+    {
+      "comment": "TOF 1,5 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TOF",
+          "operand": "T1",
+          "preset": 1500
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.1"
+        }
+      ]
+    },
+    {
+      "comment": "RTO 3 s (acumula)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "RTO",
+          "operand": "T2",
+          "preset": 3000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T2.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.2"
+        }
+      ]
+    },
+    {
+      "comment": "Zera o RTO",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "T2"
+        }
+      ]
+    },
+    {
+      "comment": "Oscilador 0,5 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "T3.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "T3",
+          "preset": 500
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "T3.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "C0",
+          "preset": 1000000
+        }
+      ]
+    },
+    {
+      "comment": "Relogio de sistema 1 Hz",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.3"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-16T11:54:15",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 10
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0xe30cdca3",
+    "size": 236,
+    "instructions": 40,
+    "date": "2026-10-16T11:54:15"
+  }
+}

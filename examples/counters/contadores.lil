@@ -1,0 +1,32 @@
+; Contadores - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0xe8d4c0b6
+.counter C0 UP 3
+.counter C1 DOWN 4
+SOR ; rede 0
+XIC I0.0
+CTU C0
+EOR
+SOR ; rede 1
+XIC C0.DN
+OTE Q0.0
+EOR
+SOR ; rede 2
+XIC I0.1
+CTD C1
+EOR
+SOR ; rede 3
+XIC C1.DN
+OTE Q0.1
+EOR
+SOR ; rede 4
+XIC I0.2
+BST
+RES C0
+NXB
+RES C1
+BND
+EOR

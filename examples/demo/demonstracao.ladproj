@@ -1,0 +1,287 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Demonstracao",
+  "description": "Roteiro da demonstracao final: selo de partida/parada (NA/NF), TON, TOF, contagem com CTU e RES.",
+  "version": "1.0.0",
+  "created": "2026-10-16T11:54:15",
+  "modified": "2026-10-16T11:54:15",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Partida",
+      "address": "I0.0",
+      "comment": "Botao de partida (NA)"
+    },
+    {
+      "name": "Parada",
+      "address": "I0.1",
+      "comment": "Botao de parada (NA, usado como contato NF no programa)"
+    },
+    {
+      "name": "Sensor_Peca",
+      "address": "I0.2",
+      "comment": "Sensor de passagem de peca"
+    },
+    {
+      "name": "Zera_Contagem",
+      "address": "I0.3",
+      "comment": "Botao para zerar a contagem"
+    },
+    {
+      "name": "Motor",
+      "address": "Q0.0",
+      "comment": "Rele 1 - motor"
+    },
+    {
+      "name": "Em_Regime",
+      "address": "Q0.1",
+      "comment": "Rele 2 - sinaliza 2 s apos a partida (TON)"
+    },
+    {
+      "name": "Ventilador",
+      "address": "Q0.2",
+      "comment": "Rele 3 - permanece 3 s apos parar (TOF)"
+    },
+    {
+      "name": "Lote_Completo",
+      "address": "Q0.3",
+      "comment": "Rele 4 - 5 pecas contadas"
+    },
+    {
+      "name": "Alarme_Pisca",
+      "address": "Q0.4",
+      "comment": "Rele 5 - pisca com lote completo"
+    },
+    {
+      "name": "Atraso_Partida",
+      "address": "T0",
+      "comment": "TON 2 s"
+    },
+    {
+      "name": "Pos_Ventilacao",
+      "address": "T1",
+      "comment": "TOF 3 s"
+    },
+    {
+      "name": "Pecas",
+      "address": "C0",
+      "comment": "CTU 5 pecas"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Selo partida/parada",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Partida"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Parada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor"
+        }
+      ]
+    },
+    {
+      "comment": "Atraso de 2 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Motor"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Atraso_Partida",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "Motor em regime",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Atraso_Partida.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Em_Regime"
+        }
+      ]
+    },
+    {
+      "comment": "Pos-ventilacao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Motor"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TOF",
+          "operand": "Pos_Ventilacao",
+          "preset": 3000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pos_Ventilacao.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ventilador"
+        }
+      ]
+    },
+    {
+      "comment": "Conta pecas com motor ligado",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Motor"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Peca"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Pecas",
+          "preset": 5
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pecas.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lote_Completo"
+        }
+      ]
+    },
+    {
+      "comment": "Zera a contagem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Zera_Contagem"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Pecas"
+        }
+      ]
+    },
+    {
+      "comment": "Pisca 1 Hz",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lote_Completo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Alarme_Pisca"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-16T11:54:15",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 9
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0x3bab0b1e",
+    "size": 232,
+    "instructions": 43,
+    "date": "2026-10-16T11:54:15"
+  }
+}

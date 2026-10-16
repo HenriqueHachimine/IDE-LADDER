@@ -1,0 +1,223 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Portas logicas",
+  "description": "AND, OR, NOT, XOR, NAND e SET/RESET com contatos.",
+  "version": "0.1.0",
+  "created": "2026-10-16T11:54:15",
+  "modified": "2026-10-16T11:54:15",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "A",
+      "address": "I0.0",
+      "comment": ""
+    },
+    {
+      "name": "B",
+      "address": "I0.1",
+      "comment": ""
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "AND",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.0"
+        }
+      ]
+    },
+    {
+      "comment": "OR",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "A"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "B"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.1"
+        }
+      ]
+    },
+    {
+      "comment": "NOT A (contato NF)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.2"
+        }
+      ]
+    },
+    {
+      "comment": "XOR",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "A"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "B"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "A"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "B"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.3"
+        }
+      ]
+    },
+    {
+      "comment": "NAND",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "B"
+        },
+        {
+          "type": "not"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.4"
+        }
+      ]
+    },
+    {
+      "comment": "SET",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Q0.5"
+        }
+      ]
+    },
+    {
+      "comment": "RESET (vence por estar depois)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Q0.5"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-16T11:54:15",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 7
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0x474d7ea8",
+    "size": 200,
+    "instructions": 41,
+    "date": "2026-10-16T11:54:15"
+  }
+}

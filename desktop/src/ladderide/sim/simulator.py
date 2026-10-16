@@ -1,0 +1,170 @@
+"""Simulador offline: envolve a LadderVM com estados, entradas virtuais e tempo.
+
+O tempo e virtual: cada varredura avanca exatamente `period_ms`, e `advance()`
+converte o tempo real decorrido (multiplicado pela velocidade) em varreduras.
+Assim a simulacao e reprodutivel e identica a sequencia que o firmware
+executaria com o mesmo periodo.
+"""
+from __future__ import annotations
+
+from enum import Enum
+
+from ..compiler.compiler import CompileResult
+from ..core.vm import LadderVM
+
+
+class SimState(Enum):
+    STOPPED = "PARADO"
+    RUNNING = "EXECUTANDO"
+    PAUSED = "PAUSADO"
+
+
+class Simulator:
+    MAX_SCANS_PER_ADVANCE = 2000
+
+    def __init__(self, result: CompileResult, period_ms: int = 10):
+        if not result.ok:
+            raise ValueError("programa com erros nao pode ser simulado")
+        self.result = result
+        self.program = result.program
+        self.vm = LadderVM(self.program)
+        self.period_ms = max(1, int(period_ms))
+        self.state = SimState.STOPPED
+        self.inputs = 0
+        self.virtual_ms = 0
+        self._budget = 0.0
+        self.last_error: str | None = None
+
+    # ------------------------------------------------------------- estados
+    def start(self) -> None:
+        if self.state == SimState.STOPPED:
+            self.vm.reset()
+            self.virtual_ms = 0
+            self._budget = 0.0
+        self.state = SimState.RUNNING
+
+    def pause(self) -> None:
+        if self.state == SimState.RUNNING:
+            self.state = SimState.PAUSED
+
+    def stop(self) -> None:
+        self.state = SimState.STOPPED
+        self._budget = 0.0
+
+    def reset(self) -> None:
+        """Reinicia a simulacao (partida a frio) mantendo as entradas."""
+        self.vm.reset()
+        self.virtual_ms = 0
+        self._budget = 0.0
+        if self.state == SimState.RUNNING:
+            return
+        self.state = SimState.PAUSED
+
+    # -------------------------------------------------------------- entradas
+    def set_input(self, index: int, value: bool) -> None:
+        if value:
+            self.inputs |= 1 << index
+        else:
+            self.inputs &= ~(1 << index)
+
+    def input(self, index: int) -> bool:
+        return bool(self.inputs >> index & 1)
+
+    # -------------------------------------------------------------- execucao
+    def _ensure_active(self) -> None:
+        if self.state == SimState.STOPPED:
+            self.vm.reset()
+            self.virtual_ms = 0
+            self.state = SimState.PAUSED
+
+    def scan_once(self) -> None:
+        """Executa uma varredura completa (ou termina a varredura em andamento)."""
+        self._ensure_active()
+        if self.vm.in_scan:
+            while self.vm.step():
+                pass
+            self.vm.end_scan()
+        else:
+            self._time_step()
+            self.vm.scan(self.inputs, self.period_ms)
+
+    def step_instruction(self) -> int | None:
+        """Executa uma instrucao. Retorna o pc executado ou None se a varredura terminou."""
+        self._ensure_active()
+        if not self.vm.in_scan:
+            self._time_step()
+            self.vm.begin_scan(self.inputs, self.period_ms)
+            if not self.program.code:
+                self.vm.end_scan()
+                return None
+        pc = self.vm.pc
+        more = self.vm.step()
+        if not more:
+            self.vm.end_scan()
+        return pc
+
+    def _time_step(self) -> None:
+        if not self.vm.first_scan:
+            self.virtual_ms += self.period_ms
+
+    def advance(self, wall_ms: float, speed: float = 1.0) -> int:
+        """Converte tempo real em varreduras (modo continuo). Retorna quantas rodaram."""
+        if self.state != SimState.RUNNING:
+            return 0
+        self._budget += wall_ms * speed
+        n = 0
+        if self.vm.first_scan and not self.vm.in_scan:
+            self.scan_once()
+            n += 1
+        while self._budget >= self.period_ms and n < self.MAX_SCANS_PER_ADVANCE:
+            self.scan_once()
+            self._budget -= self.period_ms
+            n += 1
+        if n >= self.MAX_SCANS_PER_ADVANCE:
+            self._budget = 0.0
+        return n
+
+    # ------------------------------------------------------------ consulta
+    @property
+    def active(self) -> bool:
+        return self.state != SimState.STOPPED
+
+    @property
+    def logical_outputs(self) -> int:
+        return self.vm.outputs
+
+    @property
+    def physical_outputs(self) -> int:
+        """O que o firmware comandaria aos reles: Q em RUN/pausa, estado seguro parado."""
+        return self.vm.outputs if self.active else self.program.safe_outputs
+
+    def element_power(self, element_id: str) -> bool:
+        pc = self.result.element_pc.get(element_id)
+        return pc is not None and self.vm.power[pc]
+
+    def branch_power(self, parallel_id: str) -> bool:
+        pc = self.result.branch_end_pc.get(parallel_id)
+        return pc is not None and self.vm.power[pc]
+
+    def operand_value(self, element_id: str) -> bool | None:
+        ref = self.result.element_operand.get(element_id)
+        return None if ref is None else self.vm.read_bit(*ref)
+
+    def timer_state(self, index: int) -> dict | None:
+        if not 0 <= index < len(self.vm.timers):
+            return None
+        t = self.vm.timers[index]
+        return {"acc": t.acc, "bits": {"EN": t.en, "TT": t.tt, "DN": t.dn}}
+
+    def counter_state(self, index: int) -> dict | None:
+        if not 0 <= index < len(self.vm.counters):
+            return None
+        c = self.vm.counters[index]
+        return {"acc": c.acc, "bits": {"DN": c.dn, "OV": c.ov, "UN": c.un}}
+
+    @property
+    def current_element(self) -> str | None:
+        """Elemento da proxima instrucao no modo passo a passo."""
+        if not self.vm.in_scan or self.vm.pc >= len(self.result.pc_element):
+            return None
+        return self.result.pc_element[self.vm.pc]

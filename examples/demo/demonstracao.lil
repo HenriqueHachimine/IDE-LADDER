@@ -1,0 +1,52 @@
+; Demonstracao - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0x3bab0b1e
+.timer T0 TON 2000
+.timer T1 TOF 3000
+.counter C0 UP 5
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC Q0.0
+BND
+XIO I0.1
+OTE Q0.0
+EOR
+SOR ; rede 1
+XIC Q0.0
+TON T0
+EOR
+SOR ; rede 2
+XIC T0.DN
+OTE Q0.1
+EOR
+SOR ; rede 3
+XIC Q0.0
+TOF T1
+EOR
+SOR ; rede 4
+XIC T1.DN
+OTE Q0.2
+EOR
+SOR ; rede 5
+XIC Q0.0
+XIC I0.2
+CTU C0
+EOR
+SOR ; rede 6
+XIC C0.DN
+OTE Q0.3
+EOR
+SOR ; rede 7
+XIC I0.3
+RES C0
+EOR
+SOR ; rede 8
+XIC Q0.3
+XIC S0.3
+OTE Q0.4
+EOR
