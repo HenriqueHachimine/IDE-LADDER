@@ -58,7 +58,29 @@ GPIOs de *strapping* (0, 2, 5, 12, 15) não são usados pelos sinais acima.
 5. Comportamento dos relés durante boot/reset (osciloscópio ou LED de teste).
 6. Corrente da fonte para os 8 relés acionados simultaneamente (~70 mA cada).
 
-## 4. Riscos com cargas reais
+## 4. Gravação do firmware
+
+```powershell
+python -m pip install platformio
+cd firmware
+pio run                                   # compila (1a vez baixa o toolchain, ~3 min)
+pio run -t upload --upload-port COM5      # grava
+python -m ladderide.cli --port COM5 info  # confere
+```
+
+Se a gravação não iniciar sozinha, segure **BOOT**, toque **RST** e solte
+BOOT. Driver USB-serial: CH340 ou CP210x conforme o chip da placa
+(pendência 1). Compilação verificada em 2026-10-16 (espressif32 6.9.0,
+Arduino-ESP32): RAM 44 760 B (13,7%), flash 312 205 B (23,8%), sem avisos no
+código do projeto. **A gravação e o funcionamento na placa ainda não foram
+verificados.**
+
+Configuração por placa: `firmware/src/board_config.h` (pinos, polaridade,
+mapeamentos, AUTORUN, Modbus). A política de inicialização segura está em
+`io_board_begin()` e `plc_init()` (saídas desligadas antes de carregar o
+programa; boot em STOP por padrão).
+
+## 5. Riscos com cargas reais
 
 - Este equipamento **não é um CLP de segurança** e não possui certificação.
   Não use para funções de parada de emergência ou proteção de pessoas.

@@ -17,8 +17,10 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGroupBox, QHB
 from ..comm import (CommError, DeviceClient, DeviceError, ProcessTransport, SerialTransport, TcpTransport,
                     TransportError, list_serial_ports)
 from ..comm.protocol import FAULT_TEXT, DevState
-from ..comm.virtual import ROOT, BuildError, start_virtual_device
+from ..comm.virtual import BuildError, start_virtual_device, virtual_storage_path
 from .io_panel import IOPanel
+
+STORAGE_OVERRIDE: Path | None = None   # usado pelos testes para isolar a "flash" virtual
 
 STATE_STYLE = {
     "STOP": "background:#f59e0b; color:white;",
@@ -259,11 +261,33 @@ class DevicePanel(QWidget):
             port, baud = self.port.currentText().strip(), int(self.baud.currentText())
             return (lambda: SerialTransport(port, baud)), False
         if kind == 1:
-            storage = ROOT / "build" / "virtual_flash.ldrb"
-            storage.parent.mkdir(parents=True, exist_ok=True)
+            storage = virtual_storage_path() if STORAGE_OVERRIDE is None else STORAGE_OVERRIDE
             return (lambda: start_virtual_device(Path(storage))), True
         host, port = self.host.text().strip(), self.tcp_port.value()
         return (lambda: TcpTransport(host, port)), False
+
+    KINDS = ["serial", "virtual", "tcp"]
+
+    def load_target(self, target) -> None:
+        """Preenche a conexao a partir da configuracao salva no projeto."""
+        if self.connected or self.session.auto_reconnect:
+            return
+        self.kind.setCurrentIndex(self.KINDS.index(target.transport) if target.transport in self.KINDS else 0)
+        if target.port:
+            self.port.setCurrentText(target.port)
+        self.baud.setCurrentText(str(target.baudrate))
+        self.host.setText(target.host)
+        self.tcp_port.setValue(target.tcp_port)
+
+    def store_target(self, target) -> bool:
+        """Grava a conexao atual no projeto. Retorna True se algo mudou."""
+        values = {"transport": self.KINDS[self.kind.currentIndex()], "port": self.port.currentText().strip(),
+                  "baudrate": int(self.baud.currentText()), "host": self.host.text().strip(),
+                  "tcp_port": self.tcp_port.value()}
+        changed = any(getattr(target, k) != v for k, v in values.items())
+        for k, v in values.items():
+            setattr(target, k, v)
+        return changed
 
     def toggle_connection(self) -> None:
         if self.connected or self.session.auto_reconnect:

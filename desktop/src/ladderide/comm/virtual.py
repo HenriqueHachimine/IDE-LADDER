@@ -27,6 +27,10 @@ class BuildError(RuntimeError):
 def host_tool(name: str, rebuild: bool = False) -> Path:
     """Caminho do executavel `name` (compila com gcc/$CC se necessario ou desatualizado)."""
     exe = BUILD / f"{name}{EXE_SUFFIX}"
+    if getattr(sys, "frozen", False) or not FIRMWARE.exists():
+        if exe.exists():
+            return exe  # executavel empacotado com a IDE
+        raise BuildError("dispositivo virtual nao incluido nesta instalacao")
     sources = (sorted((FIRMWARE / "lib" / "ladder_vm").glob("*.c"))
                + sorted((FIRMWARE / "lib" / "plc_core").glob("*.c"))
                + [FIRMWARE / "test" / "host" / f"{name}.c"])
@@ -46,6 +50,13 @@ def host_tool(name: str, rebuild: bool = False) -> Path:
     if proc.returncode != 0:
         raise BuildError(proc.stderr)
     return exe
+
+
+def virtual_storage_path() -> Path:
+    """Arquivo que faz o papel da flash do dispositivo virtual."""
+    base = Path.home() / ".ladderide" if getattr(sys, "frozen", False) else ROOT / "build"
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "virtual_flash.ldrb"
 
 
 def start_virtual_device(storage: Path, *extra: str) -> ProcessTransport:

@@ -41,7 +41,7 @@ def window(tmp_path, monkeypatch):
     monkeypatch.setattr(mw.QMessageBox, "information", lambda *a, **k: messages.append(a[1:]))
     monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: messages.append(a[1:]))
     monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: QMessageBox.Yes)
-    monkeypatch.setattr(dp, "ROOT", tmp_path)            # flash virtual isolada por teste
+    monkeypatch.setattr(dp, "STORAGE_OVERRIDE", tmp_path / "flash.ldrb")   # flash virtual isolada
     w = mw.MainWindow()
     w.file_open(str(DEMO))
     w.messages_shown = messages
@@ -78,6 +78,10 @@ def test_connect_transfer_run_and_monitor(window):
     motor_coil = w.project.rungs[0].outputs[0]
     assert wait_for(app, lambda: w.view.items_by_id[motor_coil.id].state.power_in is True)
     assert "16a34a" in panel.io.out_leds[0].styleSheet() and "16a34a" in panel.io.cmd_leds[0].styleSheet()
+    # tabela de temporizadores/contadores preenchida com valores do dispositivo
+    assert panel.io.elements.rowCount() == 3
+    assert wait_for(app, lambda: panel.io.elements.item(0, 2).text().endswith(" ms")
+                    and panel.io.elements.item(0, 2).text() != "0 ms")
 
     # editar o projeto invalida o mapeamento: sem sobreposicao
     w.push_undo()

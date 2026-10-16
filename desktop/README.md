@@ -1,13 +1,21 @@
 # Desktop — `ladderide`
 
-Pacotes em `src/ladderide/`:
+```powershell
+python -m pip install -e ".[gui,comm,dev]"
+python -m ladderide            # IDE
+python -m ladderide.cli --help # linha de comando
+python -m pytest -q            # testes
+```
 
-- `core/isa.py` — carrega `shared/specifications/isa.json` (opcodes, áreas, limites, erros).
-- `core/image.py` — `Program`, `encode`, `decode` (validação normativa), `build_image`.
-- `core/asm.py` — listagem textual LIL: `assemble`, `disassemble`.
-- `core/vm.py` — `LadderVM`: `scan()`, ou `begin_scan()` / `step()` / `end_scan()` para passo a passo; `dump_line()`.
-- `core/crc.py` — CRC-32 e CRC-16/MODBUS.
+| Pacote | Conteúdo |
+|---|---|
+| `core/` | `isa.py` (lê `shared/specifications/isa.json`), `image.py` (LDRB), `asm.py` (LIL), `vm.py` (VM de referência), `crc.py` |
+| `model/` | `project.py` (projeto `.ladproj`), `edit.py` (operações de edição) |
+| `compiler/` | `compiler.py` (modelo → LDRB + diagnósticos + mapa de depuração), `importer.py` (LIL/LDRB → modelo) |
+| `sim/` | `simulator.py` (tempo virtual, contínuo/varredura/passo) |
+| `comm/` | `frames.py`, `transport.py` (serial/TCP/processo), `client.py` (pedidos, transferência), `snapshot.py`, `monitor.py`, `equivalence.py`, `virtual.py` (dispositivo virtual) |
+| `ui/` | `main_window.py`, `ladder_view.py`, `layout.py`, `symbols.py`, `palette.py`, `sim_panel.py`, `device_panel.py`, `io_panel.py`, `dialogs.py` |
+| `cli.py` | linha de comando |
 
-Testes: `python -m pytest -q` (ver `docs/testing.md`).
-
-Interface gráfica (PySide6), modelo de projeto, compilador e simulador: Etapa 4.
+Regra de arquitetura: só `ui/` importa PySide6, e nenhuma regra de execução
+LADDER fica em `ui/`.

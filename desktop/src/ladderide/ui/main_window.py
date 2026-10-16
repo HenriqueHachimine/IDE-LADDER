@@ -217,7 +217,8 @@ class MainWindow(QMainWindow):
         self._fill_symbols()
         self.sim_panel.io.configure(self.project, self.sim.result if self.sim else self.result)
         self.device_panel.io.configure(self.project, self.result)
-        self.device_panel.expected_build_id = self.result.build_id if self.result and self.result.ok else None
+        self._device_io_build = self.result.build_id if self.result and self.result.ok else None
+        self.device_panel.expected_build_id = self._device_io_build
         self._update_live()
         self._update_title()
         self._update_actions()
@@ -508,6 +509,10 @@ class MainWindow(QMainWindow):
         self.bottom_tabs.setCurrentIndex(0)
         self.view.set_errors({d.element_id for d in self.result.errors if d.element_id})
         self.device_panel.expected_build_id = self.result.build_id if self.result.ok else None
+        if self.result.ok and self._device_io_build != self.result.build_id:
+            # tabelas de temporizadores/contadores do painel dependem do programa compilado
+            self.device_panel.io.configure(self.project, self.result)
+            self._device_io_build = self.result.build_id
         self._update_actions()
         return self.result.ok
 
@@ -654,6 +659,9 @@ class MainWindow(QMainWindow):
                 f"{result.bytes_sent} bytes em {result.chunks} bloco(s), {result.retries} retransmissao(oes)\n"
                 f"build_id 0x{result.build_id:08x}, CRC-32 0x{result.crc:08x}\n\n"
                 f"O dispositivo esta em STOP. Use RUN para executar."))
+        if tag == "connect" and self.device_panel.store_target(self.project.target):
+            self.dirty = True          # configuracao do dispositivo de destino salva no projeto
+            self._update_title()
         if tag in ("transfer", "mode", "connect"):
             self.session.poll()
 
@@ -688,6 +696,7 @@ class MainWindow(QMainWindow):
         self.redo_stack.clear()
         self.messages.clear()
         self.view.selection = None
+        self.device_panel.load_target(project.target)
         self.refresh()
 
     def file_new(self) -> None:

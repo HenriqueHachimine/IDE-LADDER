@@ -1,59 +1,66 @@
-# Guia de desenvolvimento, plano incremental e organização da equipe
+# Guia de desenvolvimento, plano e organização da equipe
 
 ## 1. Ambiente
 
-| Ferramenta | Versão mínima | Uso |
+| Ferramenta | Versão usada | Uso |
 |---|---|---|
-| Python | 3.11 | Desktop e scripts |
-| pytest | 8 | testes |
-| gcc (MinGW no Windows, ou Linux) | qualquer C99 | compilar a VM C para testes |
-| PySide6 | 6.6 | interface (a partir da Etapa 4) |
-| pyserial | 3.5 | comunicação (Etapa 6) |
-| PlatformIO Core | 6 | firmware (Etapa 5) |
+| Python | 3.11 | Desktop, scripts |
+| PySide6 | 6.12 | interface |
+| pyserial | 3.5 | comunicação serial |
+| pytest | 8+ | testes |
+| gcc | 6.3 (MinGW) ou qualquer C99 | VM C, dispositivo virtual, autotestes |
+| PlatformIO Core | 6.2 (espressif32 6.9.0) | firmware |
+| PyInstaller | 6.22 | executável Windows |
 
-## 2. Plano incremental e critérios de aceite
+```powershell
+python -m pip install -e "desktop[gui,comm,dev]" platformio pyinstaller
+```
 
-Regra geral: nenhuma etapa termina sem código funcional, testes, documentação
-atualizada e commit.
+## 2. Etapas, entregas e critérios de aceite
 
-| Etapa | Entregas | Critérios de aceite | Situação |
+| Etapa | Entregas | Critério de aceite | Situação |
 |---|---|---|---|
-| 1 Análise | requisitos, referências, ADRs, riscos | `docs/analysis.md` revisado pelo grupo; pendências com responsável | ✅ entregue (pendências abertas) |
-| 2 Especificação | spec LADDER, formato LDRB, LIL, protocolo (rascunho), vetores | toda regra da spec coberta por ≥ 1 vetor | ✅ |
-| 3 Motor de execução | `core` (Python) + `ladder_vm` (C) + testes diferenciais | vetores e fuzzing sem divergência; build C com `-Wall -Wextra -Werror` | ✅ |
-| 4 Simulador Desktop | modelo de projeto (JSON versionado), compilador com diagnósticos por rede/elemento, editor gráfico, painel de simulação | criar o programa de demonstração só pela interface; salvar/abrir; compilar; simular contínuo e passo a passo com realce de energia; testes de modelo/compilador | próxima |
-| 5 Firmware | `io_board`, `scan_task`, `plc_state`, `program_mgr` (programa embutido para teste) | 8 relés acionados individualmente; 8 entradas lidas; varredura de 10 ms medida; STOP leva às saídas seguras | requer hardware confirmado |
-| 6 Comunicação | LDP no firmware e no Desktop; transferência transacional | testes de falha da seção 9.3 do enunciado (transporte simulado) + carga real com CRC conferido | |
-| 7 Monitor online | leitura periódica, realce no diagrama, lógico × comandado, reconexão | atualização ≥ 5 Hz; indicação de desconexão < 1 s | |
-| 8 Integração | replay de vetores no ESP32, roteiro de hardware, demonstração | todos os vetores idênticos no ESP32; roteiro com evidências | |
-| 9 Entrega | README, relatório, contribuições, release | instalação reproduzida em máquina limpa | |
+| 1 Análise | requisitos, referências, ADRs | `docs/analysis.md` revisado pelo grupo | ✅ (pendências abertas) |
+| 2 Especificação | spec LADDER, LDRB, LIL, vetores | toda regra coberta por vetor | ✅ |
+| 3 Motor | VMs Python e C, testes diferenciais | vetores + fuzzing sem divergência | ✅ |
+| 4 Simulador Desktop | modelo, compilador, editor, simulador | criar a demonstração só pela interface; testes de UI | ✅ |
+| 5 Firmware | HAL ESP32, varredura, estados | compila sem avisos; ensaios H0–H3, H8, H12, H13 | ✅ código / ⏳ hardware |
+| 6 Comunicação | LDP, transferência transacional | testes de falha no dispositivo virtual; H10 | ✅ virtual / ⏳ hardware |
+| 7 Monitor | monitor online, reconexão | testes de UI com dispositivo virtual; H11 | ✅ virtual / ⏳ hardware |
+| 8 Integração | replay dos vetores no dispositivo, roteiro de hardware | H9 18/18; H1–H14 com evidências | ✅ virtual / ⏳ hardware |
+| 9 Entrega | README, relatório, manual, executável | instalação reproduzida em máquina limpa; relatório com contribuições reais | ✅ documentos / ⏳ revisão do grupo |
 
-## 3. Divisão de responsabilidades (adaptar ao tamanho do grupo)
+## 3. Responsabilidades (adaptar ao número de integrantes)
 
-| Papel | Módulos | Depende de |
+| Papel | Módulos | Critério de aceite das tarefas |
 |---|---|---|
-| Diretor de execução / arquitetura | integração, revisão de PRs, ADRs, prazos | — |
-| Editor gráfico e projetos | `ui`, `model` (persistência) | `model`, `compiler` |
-| Compilador, modelo e simulador | `model`, `compiler`, `sim`, `core` | spec |
-| Firmware | `io_board`, `scan_task`, `plc_state`, `program_mgr` | `ladder_vm`, hardware |
-| Comunicação e monitor | `comm` (Desktop), `proto`/`monitor` (firmware) | LDP, `program_mgr` |
-| Testes, documentação e relatório | vetores, roteiro de hardware, `docs/report` | todos |
+| Diretor de execução | integração, revisão, prazos, `docs/report` | todo PR revisado; `main` sempre verde |
+| Editor e projetos | `ui/`, `model/` | operações cobertas por `test_ui.py` |
+| Compilador e simulador | `compiler/`, `sim/`, `core/` | diagnósticos com rede/elemento; equivalência mantida |
+| Firmware | `firmware/src`, `plc_core` | `pio run` sem avisos; ensaios H1–H3, H8, H12 |
+| Comunicação e monitor | `comm/`, `ldp_frame`, `plc_runtime` | `test_comm.py`; ensaios H9–H11 |
+| Testes e documentação | vetores, roteiros, relatório | resultados registrados com evidência |
 
-Com 3 pessoas: (diretor + compilador/simulador), (editor + monitor no Desktop),
-(firmware + comunicação no firmware); testes e documentação são de todos.
+Dependências: spec → (VMs, compilador) → simulador; protocolo → (firmware,
+`comm`) → monitor; hardware confirmado → ensaios.
 
 ## 4. Convenções
 
-- **Código** em inglês (nomes); **documentação e mensagens ao usuário** em
-  português.
-- Python: tipagem nas assinaturas públicas, `ruff` como linter (a configurar
-  na Etapa 4). C: C99, `-Wall -Wextra -Werror`, sem alocação dinâmica no
-  caminho da varredura.
-- Branches: `main` sempre verde; trabalho em `feature/<etapa>-<assunto>`;
-  integração por *pull request* com revisão de outro integrante.
-- Commits: imperativo, em português, prefixados pela área
-  (`core:`, `firmware:`, `docs:`, `ui:`…).
-- Mudança de semântica ou formato: spec → vetores → as duas VMs, no mesmo PR
-  (ver `CONTRIBUTING.md`).
-- Versionamento semântico do Desktop e do firmware; formato LDRB com versão
-  própria (`docs/intermediate-format.md` §5).
+- Nomes no código em inglês; documentação e mensagens em português.
+- Python tipado nas interfaces públicas; C99 com `-Wall -Wextra -Werror`, sem
+  alocação dinâmica no firmware.
+- Branches `feature/<etapa>-<assunto>`; PR com revisão; `main` verde.
+- Commits no imperativo, com prefixo de área.
+- Mudança de semântica/formato/protocolo: spec → JSON → vetores → as duas
+  implementações, no mesmo PR (`CONTRIBUTING.md`).
+- Versionamento semântico: Desktop/firmware; LDRB e LDP têm versões próprias.
+
+## 5. Como estender
+
+- **Nova instrução:** `isa.json` (opcode, classe de operando) → spec → vetor →
+  `vm.py` e `ladder_vm.c` → `compiler.py`, `importer.py`, `ui/symbols.py`,
+  paleta. Incremente `minor` do LDRB.
+- **Nova placa:** `firmware/src/board_config.h` (e `io_board.cpp` se o
+  hardware de E/S for diferente).
+- **Wi-Fi/TCP:** implementar uma HAL de envio por socket no firmware; o
+  Desktop já tem `TcpTransport`.

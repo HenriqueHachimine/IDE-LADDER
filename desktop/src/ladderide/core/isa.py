@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from enum import IntEnum
 from pathlib import Path
 
@@ -16,6 +17,8 @@ def _find_isa_json() -> Path:
     override = os.environ.get("LADDERIDE_ISA_JSON")
     if override:
         return Path(override)
+    if getattr(sys, "frozen", False):  # executavel PyInstaller: dados ao lado do pacote
+        return Path(sys._MEIPASS) / "shared" / "specifications" / "isa.json"
     # desktop/src/ladderide/core/isa.py -> raiz do repositorio
     return Path(__file__).resolve().parents[4] / "shared" / "specifications" / "isa.json"
 

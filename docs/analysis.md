@@ -70,6 +70,7 @@ manutenibilidade por turmas futuras; distribuição simples no Windows.
 | [0003](decisions/0003-firmware-arduino-platformio.md) | Firmware Arduino-ESP32 via PlatformIO, núcleo em C99 portátil |
 | [0004](decisions/0004-protocolo-ldp.md) | Protocolo próprio (LDP) na USB; Modbus RTU só leitura |
 | [0005](decisions/0005-tempo-por-dt.md) | Tempo entra na VM como `dt` inteiro em ms |
+| [0006](decisions/0006-plc-core-portavel-dispositivo-virtual.md) | Lógica do dispositivo em C portátil + dispositivo virtual (Etapa 5) |
 
 ## 4. Riscos e informações a confirmar
 

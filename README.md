@@ -1,105 +1,115 @@
 # CLP LADDER com ESP32
 
-IDE LADDER para Windows (editor, compilador, simulador, transferência e monitor)
-e firmware interpretador para uma placa ESP32 com 8 relés, desenvolvidos como
-trabalho final da disciplina de Controladores Lógicos Programáveis.
+IDE LADDER para Windows (editor gráfico, compilador, simulador, transferência e
+monitor online) e firmware interpretador para uma placa ESP32 com 8 relés.
+Trabalho final da disciplina de Controladores Lógicos Programáveis.
 
-> **Situação (v0.1.0, 2026-10-16):** Etapas 1–3 concluídas — especificação,
-> formato intermediário e motor de execução (Python e C) com testes de
-> equivalência. Interface gráfica, firmware de hardware, comunicação e monitor
-> **ainda não existem**; veja o [plano](docs/development-guide.md).
+> **Situação (v0.9.0, 2026-10-16):** software completo e testado no PC
+> (207 testes, incluindo o firmware executado como "dispositivo virtual").
+> O firmware compila para o ESP32, mas **ainda não foi testado na placa** —
+> ver [roteiro de hardware](docs/hardware-test-procedure.md).
 
 ## Funcionalidades
 
-| Funcionalidade | Situação |
-|---|---|
-| Especificação formal das instruções e do ciclo de varredura | ✅ [spec](docs/ladder-specification.md) |
-| Formato binário LDRB + listagem textual LIL | ✅ [formato](docs/intermediate-format.md) |
-| VM de referência (simulador) com execução por varredura e passo a passo | ✅ núcleo, sem interface |
-| VM C para o ESP32 (C99 portátil) | ✅ testada no PC; não testada no ESP32 |
-| Equivalência Python × C (vetores + fuzzing) | ✅ |
-| Editor gráfico, projeto, compilador com diagnósticos | Etapa 4 |
-| Firmware com E/S, STOP/RUN/FAULT | Etapa 5 |
-| Transferência transacional (protocolo LDP) | Etapa 6 — [rascunho](docs/communication-protocol.md) |
-| Monitor online | Etapa 7 |
-
-Instruções: XIC/XIO (contato NA/NF), NOT, ramos paralelos, OTE, OTL (SET),
-OTU (RESET), TON, TOF, RTO, CTU, CTD, RES.
+- **Editor gráfico** com arrastar e soltar, ramos paralelos, símbolos,
+  desfazer/refazer, zoom, numeração e comentários de redes
+- **Instruções:** contato NA (XIC), NF (XIO), NOT, bobina, SET (OTL), RESET
+  (OTU), TON, TOF, RTO, CTU, CTD, RES
+- **Compilador** com erros e avisos por rede e elemento; nunca gera programa inválido
+- **Simulador** contínuo (0,1× a 10×), por varredura e passo a passo, com
+  fluxo de energia, entradas virtuais, temporizadores e contadores ao vivo
+- **Transferência** USB transacional (CRC, validação no firmware, gravação
+  atômica; falhas preservam o programa anterior)
+- **Monitor online** com o diagrama animado pelo estado do ESP32, lógico ×
+  comandado, detecção de perda de comunicação e reconexão
+- **Firmware** com STOP/RUN/PROGRAM_LOADING/FAULT, varredura de 10 ms,
+  watchdog, estado seguro configurável e Modbus RTU somente leitura
+- **Dispositivo virtual**: o firmware rodando no PC, para aulas e testes sem placa
+- **Equivalência garantida por testes**: simulador e firmware executam o mesmo
+  bytecode e são comparados varredura a varredura
 
 ## Arquitetura
 
-O Desktop compila o diagrama para um bytecode compacto (LDRB). O mesmo bytecode
-é executado pela VM Python do simulador e pela VM C do ESP32, que seguem a
-mesma especificação e são comparadas varredura a varredura nos testes.
-Detalhes em [docs/architecture.md](docs/architecture.md).
+```
+desktop/   IDE (Python + PySide6): core, model, compiler, sim, comm, ui, cli
+firmware/  ESP32 (PlatformIO): lib/ladder_vm, lib/plc_core (C99 portátil), src/ (HAL ESP32)
+shared/    isa.json, protocol.json (fontes únicas) e vetores de teste
+examples/  demonstração, portas lógicas, temporizadores, contadores, testes de hardware
+docs/      especificações, arquitetura, ADRs, manual, testes, relatório
+scripts/   geração de headers, exemplos, executável Windows
+```
 
-```
-desktop/          IDE (Python): src/ladderide/core = ISA, LDRB, montador, VM
-firmware/         ESP32 (PlatformIO): lib/ladder_vm = VM C, validação, CRC
-shared/           isa.json (fonte única) e vetores de teste
-docs/             especificações, arquitetura, ADRs, testes, hardware
-scripts/          geração do header C a partir do isa.json
-```
+Detalhes: [arquitetura](docs/architecture.md) · [especificação LADDER](docs/ladder-specification.md) ·
+[formato LDRB](docs/intermediate-format.md) · [protocolo](docs/communication-protocol.md) ·
+[formato de projeto](docs/project-format.md) · [decisões](docs/decisions/)
 
 ## Requisitos
 
-- Windows 10/11, Python ≥ 3.11, `pip install pytest`
-- `gcc` no PATH para os testes de equivalência (MinGW no Windows)
-- Hardware (a partir da Etapa 5): placa ESP32 8 relés —
-  ver [docs/hardware-setup.md](docs/hardware-setup.md)
+- Windows 10/11, Python ≥ 3.11
+- `gcc` (MinGW) no PATH para o dispositivo virtual e os testes em C
+- Firmware: PlatformIO; placa ESP32 8 relés ([hardware](docs/hardware-setup.md))
 
-## Executar os testes
+## Instalação e execução
 
 ```powershell
-cd desktop
-python -m pip install pytest
-python -m pytest -q
+python -m pip install -e "desktop[gui,comm,dev]"
+python -m ladderide                                   # abre a IDE
+python -m ladderide examples\demo\demonstracao.ladproj
 ```
 
-## Experimentar o núcleo
+Executável: `python -m pip install pyinstaller` e `python scripts/build_windows.py`
+→ `dist\LadderIDE\LadderIDE.exe` (inclui exemplos e dispositivo virtual).
 
-```python
-from ladderide.core import assemble, build_image, decode, LadderVM
+Manual: [docs/user-guide.md](docs/user-guide.md).
 
-src = """
-.timer T0 TON 1000
-SOR
-XIC I0.0
-TON T0
-EOR
-SOR
-XIC T0.DN
-OTE Q0.0
-EOR
-"""
-image = build_image(assemble(src))      # bytes LDRB validados (CRC incluso)
-vm = LadderVM(decode(image))
-for _ in range(102):
-    vm.scan(inputs=0b1, dt_ms=10)       # I0.0 ligado, varredura de 10 ms
-print(vm.timers[0], bin(vm.outputs))
+## Firmware e primeira transferência
+
+```powershell
+python -m pip install platformio
+cd firmware; pio run -t upload --upload-port COM5; cd ..
+python -m ladderide.cli --port COM5 info
+python -m ladderide.cli --port COM5 download examples\demo\demonstracao.ladproj
+python -m ladderide.cli --port COM5 run
 ```
-(execute dentro de `desktop/` após `$env:PYTHONPATH="src"` no PowerShell)
+
+Ou pela IDE: aba **Dispositivo** → Serial → Conectar → **Transferir** (F8) → RUN.
+Sem placa, escolha "Dispositivo virtual".
+
+## Exemplos
+
+| Exemplo | Conteúdo |
+|---|---|
+| `examples/demo` | Roteiro da demonstração: selo, TON, TOF, CTU, RES, relógio ([roteiro](docs/demo-script.md)) |
+| `examples/combinational` | AND, OR, NOT, XOR, NAND, SET/RESET |
+| `examples/timers` | TON, TOF, RTO, oscilador |
+| `examples/counters` | CTU, CTD, RES |
+| `examples/hardware` | Teste de relés em sequência, espelho de entradas |
+
+## Testes
+
+```powershell
+cd desktop; python -m pytest -q
+```
+
+Estratégia e resultados: [docs/testing.md](docs/testing.md).
 
 ## Contribuir
 
-Veja [CONTRIBUTING.md](CONTRIBUTING.md) e
-[docs/development-guide.md](docs/development-guide.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) e [guia de desenvolvimento](docs/development-guide.md).
 
 ## Limitações conhecidas
 
-- Sem interface gráfica, comunicação ou firmware de hardware nesta versão.
-- Sem memória retentiva entre partidas (STOP→RUN é partida a frio).
-- Não é um CLP de segurança; não use para funções de proteção de pessoas.
-- Mapeamento de hardware ainda não confirmado na placa do grupo.
+- Não testado na placa real (pendências em [hardware-setup](docs/hardware-setup.md)).
+- Sem memória retentiva entre partidas; sem forçamento de E/S; sem edição em RUN.
+- Wi-Fi/TCP só no lado do Desktop.
+- A placa não mede o estado físico dos relés.
+- Não é um CLP de segurança: não use para proteção de pessoas.
 
 ## Créditos e referências
 
-- Mapeamento da placa baseado em
-  [multigcs/esp32_relay_x8_modbus_303e32dc812](https://github.com/multigcs/esp32_relay_x8_modbus_303e32dc812)
-  (MIT, © 2026 Oliver Dippel).
-- Projeto acadêmico anterior (IFTM) usado como referência de interface:
-  [Pedrofrac/Trabalho-Final-CLP](https://github.com/Pedrofrac/Trabalho-Final-CLP).
-- Nomenclatura XIC/XIO/OTE/OTL/OTU/TON/TOF/RTO/CTU/CTD/RES inspirada na
-  família Allen-Bradley; semântica própria definida na especificação.
+- Mapeamento da placa: [multigcs/esp32_relay_x8_modbus_303e32dc812](https://github.com/multigcs/esp32_relay_x8_modbus_303e32dc812) (MIT, © 2026 Oliver Dippel).
+- Projeto anterior usado como referência de interface: [Pedrofrac/Trabalho-Final-CLP](https://github.com/Pedrofrac/Trabalho-Final-CLP).
+- Nomenclatura de instruções inspirada na família Allen-Bradley; semântica própria e documentada.
+- Bibliotecas: PySide6 (LGPL), pyserial (BSD), Arduino-ESP32 (LGPL), LittleFS (BSD).
 
-Licença: [MIT](LICENSE).
+Licença: [MIT](LICENSE). Relatório: [docs/report/relatorio.md](docs/report/relatorio.md).

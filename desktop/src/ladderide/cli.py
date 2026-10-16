@@ -19,14 +19,14 @@ from pathlib import Path
 from .comm import CommError, DeviceClient, DeviceError, SerialTransport, TcpTransport, list_serial_ports
 from .comm.equivalence import load_scan_vectors, run_vector_on_device
 from .comm.protocol import FAULT_TEXT
-from .comm.virtual import ROOT, start_virtual_device
+from .comm.virtual import ROOT, start_virtual_device, virtual_storage_path
 from .compiler import compile_project
 from .model import Project
 
 
 def _client(args) -> DeviceClient:
     if args.virtual:
-        storage = Path(args.virtual_storage)
+        storage = Path(args.virtual_storage) if args.virtual_storage else virtual_storage_path()
         storage.parent.mkdir(parents=True, exist_ok=True)
         return DeviceClient(start_virtual_device(storage), timeout=0.5)
     if args.host:
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--host", help="endereco TCP do dispositivo")
     ap.add_argument("--tcp-port", type=int, default=5020)
     ap.add_argument("--virtual", action="store_true", help="usa o dispositivo virtual (PC)")
-    ap.add_argument("--virtual-storage", default=str(ROOT / "build" / "virtual_flash.ldrb"))
+    ap.add_argument("--virtual-storage", default=None, help="arquivo da flash virtual")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("ports")
     c = sub.add_parser("compile")
