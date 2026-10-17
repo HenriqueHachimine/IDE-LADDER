@@ -16,10 +16,8 @@ WHITE = QColor("#ffffff")
 
 
 def font(size: float, bold: bool = False) -> QFont:
-    f = QFont("Segoe UI", 1)
-    f.setPointSizeF(size)
-    f.setBold(bold)
-    return f
+    from ..ui.fonts import ui_font
+    return ui_font(size, bold)
 
 
 def text(p: QPainter, x: float, y: float, s: str, size: float = 8, bold: bool = False, color: QColor = INK,

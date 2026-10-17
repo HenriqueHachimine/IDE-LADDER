@@ -8,8 +8,10 @@ os importou passa a desenhar com a nova cor no proximo repaint.
 from __future__ import annotations
 
 from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QPalette
+from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
+
+from .fonts import ui_font
 
 MODES = {"light": "Claro", "dark": "Escuro", "system": "Seguir o Windows"}
 
@@ -189,7 +191,7 @@ def apply_theme(app: QApplication, mode: str | None = None) -> str:
     for c, lc, dc in _themed:
         c.setRgba((dc if current_name == "dark" else lc).rgba())
     app.setStyle("Fusion")
-    app.setFont(QFont("Segoe UI", 9))
+    app.setFont(ui_font(9))
     app.setPalette(_palette(colors))
     app.setStyleSheet(build_qss(colors))
     return current_name

@@ -6,7 +6,7 @@
     python -m ladderide.cli --port COM5 download projeto.ladproj [--stop]
     python -m ladderide.cli --port COM5 monitor [--interval 0.2] [--count N]
     python -m ladderide.cli --port COM5 equivalence [--vectors shared/test-vectors/scan]
-    (use --virtual no lugar de --port para o dispositivo virtual)
+    (no Linux a porta e /dev/ttyUSB0 ou /dev/ttyACM0; use --virtual para o dispositivo virtual)
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def _bits(mask: int, n: int) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ladderide.cli", description="Ferramentas do CLP LADDER ESP32")
-    ap.add_argument("--port", help="porta serial (ex.: COM5)")
+    ap.add_argument("--port", help="porta serial (ex.: COM5 no Windows, /dev/ttyUSB0 no Linux)")
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--host", help="endereco TCP do dispositivo")
     ap.add_argument("--tcp-port", type=int, default=5020)

@@ -52,11 +52,14 @@ Detalhes: [arquitetura](docs/architecture.md) · [especificação LADDER](docs/l
 
 ## Requisitos
 
-- Windows 10/11, Python ≥ 3.11
-- `gcc` (MinGW) no PATH para o dispositivo virtual e os testes em C
+- **Windows 10/11** ou **Linux** (testado em Debian 12 e Ubuntu 24.04), Python ≥ 3.11
+- `gcc` no PATH para o dispositivo virtual, a verificação para ESP32 e os testes
+  em C (Windows: MinGW; Linux: `sudo apt install build-essential`)
 - Firmware: PlatformIO; placa ESP32 8 relés ([hardware](docs/hardware-setup.md))
 
 ## Instalação e execução
+
+**Windows** (PowerShell):
 
 ```powershell
 python -m pip install -e "desktop[gui,comm,dev]"
@@ -64,8 +67,23 @@ python -m ladderide                                   # abre a IDE
 python -m ladderide examples\demo\demonstracao.ladproj
 ```
 
-Executável: `python -m pip install pyinstaller` e `python scripts/build_windows.py`
-→ `dist\LadderIDE\LadderIDE.exe` (inclui exemplos e dispositivo virtual).
+**Linux** (bash):
+
+```bash
+sudo apt install python3-venv build-essential libxcb-cursor0   # Debian/Ubuntu
+python3 -m venv .venv && . .venv/bin/activate
+python -m pip install -e "desktop[gui,comm,dev]"
+python -m ladderide examples/demo/demonstracao.ladproj
+sudo usermod -aG dialout $USER     # acesso a /dev/ttyUSB0 do ESP32 (saia e entre na sessao)
+```
+
+**Executável** (gerado no próprio sistema de destino):
+`python -m pip install pyinstaller` e `python scripts/build_app.py`.
+- Windows: `dist\LadderIDE\LadderIDE.exe`.
+- Linux: `dist/LadderIDE/LadderIDE` e o pacote `dist/LadderIDE-linux-x86_64.tar.gz`.
+  Para colocar no menu de aplicativos, rode `./install.sh` dentro do pacote.
+
+Os dois incluem exemplos, a VM C e o dispositivo virtual.
 
 Manual: [docs/user-guide.md](docs/user-guide.md).
 
@@ -73,7 +91,7 @@ Manual: [docs/user-guide.md](docs/user-guide.md).
 
 ```powershell
 python -m pip install platformio
-cd firmware; pio run -t upload --upload-port COM5; cd ..
+cd firmware; pio run -t upload --upload-port COM5; cd ..     # Linux: --upload-port /dev/ttyUSB0
 python -m ladderide.cli --port COM5 info
 python -m ladderide.cli --port COM5 download examples\demo\demonstracao.ladproj
 python -m ladderide.cli --port COM5 run

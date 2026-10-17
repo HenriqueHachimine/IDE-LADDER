@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel, QPushButton, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..envs import BUTTON, SWITCH, Environment, EnvironmentPlant, available, create
 from ..envs.registry import load_errors
 from .theme import themed
+from .fonts import ui_font
 
 VIEW_BG = themed("#e2e8f0", "#0b1120")
 VIEW_TEXT = themed("#64748b", "#94a3b8")
@@ -43,7 +44,7 @@ class EnvironmentView(QWidget):
         p.fillRect(self.rect(), VIEW_BG)
         if self.env is None:
             p.setPen(VIEW_TEXT)
-            p.setFont(QFont("Segoe UI", 10))
+            p.setFont(ui_font(10))
             p.drawText(self.rect(), Qt.AlignCenter, "Escolha um ambiente de simulacao acima")
             return
         scale, ox, oy = self._transform()
@@ -61,9 +62,7 @@ class EnvironmentView(QWidget):
         p.restore()
         alarms = self.env.alarms()
         if alarms:
-            f = QFont("Segoe UI", 9)
-            f.setBold(True)
-            p.setFont(f)
+            p.setFont(ui_font(9, bold=True))
             line_h = p.fontMetrics().height() + 4
             box = QRectF(ox + 6, oy + 6, w * scale - 12, line_h * len(alarms) + 8)
             p.setPen(QPen(QColor("#7f1d1d"), 1))

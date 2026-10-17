@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from PySide6.QtCore import QMimeData, QPointF, QRectF, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QColor, QDrag, QFont, QPainter, QPen, QPixmap
+from PySide6.QtGui import QAction, QColor, QDrag, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QGraphicsItem, QGraphicsLineItem, QGraphicsRectItem,
                                QGraphicsScene, QGraphicsView, QMenu)
 
@@ -18,6 +18,7 @@ from .layout import RUNG_HEAD, RUNG_PAD, Layout, PlacedElem, Slot, build_layout
 from .symbols import (CURRENT_BORDER, DEENERGIZED, ENERGIZED, ERROR_FILL, NEUTRAL, SELECTED_BORDER,
                       SELECTED_FILL, SymbolState, paint_symbol)
 from .theme import themed
+from .fonts import ui_font
 
 SX, SY = 100.0, 66.0       # pixels por unidade de grade
 LABEL_W = 0.3              # margem entre a borda do cartao e o trilho esquerdo
@@ -143,9 +144,7 @@ class RungCard(QGraphicsRectItem):
         head_h = RUNG_HEAD * SY
         p.setPen(QPen(CARD_HEAD_LINE, 1))
         p.drawLine(QPointF(r.left() + 1, r.top() + head_h), QPointF(r.right() - 1, r.top() + head_h))
-        f = QFont("Segoe UI", 8)
-        f.setBold(True)
-        p.setFont(f)
+        p.setFont(ui_font(8, bold=True))
         text = f"Rede {self.index}"
         bw = p.fontMetrics().horizontalAdvance(text) + 16
         badge = QRectF(r.left() + 10, r.top() + 6, bw, head_h - 12)
@@ -155,9 +154,7 @@ class RungCard(QGraphicsRectItem):
         p.setPen(QColor(255, 255, 255) if self.selected else BADGE_TEXT)
         p.drawText(badge, Qt.AlignCenter, text)
         if self.comment:
-            f = QFont("Segoe UI", 8)
-            f.setItalic(True)
-            p.setFont(f)
+            p.setFont(ui_font(8, italic=True))
             p.setPen(COMMENT_TEXT)
             area = QRectF(badge.right() + 10, r.top(), r.right() - badge.right() - 20, head_h)
             p.drawText(area, Qt.AlignLeft | Qt.AlignVCenter,
@@ -219,7 +216,7 @@ class LadderView(QGraphicsView):
         hint = scene.addRect(QRectF(left, new_y, right - left, 0.6 * SY),
                              QPen(HINT_BORDER, 1.2, Qt.DashLine), QColor(0, 0, 0, 0))
         hint.setZValue(-5)
-        text = scene.addText("+  Solte uma instrucao aqui para criar uma nova rede", QFont("Segoe UI", 8))
+        text = scene.addText("+  Solte uma instrucao aqui para criar uma nova rede", ui_font(8))
         text.setDefaultTextColor(COMMENT_TEXT)
         text.setPos(left + 12, new_y + 0.3 * SY - text.boundingRect().height() / 2)
         for w in lay.wires:

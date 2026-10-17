@@ -5,6 +5,9 @@
  *
  *   virtual_device <arquivo_programa> [--autorun] [--watchdog-us N]
  */
+#ifndef _WIN32
+#define _POSIX_C_SOURCE 200809L /* clock_gettime/nanosleep com -std=c99 no Linux */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -120,7 +123,8 @@ static void sleep_ms(unsigned ms)
 #ifdef _WIN32
     Sleep(ms);
 #else
-    usleep(ms * 1000u);
+    struct timespec ts = {(time_t)(ms / 1000u), (long)(ms % 1000u) * 1000000L};
+    nanosleep(&ts, NULL);
 #endif
 }
 

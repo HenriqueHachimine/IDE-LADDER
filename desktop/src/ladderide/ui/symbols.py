@@ -7,6 +7,7 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 
 from .theme import themed
+from .fonts import mono_font, ui_font
 
 # (cor no tema claro, cor no tema escuro)
 ENERGIZED = themed((22, 163, 74), (34, 197, 94))
@@ -50,11 +51,8 @@ def _pen(power: bool | None, width: float = 2.0) -> QPen:
     return pen
 
 
-def _font(size: float, bold: bool = False, family: str = "Segoe UI") -> QFont:
-    f = QFont(family, 1)
-    f.setPointSizeF(size)
-    f.setBold(bold)
-    return f
+def _font(size: float, bold: bool = False, family: str = "ui") -> QFont:
+    return mono_font(size, bold) if family == "mono" else ui_font(size, bold)
 
 
 def _labels(p: QPainter, r: QRectF, st: SymbolState, top: float, bottom: float) -> None:
@@ -69,7 +67,7 @@ def _labels(p: QPainter, r: QRectF, st: SymbolState, top: float, bottom: float) 
         p.drawText(QRectF(r.left() + 3, r.top(), avail, top - r.top() - 2), Qt.AlignHCenter | Qt.AlignBottom,
                    p.fontMetrics().elidedText(st.label, Qt.ElideRight, int(avail)))
     if st.sublabel:
-        p.setFont(_font(7.5, False, "Consolas"))
+        p.setFont(_font(7.5, False, "mono"))
         p.setPen(SUBLABEL)
         p.drawText(QRectF(r.left(), bottom + 2, r.width(), r.bottom() - bottom), Qt.AlignHCenter | Qt.AlignTop,
                    st.sublabel)
@@ -171,7 +169,7 @@ def paint_symbol(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
             p.setFont(_font(8, True))
             p.drawText(QRectF(box.left() + 5, body_top, box.width() - 10, line_h), Qt.AlignLeft | Qt.AlignVCenter,
                        p.fontMetrics().elidedText(st.label, Qt.ElideRight, int(box.width() - 10)))
-        p.setFont(_font(7.5, False, "Consolas"))
+        p.setFont(_font(7.5, False, "mono"))
         p.setPen(SUBLABEL)
         if st.lines:
             p.drawText(QRectF(box.left() + 5, body_top + line_h, box.width() - 10, line_h),

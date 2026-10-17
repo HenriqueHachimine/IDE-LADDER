@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QHeaderView, QLabel, QP
 
 from ..verify.il_blocks import il_blocks, il_text
 from .theme import themed
+from .fonts import mono_font
 
 POWER_ON = themed("#15803d", "#4ade80")
 POWER_OFF = themed("#64748b", "#64748b")
@@ -52,7 +53,7 @@ class ILPanel(QWidget):
             row.addWidget(b)
         row.addStretch(1)
         layout.addLayout(row)
-        self.mono = QFont("Consolas", 9)
+        self.mono = mono_font(9)
         self.line_items: list[QTreeWidgetItem] = []      # indice = pc
         self.items_by_element: dict[str, list[QTreeWidgetItem]] = {}
         self.text = ""

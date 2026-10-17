@@ -21,6 +21,12 @@ ensaios na placa real.
   aplicado sem reiniciar e lembrado entre sessões.
 
 ### Alterado
+- Suporte a Linux: fontes com alternativas (DejaVu, Noto, Ubuntu...),
+  `scripts/build_app.py` gera o executável no Windows e no Linux (com
+  `.tar.gz`, ícone, atalho de menu e `install.sh`), documentação de instalação
+  e de acesso à porta serial (`dialout`). O dispositivo virtual em C passou a
+  compilar no Linux (`_POSIX_C_SOURCE`, `nanosleep`). A suíte de testes roda nos
+  dois sistemas.
 - Física realista nos ambientes (`envs/physics.py`): inércia da esteira,
   fotocélula física, válvula com atraso, vazão de Torricelli e produto em queda
   no silo; veículos com IDM, zona de dilema no amarelo e pedestres a 1,3 m/s

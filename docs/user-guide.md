@@ -2,19 +2,37 @@
 
 ## 1. Instalação
 
-**Executável:** copie a pasta `dist\LadderIDE` (gerada por
-`python scripts/build_windows.py`) e execute `LadderIDE.exe`.
+A IDE roda no **Windows** e no **Linux**.
 
-**A partir do código:**
+**Executável:** gere com `python scripts/build_app.py` no próprio sistema.
+- Windows: copie a pasta `dist\LadderIDE` e execute `LadderIDE.exe`.
+- Linux: descompacte `LadderIDE-linux-x86_64.tar.gz`, execute `./LadderIDE`
+  ou rode `./install.sh` para criar o atalho no menu de aplicativos.
+
+**A partir do código (Windows):**
 
 ```powershell
 python -m pip install -e "desktop[gui,comm,dev]"
-python -m ladderide                      # abre a IDE
 python -m ladderide examples\demo\demonstracao.ladproj
 ```
 
-O dispositivo virtual e os testes de equivalência precisam de `gcc` no PATH
-(MinGW). O executável já traz o dispositivo virtual compilado.
+**A partir do código (Linux, Debian/Ubuntu):**
+
+```bash
+sudo apt install python3-venv build-essential libxcb-cursor0
+python3 -m venv .venv && . .venv/bin/activate
+python -m pip install -e "desktop[gui,comm,dev]"
+python -m ladderide examples/demo/demonstracao.ladproj
+```
+
+O dispositivo virtual, a verificação para ESP32 e os testes de equivalência
+precisam de `gcc` no PATH (MinGW no Windows, `build-essential` no Linux). O
+executável já traz essas partes compiladas.
+
+**Porta serial no Linux:** o ESP32 aparece como `/dev/ttyUSB0` (CP210x/CH340)
+ou `/dev/ttyACM0`. Seu usuário precisa estar no grupo `dialout`: rode
+`sudo usermod -aG dialout $USER` e depois saia e entre de novo na sessão. Se
+a janela não abrir no Wayland, tente `QT_QPA_PLATFORM=xcb python -m ladderide`.
 
 ## 2. Tela
 
