@@ -211,6 +211,7 @@ class DevicePanel(QWidget):
         dform.addRow("Varredura:", self.timing)
         row = QHBoxLayout()
         self.transfer_btn = QPushButton("Transferir programa")
+        self.transfer_btn.setObjectName("primary")
         self.run_btn = QPushButton("RUN")
         self.stop_btn = QPushButton("STOP")
         self.clear_btn = QPushButton("Limpar falha")

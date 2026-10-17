@@ -13,7 +13,7 @@ from ..model.project import Project
 
 LED_ON = "background:#16a34a; border:1px solid #14532d;"
 LED_OFF = "background:#e2e8f0; border:1px solid #94a3b8;"
-LED_UNKNOWN = "background:#fde68a; border:1px solid #b45309;"
+LED_UNKNOWN = "background:#f8fafc; border:1px dashed #94a3b8;"
 
 
 class Led(QLabel):
@@ -49,12 +49,18 @@ class IOPanel(QWidget):
             t.setEditTriggers(QTableWidget.NoEditTriggers)
             t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
             t.setMinimumHeight(110)
+            t.setAlternatingRowColors(True)
+            t.setShowGrid(False)
         layout.addWidget(self.inputs_box)
         layout.addWidget(self.momentary)
         layout.addWidget(self.outputs_box)
-        layout.addWidget(QLabel("Temporizadores e contadores"))
+        title = QLabel("Temporizadores e contadores")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
         layout.addWidget(self.elements, 1)
-        layout.addWidget(QLabel("Variaveis"))
+        title = QLabel("Variaveis")
+        title.setObjectName("sectionTitle")
+        layout.addWidget(title)
         layout.addWidget(self.variables, 1)
         self.input_buttons: list[QPushButton] = []
         self.out_leds: list[Led] = []
@@ -82,8 +88,7 @@ class IOPanel(QWidget):
             name = project.symbol_for(addr)
             b = QPushButton(f"{addr}\n{name}" if name else addr)
             b.setCheckable(True)
-            b.setMinimumHeight(40)
-            b.setStyleSheet("QPushButton:checked { background:#16a34a; color:white; font-weight:bold; }")
+            b.setMinimumHeight(42)
             b.pressed.connect(lambda k=k: self._pressed(k))
             b.released.connect(lambda k=k: self._released(k))
             b.toggled.connect(lambda v, k=k: self._toggled(k, v))

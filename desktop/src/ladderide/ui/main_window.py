@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QElapsedTimer, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (QDockWidget, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QListWidget,
                                QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTableWidget,
@@ -22,6 +22,7 @@ from ..comm.monitor import MonitorSource
 from ..comm.protocol import DevState
 from .device_panel import DevicePanel, DeviceSession
 from .dialogs import ElementDialog, ProjectDialog
+from .icons import make_icon
 from .ladder_view import COND_TOOLS, OUTPUT_TOOLS, LadderView
 from .palette import Palette
 from .sim_panel import SimPanel
@@ -109,6 +110,14 @@ class MainWindow(QMainWindow):
         A("device_transfer", "Transferir programa ao dispositivo", lambda: self.device_transfer(), "F8")
         A("about", "Sobre", self.about)
         A("help", "Referencia das instrucoes", self.instruction_help, "F1")
+        for key, icon in (("new", "new"), ("open", "open"), ("save", "save"), ("undo", "undo"), ("redo", "redo"),
+                          ("delete", "delete"), ("rung_add", "rung"), ("compile", "compile"), ("sim_run", "run"),
+                          ("sim_pause", "pause"), ("sim_scan", "scan"), ("sim_step", "step"),
+                          ("sim_reset", "reset"), ("sim_stop", "stop"), ("zoom_in", "zoom_in"),
+                          ("zoom_out", "zoom_out"), ("device_transfer", "transfer")):
+            self.actions_[key].setIcon(make_icon(icon))
+        self.actions_["device_transfer"].setIconText("Transferir")
+        self.actions_["open"].setIconText("Abrir")
 
     def _create_menus(self) -> None:
         a = self.actions_
@@ -146,9 +155,15 @@ class MainWindow(QMainWindow):
 
         tb = self.addToolBar("Principal")
         tb.setObjectName("main_toolbar")
-        for k in ("new", "open", "save", None, "undo", "redo", None, "compile", None, "sim_run", "sim_pause",
-                  "sim_scan", "sim_step", "sim_reset", "sim_stop", None, "zoom_in", "zoom_out"):
+        tb.setMovable(False)
+        tb.setIconSize(QSize(20, 20))
+        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        for k in ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "compile", None,
+                  "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop", None,
+                  "device_transfer", None, "zoom_in", "zoom_out"):
             tb.addSeparator() if k is None else tb.addAction(a[k])
+        for k in ("new", "undo", "redo", "zoom_in", "zoom_out", "sim_reset"):
+            tb.widgetForAction(a[k]).setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.toolbar = tb
 
     def _create_docks(self) -> None:
@@ -161,6 +176,7 @@ class MainWindow(QMainWindow):
         self.sim_dock = self._dock("Simulador", self.sim_panel, Qt.RightDockWidgetArea)
 
         self.messages = QListWidget()
+        self.messages.setAlternatingRowColors(True)
         self.messages.itemActivated.connect(self.on_message)
         self.messages.itemClicked.connect(self.on_message)
         self.symbols = QTableWidget(0, 3)
@@ -200,12 +216,14 @@ class MainWindow(QMainWindow):
         self.monitoring = False
         self.last_snapshot = None
         self.progress_dialog = None
-        self.resizeDocks([self.palette_dock, self.sim_dock], [180, 380], Qt.Horizontal)
-        self.resizeDocks([self.bottom_dock], [150], Qt.Vertical)
+        self.resizeDocks([self.palette_dock, self.sim_dock], [190, 400], Qt.Horizontal)
+        self.resizeDocks([self.bottom_dock], [120], Qt.Vertical)
 
     def _dock(self, title: str, widget, area) -> QDockWidget:
         dock = QDockWidget(title, self)
         dock.setObjectName(title)
+        dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
+                         | QDockWidget.DockWidgetClosable)
         dock.setWidget(widget)
         self.addDockWidget(area, dock)
         return dock

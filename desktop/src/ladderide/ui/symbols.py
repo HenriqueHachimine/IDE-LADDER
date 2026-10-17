@@ -7,15 +7,20 @@ from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 
 ENERGIZED = QColor(22, 163, 74)
-DEENERGIZED = QColor(120, 120, 120)
-NEUTRAL = QColor(35, 35, 35)
-CLOSED_FILL = QColor(22, 163, 74, 70)
-SELECTED_FILL = QColor(59, 130, 246, 45)
+DEENERGIZED = QColor(148, 163, 184)
+NEUTRAL = QColor(51, 65, 85)
+CLOSED_FILL = QColor(22, 163, 74, 60)
+COIL_ON_FILL = QColor(22, 163, 74, 45)
+SELECTED_FILL = QColor(37, 99, 235, 28)
 SELECTED_BORDER = QColor(37, 99, 235)
-ERROR_FILL = QColor(220, 38, 38, 45)
+ERROR_FILL = QColor(220, 38, 38, 40)
 CURRENT_BORDER = QColor(234, 88, 12)
-LABEL = QColor(30, 41, 59)
+LABEL = QColor(15, 23, 42)
 SUBLABEL = QColor(100, 116, 139)
+BOX_FILL = QColor(255, 255, 255)
+TIMER_HEAD = (QColor(224, 231, 255), QColor(55, 48, 163))
+COUNTER_HEAD = (QColor(254, 243, 199), QColor(146, 64, 14))
+DONE_OFF = QColor(203, 213, 225)
 
 
 @dataclass
@@ -42,18 +47,28 @@ def _pen(power: bool | None, width: float = 2.0) -> QPen:
     return pen
 
 
+def _font(size: float, bold: bool = False, family: str = "Segoe UI") -> QFont:
+    f = QFont(family, 1)
+    f.setPointSizeF(size)
+    f.setBold(bold)
+    return f
+
+
 def _labels(p: QPainter, r: QRectF, st: SymbolState, top: float, bottom: float) -> None:
     if st.label:
-        f = QFont("Segoe UI", 8)
-        f.setBold(True)
-        p.setFont(f)
+        avail = r.width() - 6
+        size = 8.5
+        p.setFont(_font(size, True))
+        while size > 7 and p.fontMetrics().horizontalAdvance(st.label) > avail:
+            size -= 0.5
+            p.setFont(_font(size, True))
         p.setPen(LABEL)
-        p.drawText(QRectF(r.left(), r.top(), r.width(), top - r.top()), Qt.AlignHCenter | Qt.AlignBottom,
-                   p.fontMetrics().elidedText(st.label, Qt.ElideRight, int(r.width())))
+        p.drawText(QRectF(r.left() + 3, r.top(), avail, top - r.top() - 2), Qt.AlignHCenter | Qt.AlignBottom,
+                   p.fontMetrics().elidedText(st.label, Qt.ElideRight, int(avail)))
     if st.sublabel:
-        p.setFont(QFont("Segoe UI", 7))
+        p.setFont(_font(7.5, False, "Consolas"))
         p.setPen(SUBLABEL)
-        p.drawText(QRectF(r.left(), bottom, r.width(), r.bottom() - bottom), Qt.AlignHCenter | Qt.AlignTop,
+        p.drawText(QRectF(r.left(), bottom + 2, r.width(), r.bottom() - bottom), Qt.AlignHCenter | Qt.AlignTop,
                    st.sublabel)
 
 
@@ -63,70 +78,110 @@ def paint_symbol(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
     mid = r.center().y()
     w = r.width()
     if kind in ("XIC", "XIO"):
-        bh = r.height() * 0.24
-        x1, x2 = r.left() + w * 0.38, r.left() + w * 0.62
+        bh = r.height() * 0.2
+        x1, x2 = r.left() + w * 0.40, r.left() + w * 0.60
         if st.closed:
-            p.fillRect(QRectF(x1, mid - bh, x2 - x1, 2 * bh), CLOSED_FILL)
+            p.setPen(Qt.NoPen)
+            p.setBrush(CLOSED_FILL)
+            p.drawRoundedRect(QRectF(x1 - 3, mid - bh - 3, x2 - x1 + 6, 2 * bh + 6), 3, 3)
+            p.setBrush(Qt.NoBrush)
         p.setPen(_pen(st.power_in))
         p.drawLine(QPointF(r.left(), mid), QPointF(x1, mid))
+        p.setPen(_pen(st.power_in, 2.6))
         p.drawLine(QPointF(x1, mid - bh), QPointF(x1, mid + bh))
-        p.setPen(_pen(st.power_out))
+        p.setPen(_pen(st.power_out, 2.6))
         p.drawLine(QPointF(x2, mid - bh), QPointF(x2, mid + bh))
+        p.setPen(_pen(st.power_out))
         p.drawLine(QPointF(x2, mid), QPointF(r.right(), mid))
         if kind == "XIO":
-            p.setPen(_pen(st.power_out, 1.6))
-            p.drawLine(QPointF(x1 - 3, mid + bh), QPointF(x2 + 3, mid - bh))
-        _labels(p, r, st, mid - bh - 1, mid + bh + 1)
+            pen = _pen(st.power_out, 1.8)
+            pen.setCapStyle(Qt.RoundCap)
+            p.setPen(pen)
+            p.drawLine(QPointF(x1 - 4, mid + bh), QPointF(x2 + 4, mid - bh))
+        _labels(p, r, st, mid - bh - 2, mid + bh + 1)
     elif kind == "NOT":
-        bw, bh = w * 0.42, r.height() * 0.36
+        bw, bh = w * 0.42, r.height() * 0.34
         box = QRectF(r.center().x() - bw / 2, mid - bh / 2, bw, bh)
         p.setPen(_pen(st.power_in))
         p.drawLine(QPointF(r.left(), mid), QPointF(box.left(), mid))
+        p.setPen(_pen(st.power_out, 1.6))
+        p.setBrush(BOX_FILL)
+        p.drawRoundedRect(box, 3, 3)
+        p.setBrush(Qt.NoBrush)
         p.setPen(_pen(st.power_out))
-        p.drawRect(box)
         p.drawLine(QPointF(box.right(), mid), QPointF(r.right(), mid))
-        p.setFont(QFont("Segoe UI", 7, QFont.Bold))
+        p.setPen(LABEL)
+        p.setFont(_font(7.5, True))
         p.drawText(box, Qt.AlignCenter, "NOT")
     elif kind in ("OTE", "OTL", "OTU", "RES"):
-        rad = min(r.height() * 0.24, w * 0.16)
+        rad = min(r.height() * 0.22, w * 0.14)
         cx = r.center().x()
-        p.setPen(_pen(st.power_in))
-        p.drawLine(QPointF(r.left(), mid), QPointF(cx - rad, mid))
-        p.setPen(_pen(st.power_in))
         arc = QRectF(cx - rad, mid - rad, 2 * rad, 2 * rad)
-        p.drawArc(arc.adjusted(-2, 0, -2, 0), 110 * 16, 140 * 16)
-        p.drawArc(arc.adjusted(2, 0, 2, 0), -70 * 16, 140 * 16)
-        p.setPen(NEUTRAL if st.power_in is None else color_for(st.power_in))
-        p.drawLine(QPointF(cx + rad, mid), QPointF(r.right(), mid))
+        if st.power_in:
+            p.setPen(Qt.NoPen)
+            p.setBrush(COIL_ON_FILL)
+            p.drawEllipse(arc.adjusted(-1, -1, 1, 1))
+            p.setBrush(Qt.NoBrush)
+        p.setPen(_pen(st.power_in))
+        p.drawLine(QPointF(r.left(), mid), QPointF(cx - rad - 1, mid))
+        pen = _pen(st.power_in, 2.4)
+        pen.setCapStyle(Qt.RoundCap)
+        p.setPen(pen)
+        p.drawArc(arc.adjusted(-2, 0, -2, 0), 115 * 16, 130 * 16)
+        p.drawArc(arc.adjusted(2, 0, 2, 0), -65 * 16, 130 * 16)
+        p.setPen(_pen(st.power_in))
+        p.drawLine(QPointF(cx + rad + 1, mid), QPointF(r.right(), mid))
         letter = {"OTL": "S", "OTU": "R", "RES": "RES"}.get(kind, "")
         if letter:
-            p.setFont(QFont("Segoe UI", 7 if kind == "RES" else 9, QFont.Bold))
+            p.setPen(LABEL)
+            p.setFont(_font(7 if kind == "RES" else 9.5, True))
             p.drawText(arc.adjusted(-6, 0, 6, 0), Qt.AlignCenter, letter)
         _labels(p, r, st, mid - rad - 1, mid + rad + 1)
     elif kind in ("TON", "TOF", "RTO", "CTU", "CTD"):
-        box = QRectF(r.left() + w * 0.1, r.top() + 3, w * 0.8, r.height() - 6)
+        is_timer = kind in ("TON", "TOF", "RTO")
+        head_bg, head_fg = TIMER_HEAD if is_timer else COUNTER_HEAD
+        box = QRectF(r.left() + w * 0.08, r.top() + 3, w * 0.84, r.height() - 6)
         p.setPen(_pen(st.power_in))
         p.drawLine(QPointF(r.left(), mid), QPointF(box.left(), mid))
-        p.setPen(QPen(color_for(st.power_in), 1.5))
-        p.setBrush(QColor(255, 255, 255))
-        p.drawRect(box)
+        p.setPen(QPen(color_for(st.power_in), 1.4 if not st.power_in else 2.2))
+        p.setBrush(BOX_FILL)
+        p.drawRoundedRect(box, 5, 5)
+        head_h = min(15.0, box.height() * 0.3)
+        head = QRectF(box.left() + 1, box.top() + 1, box.width() - 2, head_h)
+        p.setPen(Qt.NoPen)
+        p.setBrush(head_bg)
+        p.drawRoundedRect(head, 4, 4)
+        p.drawRect(head.adjusted(0, head_h / 2, 0, 0))
         p.setBrush(Qt.NoBrush)
+        p.setPen(head_fg)
+        p.setFont(_font(7.5, True))
+        p.drawText(head.adjusted(5, 0, -14, 0), Qt.AlignLeft | Qt.AlignVCenter, kind)
         if st.done is not None:
-            p.setBrush(ENERGIZED if st.done else QColor(203, 213, 225))
             p.setPen(Qt.NoPen)
-            p.drawEllipse(QPointF(box.right() - 7, box.top() + 7), 4, 4)
+            p.setBrush(ENERGIZED if st.done else DONE_OFF)
+            p.drawEllipse(QPointF(head.right() - 7, head.center().y()), 3.8, 3.8)
             p.setBrush(Qt.NoBrush)
-        p.setPen(LABEL)
-        f = QFont("Segoe UI", 7)
-        f.setBold(True)
-        p.setFont(f)
-        title = f"{kind}  {st.label}" if st.label else kind
-        p.drawText(QRectF(box.left() + 3, box.top() + 1, box.width() - 14, 13), Qt.AlignLeft | Qt.AlignVCenter,
-                   p.fontMetrics().elidedText(title, Qt.ElideRight, int(box.width() - 14)))
-        p.setFont(QFont("Segoe UI", 7))
-        for k, line in enumerate(st.lines[:3]):
-            p.drawText(QRectF(box.left() + 3, box.top() + 14 + k * 12, box.width() - 4, 12),
-                       Qt.AlignLeft | Qt.AlignVCenter, line)
+        body_top = head.bottom() + 1
+        line_h = max(10.0, (box.bottom() - body_top - 2) / 3)
+        if st.label:
+            p.setPen(LABEL)
+            p.setFont(_font(8, True))
+            p.drawText(QRectF(box.left() + 5, body_top, box.width() - 10, line_h), Qt.AlignLeft | Qt.AlignVCenter,
+                       p.fontMetrics().elidedText(st.label, Qt.ElideRight, int(box.width() - 10)))
+        p.setFont(_font(7.5, False, "Consolas"))
+        p.setPen(SUBLABEL)
+        if st.lines:
+            p.drawText(QRectF(box.left() + 5, body_top + line_h, box.width() - 10, line_h),
+                       Qt.AlignLeft | Qt.AlignVCenter, st.lines[0])
+        if len(st.lines) > 1:
+            p.setPen(LABEL)
+            p.drawText(QRectF(box.left() + 5, body_top + 2 * line_h, box.width() - 10, line_h),
+                       Qt.AlignLeft | Qt.AlignVCenter, st.lines[1])
+        if len(st.lines) > 2 and st.lines[2]:
+            p.setPen(ENERGIZED)
+            p.setFont(_font(7, True))
+            p.drawText(QRectF(box.left() + 5, body_top + 2 * line_h, box.width() - 10, line_h),
+                       Qt.AlignRight | Qt.AlignVCenter, st.lines[2])
     elif kind == "PAR":
         p.setPen(_pen(None))
         p.drawLine(QPointF(r.left() + 3, r.top() + 6), QPointF(r.left() + 3, r.bottom() - 6))
@@ -136,10 +191,40 @@ def paint_symbol(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
 
 
 def tool_icon(kind: str) -> QIcon:
-    pix = QPixmap(56, 34)
+    pix = QPixmap(112, 68)
+    pix.setDevicePixelRatio(2)
     pix.fill(Qt.transparent)
     p = QPainter(pix)
-    paint_symbol(p, kind if kind != "RUNG" else "PAR", QRectF(1, 1, 54, 32),
-                 SymbolState(lines=("PRE",) if kind in ("TON", "TOF", "RTO", "CTU", "CTD") else ()))
+    if kind in ("TON", "TOF", "RTO", "CTU", "CTD"):
+        p.setRenderHint(QPainter.Antialiasing, True)
+        head_bg, head_fg = TIMER_HEAD if kind in ("TON", "TOF", "RTO") else COUNTER_HEAD
+        p.setPen(QPen(NEUTRAL, 2))
+        p.drawLine(QPointF(1, 17), QPointF(10, 17))
+        p.drawLine(QPointF(46, 17), QPointF(55, 17))
+        box = QRectF(10, 4, 36, 26)
+        p.setPen(QPen(head_fg, 1.4))
+        p.setBrush(head_bg)
+        p.drawRoundedRect(box, 4, 4)
+        p.setPen(head_fg)
+        p.setFont(_font(8, True))
+        p.drawText(box, Qt.AlignCenter, kind)
+    elif kind == "RUNG":
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(QPen(NEUTRAL, 2.5))
+        p.drawLine(QPointF(6, 4), QPointF(6, 30))
+        p.drawLine(QPointF(50, 4), QPointF(50, 30))
+        p.setPen(QPen(SELECTED_BORDER, 2))
+        p.drawLine(QPointF(6, 17), QPointF(50, 17))
+    elif kind == "PAR":
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(QPen(NEUTRAL, 2))
+        p.drawLine(QPointF(1, 10), QPointF(55, 10))
+        p.drawLine(QPointF(10, 10), QPointF(10, 25))
+        p.drawLine(QPointF(46, 10), QPointF(46, 25))
+        p.drawLine(QPointF(10, 25), QPointF(46, 25))
+        p.setPen(QPen(SELECTED_BORDER, 2, Qt.DotLine))
+        p.drawLine(QPointF(20, 25), QPointF(36, 25))
+    else:
+        paint_symbol(p, kind, QRectF(1, 1, 54, 32), SymbolState())
     p.end()
     return QIcon(pix)

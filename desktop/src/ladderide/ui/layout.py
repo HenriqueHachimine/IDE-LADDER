@@ -15,9 +15,11 @@ from dataclasses import dataclass, field
 from ..model.project import Contact, NotOp, Parallel, Project, Rung
 
 MARGIN = 0.25        # espaco entre juncao vertical e o primeiro elemento do ramo
-OUT_W = 1.3          # largura de uma saida
+OUT_W = 1.7          # largura de uma saida (caixas de temporizador/contador)
 BUS = 0.3            # barramento vertical antes das saidas
-RUNG_GAP = 0.5
+RUNG_GAP = 0.35      # espaco entre os cartoes de rede
+RUNG_HEAD = 0.45     # faixa de titulo "Rede N - comentario"
+RUNG_PAD = 0.15      # respiro abaixo do ultimo elemento
 SLOT_W = 0.34
 
 
@@ -112,19 +114,21 @@ def build_layout(project: Project) -> Layout:
     y = 0.0
     for r_index, rung in enumerate(project.rungs):
         y = _place_rung(lay, r_index, rung, y) + RUNG_GAP
-    lay.slots.append(Slot("newrung", len(project.rungs), None, 0, (-1.0, y - RUNG_GAP / 2, lay.rail_right + 1.0, 1.5), 0))
+    lay.slots.append(Slot("newrung", len(project.rungs), None, 0, (-1.0, y - RUNG_GAP, lay.rail_right + 1.0, 1.5), 0))
     lay.height = y + 1.0
     return lay
 
 
-def _place_rung(lay: Layout, r_index: int, rung: Rung, y0: float) -> float:
+def _place_rung(lay: Layout, r_index: int, rung: Rung, top: float) -> float:
     _, cond_h = measure_series(rung.condition)
     n_out = len(rung.outputs)
     h = max(cond_h, n_out, 1.0)
-    lay.rungs.append(RungBox(r_index, rung, y0, h))
+    total = RUNG_HEAD + h + RUNG_PAD
+    lay.rungs.append(RungBox(r_index, rung, top, total))
     # Area da rede inteira: solta no fim da condicao / fim das saidas (prioridade baixa)
-    lay.slots.append(Slot("cond", r_index, rung.condition, len(rung.condition), (0.0, y0, lay.out_x - BUS, h), 0))
-    lay.slots.append(Slot("out", r_index, rung.outputs, n_out, (lay.out_x - BUS, y0, OUT_W + BUS, h), 0))
+    lay.slots.append(Slot("cond", r_index, rung.condition, len(rung.condition), (0.0, top, lay.out_x - BUS, total), 0))
+    lay.slots.append(Slot("out", r_index, rung.outputs, n_out, (lay.out_x - BUS, top, OUT_W + BUS, total), 0))
+    y0 = top + RUNG_HEAD
 
     end_x, key = _place_series(lay, r_index, rung.condition, 0.0, y0, ("rail",))
     mid = y0 + 0.5
@@ -145,7 +149,7 @@ def _place_rung(lay: Layout, r_index: int, rung: Rung, y0: float) -> float:
             lay.slots.append(Slot("out", r_index, rung.outputs, k, (lay.out_x, y0 + k - 0.2, OUT_W, 0.4), 2))
     if n_out == 0:
         lay.wires.append(Wire(lay.out_x + OUT_W, mid, lay.rail_right, mid, None))
-    return y0 + h
+    return top + total
 
 
 def _place_series(lay: Layout, r_index: int, nodes: list, x: float, y: float, key) -> tuple[float, tuple]:

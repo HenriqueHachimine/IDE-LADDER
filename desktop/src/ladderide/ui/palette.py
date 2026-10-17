@@ -65,6 +65,8 @@ class Palette(QScrollArea):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWidgetResizable(True)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setFrameShape(QScrollArea.NoFrame)
         body = QWidget()
         layout = QVBoxLayout(body)
         layout.setContentsMargins(4, 4, 4, 4)
@@ -72,15 +74,16 @@ class Palette(QScrollArea):
         for title, tools in GROUPS:
             box = QGroupBox(title)
             grid = QGridLayout(box)
-            grid.setContentsMargins(2, 2, 2, 2)
+            grid.setContentsMargins(4, 6, 4, 4)
+            grid.setSpacing(2)
             for k, (tool, text, tip) in enumerate(tools):
                 b = ToolButton(tool, text, tip)
                 b.clicked.connect(lambda _=False, t=tool: self.toolClicked.emit(t))
                 grid.addWidget(b, k // 2, k % 2)
                 self.buttons.append(b)
             layout.addWidget(box)
-        hint = QLabel("XIC = contato NA\nXIO = contato NF\nOTL/OTU = SET/RESET")
-        hint.setStyleSheet("color: #64748b; font-size: 8pt;")
+        hint = QLabel("Arraste para o diagrama ou clique para\ninserir apos o elemento selecionado.")
+        hint.setStyleSheet("color: #64748b; font-size: 8pt; padding: 4px;")
         layout.addWidget(hint)
         layout.addStretch(1)
         self.setWidget(body)

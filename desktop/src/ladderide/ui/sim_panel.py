@@ -1,8 +1,9 @@
 """Painel do simulador offline."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QHBoxLayout, QLabel, QToolButton, QVBoxLayout,
-                               QWidget)
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QLabel, QSizePolicy, QToolButton,
+                               QVBoxLayout, QWidget)
 
 from ..sim.simulator import SimState, Simulator
 from .io_panel import IOPanel
@@ -15,19 +16,25 @@ class SimPanel(QWidget):
     def __init__(self, actions: dict, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        bar = QHBoxLayout()
-        for key in ("sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop"):
+        layout.setContentsMargins(10, 8, 10, 8)
+        bar = QGridLayout()
+        bar.setSpacing(4)
+        for k, key in enumerate(("sim_run", "sim_pause", "sim_stop", "sim_scan", "sim_step", "sim_reset")):
             b = QToolButton()
             b.setDefaultAction(actions[key])
-            bar.addWidget(b)
-        bar.addStretch(1)
+            b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+            b.setIconSize(QSize(18, 18))
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            bar.addWidget(b, k // 3, k % 3)
         layout.addLayout(bar)
         form = QFormLayout()
+        form.setHorizontalSpacing(14)
         self.speed = QComboBox()
         for text, value in SPEEDS:
             self.speed.addItem(text, value)
         self.speed.setCurrentIndex(3)
         self.state = QLabel("PARADO")
+        self.state.setObjectName("stateBadge")
         self.scans = QLabel("0")
         self.vtime = QLabel("0,000 s")
         self.pc = QLabel("-")
@@ -40,6 +47,9 @@ class SimPanel(QWidget):
         self.io = IOPanel(show_commanded=False)
         layout.addWidget(self.io, 1)
 
+    def _badge(self, bg: str, fg: str) -> None:
+        self.state.setStyleSheet(f"background:{bg}; color:{fg};")
+
     @property
     def speed_factor(self) -> float:
         return float(self.speed.currentData())
@@ -47,6 +57,7 @@ class SimPanel(QWidget):
     def refresh(self, sim: Simulator | None) -> None:
         if sim is None:
             self.state.setText("sem programa compilado")
+            self._badge("#e2e8f0", "#334155")
             self.scans.setText("0")
             self.vtime.setText("0,000 s")
             self.pc.setText("-")
@@ -57,6 +68,8 @@ class SimPanel(QWidget):
         if sim.state != SimState.STOPPED and vm.in_scan:
             text += " (no meio da varredura)"
         self.state.setText(text)
+        self._badge(*{SimState.RUNNING: ("#dcfce7", "#166534"), SimState.PAUSED: ("#fef3c7", "#92400e")}
+                    .get(sim.state, ("#e2e8f0", "#334155")))
         self.scans.setText(str(vm.scan_count))
         self.vtime.setText(f"{sim.virtual_ms / 1000:.3f} s".replace(".", ","))
         if vm.in_scan and vm.pc < len(sim.program.code):

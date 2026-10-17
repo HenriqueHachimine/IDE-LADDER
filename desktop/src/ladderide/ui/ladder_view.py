@@ -8,18 +8,23 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from PySide6.QtCore import QMimeData, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QAction, QColor, QDrag, QFont, QPainter, QPen
+from PySide6.QtCore import QMimeData, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QAction, QColor, QDrag, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QGraphicsItem, QGraphicsLineItem, QGraphicsRectItem,
                                QGraphicsScene, QGraphicsView, QMenu)
 
 from ..model.project import Coil, Contact, CounterBox, NotOp, Parallel, Project, ResetBox, TimerBox
-from .layout import Layout, PlacedElem, Slot, build_layout
+from .layout import RUNG_HEAD, RUNG_PAD, Layout, PlacedElem, Slot, build_layout
 from .symbols import (CURRENT_BORDER, DEENERGIZED, ENERGIZED, ERROR_FILL, NEUTRAL, SELECTED_BORDER,
                       SELECTED_FILL, SymbolState, paint_symbol)
 
-SX, SY = 96.0, 62.0        # pixels por unidade de grade
-LABEL_W = 0.8
+SX, SY = 100.0, 66.0       # pixels por unidade de grade
+LABEL_W = 0.3              # margem entre a borda do cartao e o trilho esquerdo
+CARD_BORDER = QColor(216, 224, 234)
+CARD_HEAD_LINE = QColor(238, 242, 247)
+BADGE_FILL = QColor(238, 242, 255)
+BADGE_TEXT = QColor(55, 48, 163)
+COMMENT_TEXT = QColor(100, 116, 139)
 MIME_TOOL = "application/x-ladder-tool"
 MIME_MOVE = "application/x-ladder-move"
 OUTPUT_TOOLS = {"OTE", "OTL", "OTU", "TON", "TOF", "RTO", "CTU", "CTD", "RES"}
@@ -112,6 +117,49 @@ class ElementItem(QGraphicsItem):
         paint_symbol(p, self.kind, r, self.state)
 
 
+class RungCard(QGraphicsRectItem):
+    """Cartao de uma rede: fundo, faixa de titulo com numero e comentario."""
+
+    def __init__(self, rect: QRectF, index: int, comment: str):
+        super().__init__(rect)
+        self.index = index
+        self.comment = comment
+        self.selected = False
+        self.setData(0, index)
+        self.setZValue(-5)
+        if comment:
+            self.setToolTip(comment)
+
+    def paint(self, p: QPainter, option, widget=None) -> None:
+        r = self.rect()
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(QPen(SELECTED_BORDER if self.selected else CARD_BORDER, 2 if self.selected else 1))
+        p.setBrush(QColor(255, 255, 255))
+        p.drawRoundedRect(r, 8, 8)
+        head_h = RUNG_HEAD * SY
+        p.setPen(QPen(CARD_HEAD_LINE, 1))
+        p.drawLine(QPointF(r.left() + 1, r.top() + head_h), QPointF(r.right() - 1, r.top() + head_h))
+        f = QFont("Segoe UI", 8)
+        f.setBold(True)
+        p.setFont(f)
+        text = f"Rede {self.index}"
+        bw = p.fontMetrics().horizontalAdvance(text) + 16
+        badge = QRectF(r.left() + 10, r.top() + 6, bw, head_h - 12)
+        p.setPen(Qt.NoPen)
+        p.setBrush(SELECTED_BORDER if self.selected else BADGE_FILL)
+        p.drawRoundedRect(badge, badge.height() / 2, badge.height() / 2)
+        p.setPen(QColor(255, 255, 255) if self.selected else BADGE_TEXT)
+        p.drawText(badge, Qt.AlignCenter, text)
+        if self.comment:
+            f = QFont("Segoe UI", 8)
+            f.setItalic(True)
+            p.setFont(f)
+            p.setPen(COMMENT_TEXT)
+            area = QRectF(badge.right() + 10, r.top(), r.right() - badge.right() - 20, head_h)
+            p.drawText(area, Qt.AlignLeft | Qt.AlignVCenter,
+                       p.fontMetrics().elidedText(self.comment, Qt.ElideRight, int(area.width())))
+
+
 class LadderView(QGraphicsView):
     selectionChangedTo = Signal(object)          # id de elemento, ("rung", n) ou None
     editRequested = Signal(str)                  # id
@@ -125,13 +173,13 @@ class LadderView(QGraphicsView):
         self.setAcceptDrops(True)
         self.setDragMode(QGraphicsView.NoDrag)
         self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.setBackgroundBrush(QColor(250, 250, 249))
+        self.setBackgroundBrush(QColor(238, 242, 247))
         self.project: Project | None = None
         self.layout_: Layout | None = None
         self.items_by_id: dict[str, ElementItem] = {}
         self.wire_items: list[tuple[QGraphicsLineItem, tuple | None]] = []
         self.rail_items: list[QGraphicsLineItem] = []
-        self.rung_labels: list[tuple[QGraphicsRectItem, int]] = []
+        self.rung_labels: list[tuple[RungCard, int]] = []
         self.selection: object = None
         self.readonly = False
         self.error_ids: set[str] = set()
@@ -143,6 +191,7 @@ class LadderView(QGraphicsView):
     # --------------------------------------------------------------- montagem
     def rebuild(self, project: Project) -> None:
         self.project = project
+        self._press_item = None             # o item pressionado deixa de existir
         scene = self.scene()
         scene.clear()
         self.items_by_id.clear()
@@ -150,10 +199,25 @@ class LadderView(QGraphicsView):
         self.rail_items.clear()
         self.rung_labels.clear()
         lay = self.layout_ = build_layout(project)
-        top, bottom = -0.3 * SY, (lay.height - 1.0) * SY
-        for x in (0.0, lay.rail_right * SX):
-            line = scene.addLine(x, top, x, bottom, QPen(NEUTRAL, 4))
-            self.rail_items.append(line)
+        left, right = -LABEL_W * SX, (lay.rail_right + LABEL_W) * SX
+        for rb in lay.rungs:
+            card = RungCard(QRectF(left, rb.y * SY, right - left, rb.h * SY), rb.index, rb.rung.comment)
+            scene.addItem(card)
+            self.rung_labels.append((card, rb.index))
+            y1 = (rb.y + RUNG_HEAD) * SY + 2
+            y2 = (rb.y + rb.h - RUNG_PAD) * SY - 2
+            for x in (0.0, lay.rail_right * SX):
+                line = scene.addLine(x, y1, x, y2, QPen(NEUTRAL, 4, Qt.SolidLine, Qt.RoundCap))
+                line.setZValue(0.5)
+                self.rail_items.append(line)
+        # area para criar uma nova rede (alvo de arrastar e soltar)
+        new_y = (lay.height - 1.0) * SY
+        hint = scene.addRect(QRectF(left, new_y, right - left, 0.6 * SY),
+                             QPen(QColor(148, 163, 184), 1.2, Qt.DashLine), QColor(0, 0, 0, 0))
+        hint.setZValue(-5)
+        text = scene.addText("+  Solte uma instrucao aqui para criar uma nova rede", QFont("Segoe UI", 8))
+        text.setDefaultTextColor(QColor(100, 116, 139))
+        text.setPos(left + 12, new_y + 0.3 * SY - text.boundingRect().height() / 2)
         for w in lay.wires:
             item = scene.addLine(w.x1 * SX, w.y1 * SY, w.x2 * SX, w.y2 * SY, QPen(NEUTRAL, 2))
             item.setZValue(0)
@@ -163,24 +227,10 @@ class LadderView(QGraphicsView):
             item.has_error = placed.node.id in self.error_ids
             scene.addItem(item)
             self.items_by_id[placed.node.id] = item
-        for rb in lay.rungs:
-            box = QRectF(-LABEL_W * SX, rb.y * SY, LABEL_W * SX - 8, rb.h * SY)
-            rect = scene.addRect(box, QPen(Qt.NoPen))
-            rect.setData(0, rb.index)
-            text = scene.addText(str(rb.index), QFont("Segoe UI", 11, QFont.Bold))
-            text.setDefaultTextColor(QColor(71, 85, 105))
-            text.setPos(box.left() + 6, box.top() + 4)
-            if rb.rung.comment:
-                rect.setToolTip(rb.rung.comment)
-                c = scene.addText(rb.rung.comment[:14], QFont("Segoe UI", 7))
-                c.setDefaultTextColor(QColor(100, 116, 139))
-                c.setPos(box.left(), box.top() + 26)
-            self.rung_labels.append((rect, rb.index))
         self.highlight = scene.addRect(QRectF(), QPen(SELECTED_BORDER, 1.5), QColor(59, 130, 246, 60))
         self.highlight.setZValue(10)
         self.highlight.hide()
-        scene.setSceneRect(QRectF(-LABEL_W * SX - 10, top - 10, (lay.rail_right + LABEL_W + 1) * SX,
-                                  bottom - top + 2 * SY))
+        scene.setSceneRect(QRectF(left - 16, -16, right - left + 32, new_y + 0.6 * SY + 32))
         self._apply_selection()
 
     def set_errors(self, ids: set[str]) -> None:
@@ -203,9 +253,15 @@ class LadderView(QGraphicsView):
 
         for line, key in self.wire_items:
             pw = power(key)
-            line.setPen(QPen(NEUTRAL if pw is None else (ENERGIZED if pw else DEENERGIZED), 3 if pw else 2))
-        for line in self.rail_items:
-            line.setPen(QPen(ENERGIZED if (source is not None and rail) else NEUTRAL, 4))
+            if pw is None and source is not None:
+                pw = False                       # fios de retorno ao trilho direito
+            line.setPen(QPen(NEUTRAL if pw is None else (ENERGIZED if pw else DEENERGIZED), 3 if pw else 2,
+                             Qt.SolidLine, Qt.RoundCap))
+        for k, line in enumerate(self.rail_items):
+            left_rail = k % 2 == 0               # rail_items alterna esquerdo/direito por rede
+            hot = source is not None and rail and left_rail
+            color = ENERGIZED if hot else (NEUTRAL if source is None else DEENERGIZED)
+            line.setPen(QPen(color, 4, Qt.SolidLine, Qt.RoundCap))
         current = source.current_element if source is not None else None
         for eid, item in self.items_by_id.items():
             st = item.state
@@ -243,9 +299,9 @@ class LadderView(QGraphicsView):
         for eid, item in self.items_by_id.items():
             item.selected = eid == self.selection
             item.update()
-        for rect, idx in self.rung_labels:
-            selected = self.selection == ("rung", idx)
-            rect.setBrush(QColor(59, 130, 246, 60) if selected else QColor(0, 0, 0, 0))
+        for card, idx in self.rung_labels:
+            card.selected = self.selection == ("rung", idx)
+            card.update()
 
     def _item_at(self, pos) -> ElementItem | QGraphicsRectItem | None:
         found = [i for i in self.items(pos) if isinstance(i, ElementItem)]
@@ -253,7 +309,7 @@ class LadderView(QGraphicsView):
             found.sort(key=lambda i: i.zValue(), reverse=True)
             return found[0]
         for i in self.items(pos):
-            if isinstance(i, QGraphicsRectItem) and i.data(0) is not None:
+            if isinstance(i, RungCard):
                 return i
         return None
 
@@ -274,15 +330,33 @@ class LadderView(QGraphicsView):
     def mouseMoveEvent(self, event) -> None:
         if (self._press_item is not None and not self.readonly and event.buttons() & Qt.LeftButton
                 and (event.position() - self._press_pos).manhattanLength() > QApplication.startDragDistance()):
+            item = self._press_item
+            self._press_item = None
             mime = QMimeData()
-            mime.setData(MIME_MOVE, self._press_item.node.id.encode())
+            mime.setData(MIME_MOVE, item.node.id.encode())
             drag = QDrag(self)
             drag.setMimeData(mime)
-            self._press_item = None
+            if item.kind != "PAR":
+                drag.setPixmap(self._drag_pixmap(item))
+                drag.setHotSpot(QPointF(item.rect.width() * self.zoom / 2,
+                                        item.rect.height() * self.zoom / 2).toPoint())
             drag.exec(Qt.MoveAction)
-            self.highlight.hide()
+            if self.highlight is not None:
+                self.highlight.hide()
             return
         super().mouseMoveEvent(event)
+
+    def _drag_pixmap(self, item: ElementItem) -> QPixmap:
+        size = item.rect.size() * self.zoom
+        pix = QPixmap(max(1, int(size.width())), max(1, int(size.height())))
+        pix.fill(Qt.transparent)
+        p = QPainter(pix)
+        p.setOpacity(0.75)
+        p.scale(self.zoom, self.zoom)
+        p.fillRect(QRectF(0, 0, item.rect.width(), item.rect.height()), SELECTED_FILL)
+        paint_symbol(p, item.kind, QRectF(0, 0, item.rect.width(), item.rect.height()), item.state)
+        p.end()
+        return pix
 
     def mouseReleaseEvent(self, event) -> None:
         self._press_item = None
@@ -393,16 +467,19 @@ class LadderView(QGraphicsView):
     def dropEvent(self, event) -> None:
         if self.highlight is not None:
             self.highlight.hide()
+        # A edicao e aplicada depois que o laco de arrastar do sistema termina:
+        # reconstruir a cena (e abrir dialogos) dentro de dropEvent trava o
+        # Windows, pois o item arrastado e destruido no meio do arrasto.
         info = self._drag_info(event)
         if info and info[1] == "RUNG":
-            self.actionRequested.emit("rung_append", None)
             event.acceptProposedAction()
+            QTimer.singleShot(0, lambda: self.actionRequested.emit("rung_append", None))
             return
         found = self._slot_for(event)
         if found:
             (mode, payload, _), slot = found
             event.acceptProposedAction()
-            self.dropRequested.emit(mode, payload, slot)
+            QTimer.singleShot(0, lambda: self.dropRequested.emit(mode, payload, slot))
         else:
             event.ignore()
 
