@@ -131,6 +131,22 @@ def _draw(name: str, p: QPainter) -> None:
         p.drawRect(QRectF(6, 9.5, 5, 4.5))
         p.setBrush(GREEN); p.setPen(Qt.NoPen)
         p.drawEllipse(QPointF(16, 7.5), 2, 2)
+    elif name in ("lock", "unlock"):
+        p.setPen(QPen(INK, 2, Qt.SolidLine, Qt.RoundCap))
+        p.setBrush(Qt.NoBrush)
+        shackle = QPainterPath()
+        if name == "lock":
+            shackle.moveTo(7, 10); shackle.lineTo(7, 7); shackle.arcTo(QRectF(7, 3, 8, 8), 180, -180)
+            shackle.lineTo(15, 10)
+        else:                                   # aberto: haste direita levantada
+            shackle.moveTo(7, 10); shackle.lineTo(7, 7); shackle.arcTo(QRectF(7, 3, 8, 8), 180, -180)
+            shackle.lineTo(15, 5.5)
+        p.drawPath(shackle)
+        p.setPen(Qt.NoPen)
+        p.setBrush(INK if name == "lock" else AMBER)
+        p.drawRoundedRect(QRectF(4.5, 10, 13, 9), 2, 2)
+        p.setBrush(QColor("white"))
+        p.drawEllipse(QPointF(11, 14.5), 1.5, 1.5)
     elif name == "theme":
         p.setPen(Qt.NoPen); p.setBrush(INK)
         moon = QPainterPath()

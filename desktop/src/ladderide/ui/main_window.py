@@ -6,7 +6,8 @@ from pathlib import Path
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHBoxLayout, QInputDialog, QLabel,
-                               QListWidget, QListWidgetItem, QMainWindow, QScrollArea, QMessageBox, QPushButton, QTableWidget,
+                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QScrollArea,
+                               QTableWidget, QToolButton,
                                QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView)
 
 from .. import __version__
@@ -32,6 +33,7 @@ from .palette import Palette
 from .sim_panel import SimPanel
 
 FILE_FILTER = "Projeto LADDER (*.ladproj)"
+QWIDGETSIZE_MAX = (1 << 24) - 1     # limite de tamanho de widget do Qt (nao exportado pelo PySide6)
 
 
 class MainWindow(QMainWindow):
@@ -40,6 +42,7 @@ class MainWindow(QMainWindow):
     def __init__(self, project: Project | None = None, path: str | None = None, persist_layout: bool = False):
         super().__init__()
         self.persist_layout = persist_layout
+        self.layout_locked = False
         self.project = project or Project()
         self.path: str | None = path
         self.dirty = False
@@ -69,6 +72,11 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.status_compile)
         self.statusBar().addPermanentWidget(self.status_sim)
         self.statusBar().addPermanentWidget(self.status_device)
+        self.lock_button = QToolButton()        # cadeado: trava/destrava o layout
+        self.lock_button.setDefaultAction(self.actions_["layout_lock"])
+        self.lock_button.setAutoRaise(True)
+        self.lock_button.setIconSize(QSize(16, 16))
+        self.statusBar().addPermanentWidget(self.lock_button)
         self._was_editing = True
         self._palette_was_visible = True
 
@@ -90,6 +98,8 @@ class MainWindow(QMainWindow):
         self._default_layout = self.saveState(self.LAYOUT_VERSION)
         if persist_layout:
             self._restore_layout()
+        self.set_layout_locked(persist_layout and self._settings().value("ui/layout_locked", False, type=bool),
+                               save=False)
         self.refresh()
 
     # ================================================================ acoes
@@ -147,6 +157,9 @@ class MainWindow(QMainWindow):
         self.actions_["dev_monitor"].setCheckable(True)
         A("layout_reset", "Restaurar layout padrao", self.reset_layout, None,
           "Volta os paineis para a posicao original")
+        A("layout_lock", "Travar layout", lambda on: self.set_layout_locked(on), "Ctrl+Alt+L",
+          "Impede mover, fechar ou redimensionar paineis e barras")
+        self.actions_["layout_lock"].setCheckable(True)
         A("about", "Sobre", self.about)
         A("help", "Referencia das instrucoes", self.instruction_help, "F1")
         for key, icon in (("new", "new"), ("open", "open"), ("save", "save"), ("undo", "undo"), ("redo", "redo"),
@@ -218,6 +231,7 @@ class MainWindow(QMainWindow):
         for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.env_dock,
                      self.msgs_dock, self.symbols_dock):
             panels.addAction(dock.toggleViewAction())
+        m.addAction(a["layout_lock"])
         m.addAction(a["layout_reset"])
         m = mb.addMenu("Aj&uda")
         m.addAction(a["help"])
@@ -236,7 +250,7 @@ class MainWindow(QMainWindow):
         for title, keys in groups.items():
             tb = self.addToolBar(title)
             tb.setObjectName(f"toolbar_{title.lower()}")
-            tb.setMovable(False)
+            tb.setMovable(True)                 # travado/destravado por set_layout_locked
             tb.setIconSize(QSize(20, 20))
             for k in keys:
                 if k is None:
@@ -332,6 +346,7 @@ class MainWindow(QMainWindow):
             self._sized = True
             if not (self.persist_layout and self._settings().value("ui/state") is not None):
                 QTimer.singleShot(0, self._initial_sizes)
+            QTimer.singleShot(0, lambda: self._freeze_sizes(self.layout_locked))
 
     def _initial_sizes(self) -> None:
         self._apply_default_sizes()
@@ -371,9 +386,64 @@ class MainWindow(QMainWindow):
         s.setValue("ui/geometry", self.saveGeometry())
         s.setValue("ui/state", self.saveState(self.LAYOUT_VERSION))
 
+    DOCK_FEATURES = (QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
+                     | QDockWidget.DockWidgetClosable)
+
+    def _docks(self) -> tuple[QDockWidget, ...]:
+        return (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.env_dock,
+                self.msgs_dock, self.symbols_dock)
+
+    def set_layout_locked(self, locked: bool, save: bool = True) -> None:
+        """Layout travado: paineis e barras nao podem ser movidos, desacoplados, fechados
+        nem redimensionados (as divisorias param de responder)."""
+        self.layout_locked = bool(locked)
+        for dock in self._docks():
+            dock.setFeatures(QDockWidget.NoDockWidgetFeatures if locked else self.DOCK_FEATURES)
+        for tb in self.toolbars:
+            tb.setMovable(not locked)
+        for dock in self._docks():
+            dock.toggleViewAction().setEnabled(not locked)
+        self.actions_["layout_reset"].setEnabled(not locked)
+        act = self.actions_["layout_lock"]
+        act.blockSignals(True)
+        act.setChecked(self.layout_locked)
+        act.blockSignals(False)
+        self._update_lock_icon()
+        if self.isVisible():                # antes de exibir, showEvent aplica com os tamanhos reais
+            self._freeze_sizes(self.layout_locked)
+        if save and self.persist_layout:
+            self._settings().setValue("ui/layout_locked", self.layout_locked)
+            self._save_layout()
+        if save:
+            self.statusBar().showMessage("Layout travado: paineis fixos. Destrave pelo cadeado ou Ctrl+Alt+L."
+                                         if locked else "Layout destravado: arraste paineis e divisorias.",
+                                         4000)
+
+    def _update_lock_icon(self) -> None:
+        act = self.actions_["layout_lock"]
+        act.setIcon(make_icon("lock" if self.layout_locked else "unlock"))
+        act.setToolTip("Layout travado - clique para destravar (Ctrl+Alt+L)" if self.layout_locked
+                       else "Layout livre - clique para travar (Ctrl+Alt+L)")
+
+    def _freeze_sizes(self, frozen: bool) -> None:
+        """Travado: cada painel fica com o tamanho atual (minimo = maximo), entao as
+        divisorias nao conseguem redimensiona-lo; a area do diagrama absorve mudancas
+        no tamanho da janela."""
+        for dock in self._docks():
+            if frozen and dock.isVisible() and not dock.isFloating():
+                area = self.dockWidgetArea(dock)
+                if area in (Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea):
+                    dock.setFixedWidth(dock.width())
+                else:
+                    dock.setFixedHeight(dock.height())
+            else:
+                dock.setMinimumSize(0, 0)
+                dock.setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX)
+
     def reset_layout(self) -> None:
-        for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.env_dock,
-                     self.msgs_dock, self.symbols_dock):
+        if self.layout_locked:
+            return
+        for dock in self._docks():
             dock.setFloating(False)
             dock.show()
         self.restoreState(self._default_layout, self.LAYOUT_VERSION)
@@ -859,6 +929,7 @@ class MainWindow(QMainWindow):
         """Redesenha o que guarda cores ja calculadas (icones, cena, listas)."""
         for key, name in self._icon_names.items():
             self.actions_[key].setIcon(make_icon(name))
+        self._update_lock_icon()
         self.palette.theme_changed()
         self.view.theme_changed()
         self.view.set_errors({d.element_id for d in (self.result.errors if self.result else []) if d.element_id})
@@ -876,6 +947,8 @@ class MainWindow(QMainWindow):
 
     def _grow_environment(self) -> None:
         """Com um ambiente em uso, o painel de baixo cresce para a cena ficar legivel."""
+        if self.layout_locked:              # layout travado: o usuario escolheu os tamanhos
+            return
         if self.env_dock.isVisible() and not self.env_dock.isFloating() and self.env_panel.env is not None:
             target = int(0.42 * self.height())
             if self.env_dock.height() < target:

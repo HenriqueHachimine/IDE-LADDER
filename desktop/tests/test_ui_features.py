@@ -131,3 +131,46 @@ def test_layout_fits_laptop_screen_and_follows_work_mode(window):
     w.palette_dock.hide()
     w.reset_layout()
     assert w.palette_dock.isVisible()
+
+
+def test_layout_lock_freezes_panels_and_persists(window, monkeypatch, tmp_path):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QDockWidget
+    app, w = window
+    w.resize(1400, 860)
+    app.processEvents()
+    ini = str(tmp_path / "ladderide.ini")
+    monkeypatch.setattr(mw.MainWindow, "_settings", lambda self: QSettings(ini, QSettings.IniFormat))
+
+    w.actions_["layout_lock"].trigger()                       # trava pelo menu/cadeado
+    assert w.layout_locked and w.actions_["layout_lock"].isChecked()
+    assert all(d.features() == QDockWidget.NoDockWidgetFeatures for d in w._docks())
+    assert not any(tb.isMovable() for tb in w.toolbars)
+    assert not w.palette_dock.toggleViewAction().isEnabled()
+    assert not w.actions_["layout_reset"].isEnabled()
+    assert w.sim_dock.minimumWidth() == w.sim_dock.maximumWidth() == w.sim_dock.width()
+    height = w.msgs_dock.height()
+    w.resizeDocks([w.msgs_dock], [height + 80], mw.Qt.Vertical)  # divisoria/redimensionamento sem efeito
+    app.processEvents()
+    assert w.msgs_dock.height() == height
+
+    w.set_layout_locked(False)
+    assert all(d.features() == mw.MainWindow.DOCK_FEATURES for d in w._docks())
+    assert all(tb.isMovable() for tb in w.toolbars)
+    assert w.sim_dock.minimumWidth() < w.sim_dock.maximumWidth()
+    w.resizeDocks([w.msgs_dock], [height + 80], mw.Qt.Vertical)
+    app.processEvents()
+    assert w.msgs_dock.height() > height                         # destravado volta a redimensionar
+
+    w.persist_layout = True                                   # grava a preferencia e o layout
+    w.set_layout_locked(True)
+    w.dirty = False
+    w.session.close()
+    w2 = mw.MainWindow(persist_layout=True)
+    try:
+        assert w2.layout_locked and w2.actions_["layout_lock"].isChecked()
+    finally:
+        w2.session.close()
+        w2.persist_layout = False
+        w2.close()
+    w.persist_layout = False

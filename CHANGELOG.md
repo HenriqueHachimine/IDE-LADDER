@@ -28,6 +28,8 @@ ensaios na placa real.
   Dispositivo com Verificar, Transferir, RUN, STOP e Monitor online; selo de
   modo e estado do ESP32 na barra de status; layout salvo, com "Restaurar
   layout padrão".
+- Travar layout (Exibir → Travar layout, Ctrl+Alt+L, cadeado na barra de
+  status): painéis e barras fixos, inclusive tamanhos; estado salvo.
 
 ### Corrigido
 - Travamento ao arrastar um elemento para outra rede (a edição era aplicada

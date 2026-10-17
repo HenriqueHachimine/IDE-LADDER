@@ -47,6 +47,12 @@ Os painéis podem ser arrastados, soltos como janelas ou fechados; a posição
 é lembrada. **Exibir → Painéis** reabre um painel fechado e **Exibir →
 Restaurar layout padrão** volta à organização original.
 
+**Travar layout** (Exibir → Travar layout, **Ctrl+Alt+L** ou o cadeado no
+canto da barra de status): depois de arrumar a tela, trave-a. Travado, os
+painéis não podem ser arrastados, desacoplados, fechados ou redimensionados, e
+as barras de ferramentas ficam fixas. Se a janela mudar de tamanho, só o diagrama
+se ajusta. Destrave pelo mesmo comando. O estado e o layout ficam salvos.
+
 **Tema:** em **Exibir → Tema**, escolha Claro, Escuro ou Seguir o Windows.
 O atalho **Ctrl+Shift+T** alterna entre claro e escuro. A escolha fica salva
 para as próximas aberturas.
