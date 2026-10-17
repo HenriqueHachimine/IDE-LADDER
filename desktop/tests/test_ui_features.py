@@ -80,6 +80,38 @@ def test_il_blocks_panel_syncs_with_diagram(window):
     assert panel._last_power is not None
 
 
+def test_cpp_panel_shows_code_before_compiling(window):
+    from PySide6.QtGui import QTextCursor
+    app, w = window
+    w.file_open(str(PORTAO))
+    assert w.result is None                                     # nada compilado ainda
+    w.show_cpp()
+    app.processEvents()
+    panel = w.cpp_panel
+    assert "uint16_t plc_scan(" in panel.text and "// ===== Rede 0" in panel.text
+    assert panel.code.errors == 0
+    # editar o diagrama atualiza o C++ na hora, sem compilar
+    contact = next(n for _, n, _ in w.project.walk() if hasattr(n, "operand") and n.kind == "XIC")
+    old = contact.operand
+    contact.operand = "Nao_Existe"
+    w.modified()
+    assert "// ERRO: variavel nao declarada: Nao_Existe" in panel.text
+    contact.operand = old
+    w.modified()
+    assert "ERRO" not in panel.text
+    # diagrama -> codigo: a rede do elemento selecionado fica destacada
+    w.view.select(w.project.rungs[1].outputs[0].id)
+    sel = panel.editor.extraSelections()
+    doc = panel.editor.document()
+    lines = (doc.findBlock(sel[0].cursor.selectionStart()).blockNumber(),
+             doc.findBlock(sel[0].cursor.selectionEnd()).blockNumber())
+    assert lines == panel.code.rung_lines[1]
+    # codigo -> diagrama: clicar numa linha seleciona a rede correspondente
+    first, _ = panel.code.rung_lines[2]
+    panel.editor.setTextCursor(QTextCursor(panel.editor.document().findBlockByNumber(first + 1)))
+    assert w.view.selection == panel.code.rung_first_element[2]
+
+
 def test_verify_action_opens_report(window, monkeypatch):
     app, w = window
     w.file_open(str(PORTAO))
@@ -115,7 +147,7 @@ def test_layout_fits_laptop_screen_and_follows_work_mode(window):
     assert w.minimumSizeHint().height() <= 700                  # cabe em 1366x768
     buttons = [tb.widgetForAction(act) for tb in w.toolbars for act in tb.actions() if not act.isSeparator()]
     texts = [b for b in buttons if b.toolButtonStyle() == mw.Qt.ToolButtonTextBesideIcon]
-    assert len(texts) == 5                                      # demais acoes: so icone (cabe em 1366 px)
+    assert len(texts) == 6                                      # demais acoes: so icone (cabe em 1366 px)
     assert w.env_dock.objectName() == "dock_env" and w.dockWidgetArea(w.env_dock) == mw.Qt.BottomDockWidgetArea
     w.file_open(str(PORTAO))
     assert w.status_mode.text() == "EDICAO" and w.palette_dock.isVisible()

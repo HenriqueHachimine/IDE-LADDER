@@ -39,7 +39,7 @@ a janela não abrir no Wayland, tente `QT_QPA_PLATFORM=xcb python -m ladderide`.
 ```
 +------------+--------------------------------+---------------------------+
 | Instrucoes | DIAGRAMA LADDER                | Simulador | Dispositivo | |
-| (paleta)   |                                | Blocos de instrucao       |
+| (paleta)   |                                | Blocos IL | Codigo C++    |
 |            +--------------------------------+  (altura total)           |
 |            | Mensagens | Simbolos | Ambiente|                           |
 +------------+--------------------------------+---------------------------+
@@ -48,14 +48,14 @@ a janela não abrir no Wayland, tente `QT_QPA_PLATFORM=xcb python -m ladderide`.
 ```
 
 - **Barras de ferramentas**, na ordem do trabalho: *Edição* (arquivo, desfazer,
-  nova rede, zoom), *Simulação* (compilar, executar... parar, ambiente) e
+  nova rede, zoom), *Simulação* (código C++, compilar, executar... parar, ambiente) e
   *Dispositivo* (verificar ESP32, transferir, blocos de instrução).
 - **Instruções** (esquerda): arraste para o diagrama ou clique para inserir
   depois do elemento selecionado. Some sozinha durante a simulação e o
   monitor online, porque nesses modos o programa não pode ser editado.
 - **Diagrama** (centro): redes numeradas entre os trilhos.
 - **Direita** (abas): Simulador (entradas, saídas, temporizadores, monitor de
-  variáveis), Dispositivo e Blocos de instrução.
+  variáveis), Dispositivo, Blocos de instrução e Código C++.
 - **Embaixo do diagrama** (abas): Mensagens, Símbolos e Ambiente. O ambiente
   fica embaixo para a cena e o painel Simulador ficarem visíveis juntos.
 - **Barra de status:** o selo mostra o modo atual (EDIÇÃO, SIMULAÇÃO ou
@@ -97,7 +97,35 @@ Cada temporizador/contador é acionado por **uma** instrução TON/TOF/RTO/CTU/C
 `RES` pode aparecer várias vezes. Semântica completa:
 `docs/ladder-specification.md` (F1 mostra um resumo).
 
-## 4. Compilar (F7)
+## 4. Código C++ (Ctrl+F7) e compilar (F7)
+
+O painel **Código C++** mostra o diagrama traduzido para C++ **antes de
+compilar**: ele é refeito a cada edição. Cada rede vira uma linha (ou um
+pequeno bloco) com o mesmo nome dos símbolos: contatos em série viram `&&`,
+ramos paralelos `||`, contato NF e NOT `!`, bobinas atribuições, SET/RESET
+`if (...) X = true/false`, e temporizadores/contadores chamadas como
+`TON(Atraso, Motor, dt)`. Exemplo:
+
+```cpp
+// ===== Rede 0 - Liga/desliga o processo (selo) =====
+Lampada_Run = (Start || Lampada_Run) && Stop;
+```
+
+Erros do diagrama aparecem no código como comentários `// ERRO` na rede, e o
+operando inválido vira `false`. Clicar numa linha seleciona a rede no
+diagrama, e selecionar um elemento destaca a rede no código. **Copiar código**
+e **Salvar .cpp** exportam o arquivo completo (runtime dos temporizadores e
+contadores, variáveis, `plc_start()` e `plc_scan()`).
+
+O ESP32 continua executando o programa compilado em bytecode pelo
+interpretador do firmware; o C++ é a mesma lógica escrita de outra forma. Um
+teste automático compila o C++ gerado com g++ e confere, varredura a varredura,
+que ele produz os mesmos estados do simulador (exemplos e projetos aleatórios).
+O trecho `#ifdef ARDUINO` no fim do arquivo é um ponto de partida para usar o
+código como sketch junto com `firmware/src/io_board.cpp`; ele não foi testado
+na placa.
+
+### Compilar (F7)
 
 Erros e avisos aparecem em **Mensagens** com a rede; clique para selecionar o
 elemento (destacado em vermelho). Programas com erro não são simulados nem
@@ -184,6 +212,7 @@ python -m ladderide.cli --port COM5 equivalence
 python -m ladderide.cli --virtual status          # dispositivo virtual
 python -m ladderide.cli verify projeto.ladproj      # verificacao para o ESP32 (codigo de saida 1 se houver erro)
 python -m ladderide.cli il projeto.ladproj -o projeto.il   # blocos de instrucao
+python -m ladderide.cli cpp projeto.ladproj -o projeto.cpp # codigo C++ (nao precisa compilar)
 ```
 
 ## 9. Segurança

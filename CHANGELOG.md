@@ -16,6 +16,11 @@ ensaios na placa real.
   varredura medido no dispositivo.
 - Blocos de instrução (F12 e `ladderide.cli il`): lista de instruções por rede,
   sincronizada com o diagrama e animada na simulação.
+- Código C++ (Ctrl+F7, painel ao lado dos blocos de instrução e
+  `ladderide.cli cpp`): o diagrama traduzido para C++ legível a cada edição,
+  sem precisar compilar, com erros marcados nas redes. O teste
+  `test_codegen_cpp.py` compila o código com g++ e compara com o simulador
+  varredura a varredura.
 - Visual renovado: tema próprio, ícones, redes em cartões.
 - Tema escuro (Exibir → Tema: claro, escuro ou seguir o Windows; Ctrl+Shift+T),
   aplicado sem reiniciar e lembrado entre sessões.

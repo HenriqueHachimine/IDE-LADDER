@@ -25,6 +25,7 @@ from .device_panel import DevicePanel, DeviceSession
 from .dialogs import ElementDialog, ProjectDialog
 from .env_panel import EnvironmentPanel
 from .icons import make_icon
+from .cpp_panel import CppPanel
 from .il_panel import ILPanel
 from .verify_dialog import VerifyDialog
 from . import theme
@@ -37,7 +38,7 @@ QWIDGETSIZE_MAX = (1 << 24) - 1     # limite de tamanho de widget do Qt (nao exp
 
 
 class MainWindow(QMainWindow):
-    LAYOUT_VERSION = 2          # mude ao reorganizar os paineis: invalida layouts salvos antigos
+    LAYOUT_VERSION = 3          # mude ao reorganizar os paineis: invalida layouts salvos antigos
 
     def __init__(self, project: Project | None = None, path: str | None = None, persist_layout: bool = False):
         super().__init__()
@@ -143,6 +144,8 @@ class MainWindow(QMainWindow):
         A("device_transfer", "Transferir programa ao dispositivo", lambda: self.device_transfer(), "F8")
         A("verify", "Verificar para ESP32", self.verify_esp32, "F9",
           "Valida o programa no codigo C do firmware, compara com o simulador e confere os limites da placa")
+        A("cpp_code", "Codigo C++", self.show_cpp, "Ctrl+F7",
+          "Mostra o diagrama traduzido para C++; atualiza a cada edicao, antes de compilar")
         A("il_blocks", "Blocos de instrucao", self.show_il_blocks, "F12",
           "Mostra o diagrama convertido em lista de instrucoes, bloco por rede")
         A("environment", "Ambiente de simulacao", self.show_environment, "Ctrl+E",
@@ -167,17 +170,19 @@ class MainWindow(QMainWindow):
                           ("sim_pause", "pause"), ("sim_scan", "scan"), ("sim_step", "step"),
                           ("sim_reset", "reset"), ("sim_stop", "stop"), ("zoom_in", "zoom_in"),
                           ("zoom_out", "zoom_out"), ("device_transfer", "transfer"), ("verify", "verify"),
-                          ("il_blocks", "il"), ("environment", "env"), ("theme_toggle", "theme")):
+                          ("il_blocks", "il"), ("cpp_code", "cpp"), ("environment", "env"),
+                          ("theme_toggle", "theme")):
             self.actions_[key].setIcon(make_icon(icon))
         self._icon_names = {"new": "new", "open": "open", "save": "save", "undo": "undo", "redo": "redo",
                             "delete": "delete", "rung_add": "rung", "compile": "compile", "sim_run": "run",
                             "sim_pause": "pause", "sim_scan": "scan", "sim_step": "step", "sim_reset": "reset",
                             "sim_stop": "stop", "zoom_in": "zoom_in", "zoom_out": "zoom_out",
-                            "device_transfer": "transfer", "verify": "verify", "il_blocks": "il",
+                            "device_transfer": "transfer", "verify": "verify", "il_blocks": "il", "cpp_code": "cpp",
                             "environment": "env", "theme_toggle": "theme"}
         self.actions_["device_transfer"].setIconText("Transferir")
         self.actions_["verify"].setIconText("Verificar ESP32")
         self.actions_["il_blocks"].setIconText("Blocos IL")
+        self.actions_["cpp_code"].setIconText("C++")
         self.actions_["environment"].setIconText("Ambiente")
         self.actions_["open"].setIconText("Abrir")
 
@@ -198,6 +203,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction(a["project"])
         m = mb.addMenu("&Programa")
+        m.addAction(a["cpp_code"])
         m.addAction(a["compile"])
         m.addAction(a["il_blocks"])
         m = mb.addMenu("&Simulacao")
@@ -228,8 +234,8 @@ class MainWindow(QMainWindow):
         self.theme_menu.addAction(a["theme_toggle"])
         m.addSeparator()
         panels = m.addMenu("Paineis")
-        for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.env_dock,
-                     self.msgs_dock, self.symbols_dock):
+        for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.cpp_dock,
+                     self.env_dock, self.msgs_dock, self.symbols_dock):
             panels.addAction(dock.toggleViewAction())
         m.addAction(a["layout_lock"])
         m.addAction(a["layout_reset"])
@@ -241,11 +247,11 @@ class MainWindow(QMainWindow):
         # Texto so nas acoes principais; as demais mostram icone e dica com o atalho.
         groups = {
             "Edicao": ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "zoom_in", "zoom_out"),
-            "Simulacao": ("compile", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
+            "Simulacao": ("cpp_code", "compile", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
                           None, "environment"),
             "Dispositivo": ("verify", "device_transfer", None, "il_blocks"),
         }
-        with_text = {"compile", "sim_run", "sim_stop", "environment", "device_transfer"}
+        with_text = {"cpp_code", "compile", "sim_run", "sim_stop", "environment", "device_transfer"}
         self.toolbars = []
         for title, keys in groups.items():
             tb = self.addToolBar(title)
@@ -310,6 +316,11 @@ class MainWindow(QMainWindow):
         self.il_dock = self._dock("Blocos de instrucao", self.il_panel, Qt.RightDockWidgetArea, "dock_il")
         self.tabifyDockWidget(self.device_dock, self.il_dock)
 
+        self.cpp_panel = CppPanel()
+        self.cpp_panel.elementActivated.connect(self.view.select)
+        self.cpp_dock = self._dock("Codigo C++", self.cpp_panel, Qt.RightDockWidgetArea, "dock_cpp")
+        self.tabifyDockWidget(self.il_dock, self.cpp_dock)
+
         # o ambiente fica sob o diagrama: cena larga e Simulador visivel ao mesmo tempo
         self.env_panel = EnvironmentPanel()
         self.env_panel.environmentChanged.connect(self.on_environment_changed)
@@ -320,6 +331,8 @@ class MainWindow(QMainWindow):
         self.msgs_dock.raise_()
         self.il_dock.visibilityChanged.connect(lambda visible: visible and self._refresh_il())
         self.view.selectionChangedTo.connect(self.il_panel.highlight)
+        self.cpp_dock.visibilityChanged.connect(lambda visible: visible and self._refresh_cpp())
+        self.view.selectionChangedTo.connect(self.cpp_panel.highlight)
         self.sim_dock.raise_()
         self.device_panel.transferRequested.connect(self.device_transfer)
         self.device_panel.monitorToggled.connect(self.on_monitor_toggled)
@@ -390,8 +403,8 @@ class MainWindow(QMainWindow):
                      | QDockWidget.DockWidgetClosable)
 
     def _docks(self) -> tuple[QDockWidget, ...]:
-        return (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.env_dock,
-                self.msgs_dock, self.symbols_dock)
+        return (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.cpp_dock,
+                self.env_dock, self.msgs_dock, self.symbols_dock)
 
     def set_layout_locked(self, locked: bool, save: bool = True) -> None:
         """Layout travado: paineis e barras nao podem ser movidos, desacoplados, fechados
@@ -467,6 +480,7 @@ class MainWindow(QMainWindow):
         self._update_title()
         self._update_actions()
         self._refresh_il()
+        self._refresh_cpp()
 
     def _update_title(self) -> None:
         name = Path(self.path).name if self.path else "sem arquivo"
@@ -898,6 +912,18 @@ class MainWindow(QMainWindow):
         self.il_dock.raise_()
         self._refresh_il()
 
+    def show_cpp(self) -> None:
+        self.cpp_dock.show()
+        self.cpp_dock.raise_()
+        self._refresh_cpp()
+
+    def _refresh_cpp(self) -> None:
+        """O C++ sai direto do diagrama: atualiza a cada edicao, sem esperar a compilacao."""
+        if not hasattr(self, "cpp_dock") or not self.cpp_dock.isVisible():
+            return
+        self.cpp_panel.set_project(self.project)
+        self.cpp_panel.highlight(self.view.selection)
+
     def _refresh_il(self) -> None:
         if not hasattr(self, "il_dock") or not self.il_dock.isVisible():
             return
@@ -937,6 +963,7 @@ class MainWindow(QMainWindow):
         self.device_panel.io.theme_changed()
         self._il_key = None
         self._refresh_il()
+        self.cpp_panel.theme_changed()
         self._update_live()
 
     # ================================================== ambientes de simulacao

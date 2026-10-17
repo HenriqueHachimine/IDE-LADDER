@@ -32,6 +32,8 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   compara com o simulador varredura a varredura e confere memória, E/S e limites da placa
 - **Blocos de instrução** (F12): o diagrama convertido em lista de instruções por
   rede, ligada ao diagrama e animada na simulação
+- **Código C++** (Ctrl+F7): o diagrama traduzido para C++ legível enquanto se
+  edita, antes de compilar; um teste compila o C++ e confere que ele reproduz o simulador
 - **Equivalência garantida por testes**: simulador e firmware executam o mesmo
   bytecode e são comparados varredura a varredura
 

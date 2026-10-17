@@ -2,6 +2,7 @@
 
     python -m ladderide.cli ports
     python -m ladderide.cli compile projeto.ladproj [-o saida.ldrb] [--lil saida.lil]
+    python -m ladderide.cli cpp projeto.ladproj [-o programa.cpp]
     python -m ladderide.cli --port COM5 info|status|run|stop|clear-fault
     python -m ladderide.cli --port COM5 download projeto.ladproj [--stop]
     python -m ladderide.cli --port COM5 monitor [--interval 0.2] [--count N]
@@ -78,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
     il = sub.add_parser("il", help="converte o diagrama em blocos de instrucao (lista IL por rede)")
     il.add_argument("project")
     il.add_argument("-o", "--output")
+    cp = sub.add_parser("cpp", help="traduz o diagrama para C++ (nao precisa compilar)")
+    cp.add_argument("project")
+    cp.add_argument("-o", "--output")
     e = sub.add_parser("equivalence")
     e.add_argument("--vectors", default=str(ROOT / "shared" / "test-vectors" / "scan"))
     args = ap.parse_args(argv)
@@ -94,6 +98,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.lil:
             Path(args.lil).write_text(r.lil, encoding="utf-8")
         return 0
+    if args.cmd == "cpp":
+        from .codegen import generate_cpp
+        code = generate_cpp(Project.load(args.project))
+        if args.output:
+            Path(args.output).write_text(code.text, encoding="utf-8")
+        else:
+            print(code.text, end="")
+        if code.errors:
+            print(f"{code.errors} erro(s) no diagrama (marcados com ERRO no codigo)", file=sys.stderr)
+        return 1 if code.errors else 0
     if args.cmd in ("verify", "il"):
         from .verify import il_blocks, il_text, verify_for_esp32
         project, r = _compile(args.project)

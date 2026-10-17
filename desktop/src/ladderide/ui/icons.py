@@ -122,6 +122,12 @@ def _draw(name: str, p: QPainter) -> None:
         for k, w in enumerate((8, 6, 9)):
             y = 7.5 + k * 3.5
             p.drawLine(QPointF(6, y), QPointF(6 + w, y))
+    elif name == "cpp":                         # codigo-fonte: </>
+        p.setPen(QPen(BLUE, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.drawPolyline(QPolygonF([QPointF(7, 6), QPointF(2.5, 11), QPointF(7, 16)]))
+        p.drawPolyline(QPolygonF([QPointF(15, 6), QPointF(19.5, 11), QPointF(15, 16)]))
+        p.setPen(QPen(INK, 1.8, Qt.SolidLine, Qt.RoundCap))
+        p.drawLine(QPointF(12.5, 4.5), QPointF(9.5, 17.5))
     elif name == "env":
         p.setPen(QPen(INK, 1.3)); p.setBrush(QColor("#e0f2fe"))
         p.drawRoundedRect(QRectF(2.5, 3.5, 17, 15), 2, 2)
