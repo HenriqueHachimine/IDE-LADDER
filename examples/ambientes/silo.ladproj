@@ -2,10 +2,10 @@
   "format": "ladderide-project",
   "format_version": 1,
   "name": "Silo de envase",
-  "description": "Esteira para com a caixa sob a valvula, enche ate o sensor de nivel e segue. Stop e NF: o programa usa contato NA (XIC) porque a entrada le 1 com o botao solto.",
+  "description": "Esteira para com a caixa sob o bico, enche ate o sensor de nivel e segue. A caixa cheia e memorizada (M0.0) porque o sensor de nivel deixa de ve-la quando ela anda, enquanto a fotocelula continua interrompida ate a caixa sair. Stop e NF: o programa usa contato NA (XIC).",
   "version": "0.1.0",
-  "created": "2026-10-17T12:05:37",
-  "modified": "2026-10-17T12:05:37",
+  "created": "2026-10-17T13:17:57",
+  "modified": "2026-10-17T13:17:57",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -35,12 +35,12 @@
     {
       "name": "Sensor_Presenca",
       "address": "I0.2",
-      "comment": "Caixa posicionada sob a valvula"
+      "comment": "Fotocelula: caixa interrompendo o feixe sob o bico"
     },
     {
       "name": "Sensor_Nivel",
       "address": "I0.3",
-      "comment": "Caixa sob a valvula esta cheia"
+      "comment": "Sensor de nivel: caixa sob o bico com 95% ou mais"
     },
     {
       "name": "Motor_Esteira",
@@ -66,6 +66,11 @@
       "name": "Lampada_Full",
       "address": "Q0.4",
       "comment": "Lampada FULL (caixa cheia)"
+    },
+    {
+      "name": "Caixa_Cheia",
+      "address": "M0.0",
+      "comment": "caixa sob o bico ja foi enchida"
     }
   ],
   "rungs": [
@@ -106,7 +111,41 @@
       ]
     },
     {
-      "comment": "Esteira anda sem caixa posicionada ou com caixa cheia",
+      "comment": "Memoriza caixa cheia (o sensor de nivel para de ver a caixa quando ela anda)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Nivel"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Caixa_Cheia"
+        }
+      ]
+    },
+    {
+      "comment": "Feixe livre: a caixa cheia saiu, espera a proxima",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Presenca"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Caixa_Cheia"
+        }
+      ]
+    },
+    {
+      "comment": "Esteira anda sem caixa no bico ou com a caixa cheia",
       "condition": [
         {
           "type": "contact",
@@ -127,7 +166,7 @@
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Sensor_Nivel"
+                "operand": "Caixa_Cheia"
               }
             ]
           ]
@@ -157,7 +196,7 @@
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Sensor_Nivel"
+          "operand": "Caixa_Cheia"
         }
       ],
       "outputs": [
@@ -184,7 +223,7 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Sensor_Nivel"
+          "operand": "Caixa_Cheia"
         }
       ],
       "outputs": [
@@ -198,18 +237,18 @@
   ],
   "history": [
     {
-      "date": "2026-10-17T12:05:37",
+      "date": "2026-10-17T13:17:57",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 4
+      "rungs": 6
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 1.0",
-    "build_id": "0xcf596eef",
-    "size": 168,
-    "instructions": 33,
-    "date": "2026-10-17T12:05:37"
+    "build_id": "0x83581390",
+    "size": 200,
+    "instructions": 41,
+    "date": "2026-10-17T13:17:57"
   },
   "environment": "silo"
 }

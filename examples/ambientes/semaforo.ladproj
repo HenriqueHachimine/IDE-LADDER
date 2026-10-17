@@ -2,10 +2,10 @@
   "format": "ladderide-project",
   "format_version": 1,
   "name": "Semaforo de cruzamento",
-  "description": "Ciclo por tempo: NS verde 6 s, amarelo 2 s, vermelho geral 1 s; LO verde 6 s, amarelo 2 s, vermelho geral 1 s. Pedestres atravessam a via que esta no vermelho, se pediram.",
+  "description": "Ciclo por tempo com valores de engenharia de trafego: verde 8 s, amarelo 3 s (50 km/h) e vermelho geral 2 s para o cruzamento esvaziar. Pedestres (1,3 m/s, ~10 s para atravessar) so iniciam a travessia nos 2 primeiros segundos da fase, para terminar antes do verde conflitante.",
   "version": "0.1.0",
-  "created": "2026-10-17T12:05:37",
-  "modified": "2026-10-17T12:05:37",
+  "created": "2026-10-17T13:17:57",
+  "modified": "2026-10-17T13:17:57",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -85,32 +85,42 @@
     {
       "name": "Fase_NS_Verde",
       "address": "T0",
-      "comment": "6 s"
+      "comment": "8 s"
     },
     {
       "name": "Fase_NS_Amarelo",
       "address": "T1",
-      "comment": "2 s"
+      "comment": "3 s"
     },
     {
       "name": "Fase_Todos_Vermelho1",
       "address": "T2",
-      "comment": "1 s"
+      "comment": "2 s"
     },
     {
       "name": "Fase_LO_Verde",
       "address": "T3",
-      "comment": "6 s"
+      "comment": "8 s"
     },
     {
       "name": "Fase_LO_Amarelo",
       "address": "T4",
-      "comment": "2 s"
+      "comment": "3 s"
     },
     {
       "name": "Fase_Todos_Vermelho2",
       "address": "T5",
-      "comment": "1 s"
+      "comment": "2 s"
+    },
+    {
+      "name": "Janela_Pedestre_LO",
+      "address": "T6",
+      "comment": "2 s no inicio do verde NS"
+    },
+    {
+      "name": "Janela_Pedestre_NS",
+      "address": "T7",
+      "comment": "2 s no inicio do verde LO"
     },
     {
       "name": "Pedido_NS",
@@ -138,7 +148,7 @@
           "type": "timer",
           "kind": "TON",
           "operand": "Fase_NS_Verde",
-          "preset": 6000
+          "preset": 8000
         }
       ]
     },
@@ -156,7 +166,7 @@
           "type": "timer",
           "kind": "TON",
           "operand": "Fase_NS_Amarelo",
-          "preset": 2000
+          "preset": 3000
         }
       ]
     },
@@ -174,7 +184,7 @@
           "type": "timer",
           "kind": "TON",
           "operand": "Fase_Todos_Vermelho1",
-          "preset": 1000
+          "preset": 2000
         }
       ]
     },
@@ -192,7 +202,7 @@
           "type": "timer",
           "kind": "TON",
           "operand": "Fase_LO_Verde",
-          "preset": 6000
+          "preset": 8000
         }
       ]
     },
@@ -210,7 +220,7 @@
           "type": "timer",
           "kind": "TON",
           "operand": "Fase_LO_Amarelo",
-          "preset": 2000
+          "preset": 3000
         }
       ]
     },
@@ -228,7 +238,7 @@
           "type": "timer",
           "kind": "TON",
           "operand": "Fase_Todos_Vermelho2",
-          "preset": 1000
+          "preset": 2000
         }
       ]
     },
@@ -398,13 +408,26 @@
       ]
     },
     {
-      "comment": "Atravessa a via NS enquanto ela esta no vermelho e LO no verde",
+      "comment": "Janela de 2 s para iniciar a travessia (o resto do verde e o tempo de terminar)",
       "condition": [
         {
           "type": "contact",
-          "kind": "XIC",
-          "operand": "Pedido_NS"
-        },
+          "kind": "XIO",
+          "operand": "Fase_NS_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Janela_Pedestre_LO",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
         {
           "type": "contact",
           "kind": "XIC",
@@ -414,6 +437,111 @@
           "type": "contact",
           "kind": "XIO",
           "operand": "Fase_LO_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Janela_Pedestre_NS",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "Atravessa a via LO (parada) no inicio do verde NS",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_NS_Verde.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Janela_Pedestre_LO.DN"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pedido_LO"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pedestre_LO"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pedestre_LO"
+        }
+      ]
+    },
+    {
+      "comment": "Pedido atendido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedestre_LO"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedido_LO"
+        }
+      ]
+    },
+    {
+      "comment": "Atravessa a via NS (parada) no inicio do verde LO",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_Todos_Vermelho1.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_LO_Verde.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Janela_Pedestre_NS.DN"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pedido_NS"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pedestre_NS"
+              }
+            ]
+          ]
         }
       ],
       "outputs": [
@@ -430,7 +558,7 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Fase_LO_Verde.DN"
+          "operand": "Pedestre_NS"
         }
       ],
       "outputs": [
@@ -440,61 +568,22 @@
           "operand": "Pedido_NS"
         }
       ]
-    },
-    {
-      "comment": "Atravessa a via LO enquanto NS esta no verde",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Pedido_LO"
-        },
-        {
-          "type": "contact",
-          "kind": "XIO",
-          "operand": "Fase_NS_Verde.DN"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTE",
-          "operand": "Pedestre_LO"
-        }
-      ]
-    },
-    {
-      "comment": "",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Fase_NS_Verde.DN"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Pedido_LO"
-        }
-      ]
     }
   ],
   "history": [
     {
-      "date": "2026-10-17T12:05:37",
+      "date": "2026-10-17T13:17:57",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 18
+      "rungs": 20
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 1.0",
-    "build_id": "0x692b6c8e",
-    "size": 412,
-    "instructions": 82,
-    "date": "2026-10-17T12:05:37"
+    "build_id": "0x84c306b6",
+    "size": 504,
+    "instructions": 101,
+    "date": "2026-10-17T13:17:57"
   },
   "environment": "semaforo"
 }

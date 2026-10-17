@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 
 from .. import draw
 from ..base import BUTTON, Environment, IOPoint
+from ..physics import IDM
 from ..registry import register
 
 ROAD_NS = (270.0, 370.0)        # x da via Norte-Sul
@@ -17,17 +18,24 @@ LANE_NS_X = 295.0               # faixa sentido sul
 LANE_LO_Y = 235.0               # faixa sentido leste
 STOP_NS = ROAD_LO[0] - 30       # linha de retencao (frente do carro), antes da faixa de pedestres
 STOP_LO = ROAD_NS[0] - 30
-CAR_L, CAR_W, GAP = 36.0, 20.0, 10.0
-SPEED = 190.0                   # px/s: atravessa o cruzamento em < 1 s (vermelho geral)
+CROSSWALK_NS = (ROAD_LO[0] - 26, ROAD_LO[0] - 4)   # faixa de pedestres sobre a via NS (y)
+CROSSWALK_LO = (ROAD_NS[0] - 26, ROAD_NS[0] - 4)   # faixa de pedestres sobre a via LO (x)
+PX_PER_M = 9.0                  # escala do desenho
+CAR_L, CAR_W = 40.0, 20.0       # 4,4 m x 2,2 m
 END_NS, END_LO = 470.0, 690.0
-SENSOR_ZONE = 150.0
-CROSS_MS = 4000
+SENSOR_ZONE = 150.0             # laco indutivo de ~17 m antes da linha
+YELLOW_MAX_DECEL = 3.5          # m/s^2: acima disso o motorista segue no amarelo (zona de dilema)
+PED_SPEED = 1.3                 # m/s
+PED_PATH = 120.0                # px percorridos na travessia (via + calcadas)
+DRIVER = IDM()
 
 
 @dataclass
 class Car:
-    s: float            # posicao da frente ao longo da faixa
+    s: float                    # posicao da frente ao longo da faixa (px)
     color: QColor
+    v: float = 0.0              # m/s
+    go: bool | None = None      # decisao no amarelo (None = ainda nao decidiu)
     waited_ms: int = 0
 
 
@@ -35,10 +43,10 @@ class Car:
 class TrafficLightEnvironment(Environment):
     id = "semaforo"
     name = "Semaforo de cruzamento"
-    description = ("Controle os semaforos da via Norte-Sul (NS) e Leste-Oeste (LO). Os carros param no "
-                   "vermelho e no amarelo (se ainda nao passaram da faixa). Os sensores indicam carros "
-                   "esperando; os botoes de pedestre pedem travessia. Verdes simultaneos ou pedestres "
-                   "atravessando com carros liberados geram alarme.")
+    description = ("Controle os semaforos da via Norte-Sul (NS) e Leste-Oeste (LO). Os carros aceleram e freiam "
+                   "como motoristas reais (modelo IDM, 50 km/h): no amarelo, quem nao consegue parar segue em "
+                   "frente, por isso o vermelho geral precisa dar tempo de o cruzamento esvaziar. Os sensores "
+                   "indicam carros esperando; os pedestres (1,3 m/s) pedem travessia pelos botoes.")
     example = "ambientes/semaforo.ladproj"
     inputs = [
         IOPoint("PED_NS", "I0.0", "Botao_Pedestre_NS", "Pedestre pede para atravessar a via NS", BUTTON),
@@ -65,22 +73,45 @@ class TrafficLightEnvironment(Environment):
         self.passed = {"NS": 0, "LO": 0}
         self.max_wait = {"NS": 0, "LO": 0}
         self.waiting_ped = {"NS": False, "LO": False}
-        self.crossing = {"NS": -1, "LO": -1}       # ms de travessia em andamento (-1 = ninguem)
+        self.crossing = {"NS": -1.0, "LO": -1.0}   # progresso da travessia 0..1 (-1 = ninguem)
         self._button_prev = {"NS": False, "LO": False}
         self.collisions = 0
         self._colliding = False
+        self.hits = 0
+        self._hitting = {"NS": False, "LO": False}
         self.conflict_ms = 0
         self.ped_conflict_ms = 0
         self.dark_ms = 0
+        self.red_runners = 0
 
     # ------------------------------------------------------------- fisica
-    def _may_pass(self, d: str, out: dict[str, bool], car: Car) -> bool:
+    def _ped_blocks_lane(self, d: str) -> bool:
+        """Pedestre sobre a faixa da via d, ainda antes de passar da pista dos carros."""
+        f = self.crossing[d]
+        if f < 0:
+            return False
+        pos = -10 + f * PED_PATH                    # deslocamento a partir da borda da via
+        lane = (LANE_NS_X - ROAD_NS[0]) if d == "NS" else (LANE_LO_Y - ROAD_LO[0])
+        return pos < lane + CAR_W / 2 + 8
+
+    def _signal_obstacle(self, d: str, out: dict[str, bool], car: Car) -> float | None:
+        """Distancia (px) ate onde o carro precisa parar por causa do sinal, ou None."""
         stop = STOP_NS if d == "NS" else STOP_LO
         if car.s > stop:
-            return True
-        if out[f"GRN_{d}"] and not out[f"RED_{d}"]:
-            return True
-        return out[f"YEL_{d}"] and not out[f"RED_{d}"] and car.s >= stop - 14
+            return None
+        if out[f"GRN_{d}"] and not out[f"RED_{d}"] and not out[f"YEL_{d}"]:
+            car.go = None                           # verde: nada a decidir
+            return None
+        if car.go is None:
+            dist_m = (stop - car.s) / PX_PER_M
+            needed = car.v * car.v / (2 * max(dist_m, 0.01))
+            if out[f"YEL_{d}"] and not out[f"RED_{d}"]:
+                car.go = needed > YELLOW_MAX_DECEL       # amarelo: segue se nao der para parar com conforto
+            else:
+                car.go = needed > 0.9 * DRIVER.b_max     # vermelho repentino: so segue se fisicamente nao para
+        if car.go:
+            return None
+        return stop - car.s
 
     def step(self, dt_ms: int, out: dict[str, bool]) -> None:
         dt = dt_ms / 1000.0
@@ -88,19 +119,33 @@ class TrafficLightEnvironment(Environment):
             cars = self.cars[d]
             self.next_arrival[d] -= dt_ms
             if self.next_arrival[d] <= 0:
-                if not cars or cars[-1].s - CAR_L >= -40 + GAP:
-                    cars.append(Car(-40.0, QColor(self.rng.choice(self.COLORS))))
-                self.next_arrival[d] = self.rng.randint(2200, 6000)
+                if not cars or cars[-1].s - CAR_L > -40 + DRIVER.s0 * PX_PER_M + 10:
+                    cars.append(Car(-40.0, QColor(self.rng.choice(self.COLORS)), v=0.8 * DRIVER.v0))
+                    self.next_arrival[d] = self.rng.randint(4000, 9000)   # ~550 veiculos/h por faixa
             stop = STOP_NS if d == "NS" else STOP_LO
+            walk_edge = (CROSSWALK_NS[0] if d == "NS" else CROSSWALK_LO[0]) - 2
             for k, car in enumerate(cars):
-                target = car.s + SPEED * dt
-                if not self._may_pass(d, out, car):
-                    target = min(target, stop)
-                if k > 0:
-                    target = min(target, cars[k - 1].s - CAR_L - GAP)
-                moved = target - car.s
-                car.s = max(car.s, target)
-                if moved < SPEED * dt * 0.5 and car.s <= stop:
+                gaps = []
+                if k > 0:                            # carro da frente (IDM)
+                    lead = cars[k - 1]
+                    gaps.append(((lead.s - CAR_L - car.s) / PX_PER_M, car.v - lead.v))
+                sig = self._signal_obstacle(d, out, car)
+                if sig is not None:                  # linha de retencao: obstaculo parado
+                    gaps.append((sig / PX_PER_M + DRIVER.s0, car.v))
+                if self._ped_blocks_lane(d) and car.s <= walk_edge + 1:
+                    gaps.append(((walk_edge - car.s) / PX_PER_M + DRIVER.s0 * 0.5, car.v))
+                if gaps:
+                    acc = min(DRIVER.accel(car.v, g, dv) for g, dv in gaps)
+                else:
+                    acc = DRIVER.accel(car.v, None)
+                was_before = car.s <= stop
+                car.v = max(0.0, car.v + acc * dt)
+                car.s += car.v * dt * PX_PER_M
+                if sig is not None and car.s > stop:   # parou na linha: nao avanca por erro numerico
+                    car.s, car.v = stop, 0.0
+                if was_before and car.s > stop and out[f"RED_{d}"] and not out[f"YEL_{d}"]:
+                    self.red_runners += 1            # cruzou a linha ja no vermelho (decidiu seguir no amarelo)
+                if car.v < 0.5 and car.s <= stop:
                     car.waited_ms += dt_ms
                     self.max_wait[d] = max(self.max_wait[d], car.waited_ms)
             end = END_NS if d == "NS" else END_LO
@@ -113,12 +158,25 @@ class TrafficLightEnvironment(Environment):
                 self.waiting_ped[d] = True
             self._button_prev[d] = pressed
             if self.crossing[d] >= 0:
-                self.crossing[d] += dt_ms
-                if self.crossing[d] >= CROSS_MS:
-                    self.crossing[d] = -1
+                self.crossing[d] += PED_SPEED * PX_PER_M * dt / PED_PATH
+                if self.crossing[d] >= 1:
+                    self.crossing[d] = -1.0
             elif self.waiting_ped[d] and out[f"WALK_{d}"]:
                 self.waiting_ped[d] = False
-                self.crossing[d] = 0
+                self.crossing[d] = 0.0
+            # atropelamento: carro sobre a faixa enquanto o pedestre esta na pista dele
+            lo_w, hi_w = CROSSWALK_NS if d == "NS" else CROSSWALK_LO
+            on_walk = any(c.s > lo_w and c.s - CAR_L < hi_w for c in cars)
+            f = self.crossing[d]
+            in_lane = False
+            if f >= 0:
+                pos = -10 + f * PED_PATH
+                lane = (LANE_NS_X - ROAD_NS[0]) if d == "NS" else (LANE_LO_Y - ROAD_LO[0])
+                in_lane = abs(pos - lane) < CAR_W / 2 + 3
+            hit = on_walk and in_lane
+            if hit and not self._hitting[d]:
+                self.hits += 1
+            self._hitting[d] = hit
         # colisao no cruzamento
         ns_in = any(c.s > ROAD_LO[0] and c.s - CAR_L < ROAD_LO[1] for c in self.cars["NS"])
         lo_in = any(c.s > ROAD_NS[0] and c.s - CAR_L < ROAD_NS[1] for c in self.cars["LO"])
@@ -149,6 +207,8 @@ class TrafficLightEnvironment(Environment):
             out.append("PERIGO: travessia de pedestres liberada com carros passando na mesma via")
         if self.collisions:
             out.append(f"{self.collisions} colisao(oes) no cruzamento")
+        if self.hits:
+            out.append(f"{self.hits} pedestre(s) atropelado(s): carro passou pela faixa com pedestre na pista")
         if self.dark_ms > 500:
             out.append("Um dos semaforos esta apagado")
         for d in ("NS", "LO"):
@@ -244,7 +304,7 @@ class TrafficLightEnvironment(Environment):
         # pedestres atravessando
         for d in ("NS", "LO"):
             if self.crossing[d] >= 0:
-                f = self.crossing[d] / CROSS_MS
+                f = self.crossing[d]
                 if d == "NS":
                     self._person(p, ROAD_NS[0] - 10 + f * (ROAD_NS[1] - ROAD_NS[0] + 20), ROAD_LO[0] - 15,
                                  QColor("#0f172a"))

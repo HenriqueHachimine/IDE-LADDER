@@ -143,3 +143,90 @@ def test_paint_runs_for_every_environment():
         p = QPainter(img)
         env.paint(p)
         p.end()
+
+
+# ---------------------------------------------------------------- fisica realista
+def test_physics_helpers():
+    from ladderide.envs.physics import IDM, DelayLine, approach, torricelli
+    assert approach(0, 10, 5, 1, 1.0) == 5 and approach(10, 0, 5, 1, 1.0) == 9
+    assert torricelli(0.25) == 0.5
+    line = DelayLine(0.3)
+    line.push(2.0)
+    assert line.advance(0.2) == 0 and line.in_flight == 2.0 and line.advance(0.1) == 2.0
+    idm = IDM()
+    assert idm.accel(0, None) == pytest.approx(idm.a)              # parte com aceleracao maxima
+    assert idm.accel(idm.v0, 5.0, idm.v0) < -idm.b                  # obstaculo perto: freia forte
+
+
+def test_silo_inertia_transport_delay_and_torricelli():
+    from ladderide.envs.builtin import silo as s
+    env = create("silo")
+    run = {"MOTOR": True, "VALVE": False, "RUN": True, "FILL": False, "FULL": False}
+    for _ in range(100):
+        env.step(10, run)
+    assert env.belt_v == pytest.approx(s.BELT_SPEED)
+    x0 = env.boxes[0].x
+    stop = dict(run, MOTOR=False)
+    steps = 0
+    while env.belt_v > 0:
+        env.step(10, stop)
+        steps += 1
+    assert 3.0 < env.boxes[0].x - x0 < 6.0 and steps > 10           # inercia: anda ~4,5 px depois de desligar
+    env.reset()
+    env.silo = s.SILO_CAPACITY
+    for _ in range(100):
+        env.step(10, dict(stop, VALVE=True))
+    full_rate = env.spilled
+    env.reset()
+    env.silo = 0.25 * s.SILO_CAPACITY
+    for _ in range(100):
+        env.step(10, dict(stop, VALVE=True))
+    assert env.spilled == pytest.approx(full_rate * 0.5, rel=0.15)  # Q ~ sqrt(nivel)
+    env.reset()
+    env.step(10, dict(stop, VALVE=True))
+    for _ in range(20):
+        env.step(10, stop)                                          # valvula ja fechada...
+    assert env.falling.in_flight > 0 or env.spilled > 0             # ...mas o produto ainda cai
+
+
+def test_silo_example_overfills_slightly_but_within_tolerance():
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "silo.ladproj"), [(100, "START", True), (200, "START", False)],
+                                 120000)
+    assert alarms == set() and env.shipped_full >= 10
+    assert 100 <= env.last_fill <= 110                               # produto em queda passa um pouco do nivel
+
+
+def test_traffic_cars_accelerate_and_example_has_no_red_runners():
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "semaforo.ladproj"), [], 120000)
+    assert alarms == set() and env.red_runners == 0 and env.hits == 0
+    car = next(iter(env.cars["NS"] + env.cars["LO"]), None)
+    assert car is None or car.v <= 14.0                             # nunca acima de ~50 km/h
+
+
+def test_traffic_without_yellow_and_all_red_causes_collision():
+    p = Project.load(EXAMPLES / "semaforo.ladproj")
+    for rung in p.rungs:                                             # amarelo e vermelho geral -> 0,1 s
+        for out in rung.outputs:
+            if getattr(out, "operand", "").startswith(("Fase_Todos_Vermelho", "Fase_NS_Amarelo",
+                                                         "Fase_LO_Amarelo")):
+                out.preset = 100
+    _, alarms, _ = closed_loop(p, [], 180000)
+    assert any("colisao" in a for a in alarms)
+
+
+def test_gate_overrun_hysteresis_and_reversal_alarm():
+    from ladderide.envs.builtin import portao as g
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "portao.ladproj"), [(100, "OPEN", True), (200, "OPEN", False)],
+                                 12000)
+    assert g.LS1_ON <= env.pos < 100 and env.v == 0 and alarms == set()   # para com ~1,5% de inercia
+    # exemplo: veiculo durante o fechamento -> para, espera e reabre sem reversao brusca
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "portao.ladproj"),
+                                 [(100, "OPEN", True), (200, "OPEN", False), (10000, "CLOSE", True),
+                                  (10100, "CLOSE", False), (12000, "VEHICLE", True)], 24000)
+    assert env.sensors()["LS1"] and env.reversals == 0 and not env.hit_vehicle and alarms == set()
+    # logica ingenua: fotocelula manda subir direto -> reversao com o portao em movimento
+    naive = Project.load(EXAMPLES / "portao.ladproj")
+    naive.rungs[0].condition[0].branches[2] = [Contact("XIC", "Fotocelula")]
+    _, alarms, _ = closed_loop(naive, [(100, "OPEN", True), (200, "OPEN", False), (10000, "CLOSE", True),
+                                       (10100, "CLOSE", False), (12000, "VEHICLE", True)], 16000)
+    assert any("reversao" in a for a in alarms)

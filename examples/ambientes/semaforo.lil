@@ -3,13 +3,15 @@
 .outputs 8
 .markers 64
 .safe_outputs 0x0000
-.build_id 0x692b6c8e
-.timer T0 TON 6000
-.timer T1 TON 2000
-.timer T2 TON 1000
-.timer T3 TON 6000
-.timer T4 TON 2000
-.timer T5 TON 1000
+.build_id 0x84c306b6
+.timer T0 TON 8000
+.timer T1 TON 3000
+.timer T2 TON 2000
+.timer T3 TON 8000
+.timer T4 TON 3000
+.timer T5 TON 2000
+.timer T6 TON 2000
+.timer T7 TON 2000
 SOR ; rede 0
 XIO T5.DN
 TON T0
@@ -74,21 +76,40 @@ XIC I0.1
 OTL M0.1
 EOR
 SOR ; rede 14
-XIC M0.0
-XIC T2.DN
-XIO T3.DN
-OTE Q0.3
+XIO T0.DN
+TON T6
 EOR
 SOR ; rede 15
-XIC T3.DN
-OTU M0.0
+XIC T2.DN
+XIO T3.DN
+TON T7
 EOR
 SOR ; rede 16
-XIC M0.1
 XIO T0.DN
+XIO T6.DN
+BST
+XIC M0.1
+NXB
+XIC Q0.7
+BND
 OTE Q0.7
 EOR
 SOR ; rede 17
-XIC T0.DN
+XIC Q0.7
 OTU M0.1
+EOR
+SOR ; rede 18
+XIC T2.DN
+XIO T3.DN
+XIO T7.DN
+BST
+XIC M0.0
+NXB
+XIC Q0.3
+BND
+OTE Q0.3
+EOR
+SOR ; rede 19
+XIC Q0.3
+OTU M0.0
 EOR

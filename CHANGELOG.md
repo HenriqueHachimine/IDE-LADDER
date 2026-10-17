@@ -21,6 +21,11 @@ ensaios na placa real.
   aplicado sem reiniciar e lembrado entre sessões.
 
 ### Alterado
+- Física realista nos ambientes (`envs/physics.py`): inércia da esteira,
+  fotocélula física, válvula com atraso, vazão de Torricelli e produto em queda
+  no silo; veículos com IDM, zona de dilema no amarelo e pedestres a 1,3 m/s
+  no semáforo; inércia, gravidade, histerese dos fins de curso e alarme de
+  reversão no portão. Exemplos ajustados a esses efeitos.
 - Disposição da tela revisada com um agente de UX: a janela cabe em 1366×768
   (antes exigia 1402 px de altura); colunas laterais com altura total;
   Ambiente embaixo do diagrama (cena e Simulador visíveis juntos); três barras

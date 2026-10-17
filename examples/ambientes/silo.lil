@@ -3,7 +3,7 @@
 .outputs 8
 .markers 64
 .safe_outputs 0x0000
-.build_id 0xcf596eef
+.build_id 0x83581390
 SOR ; rede 0
 BST
 XIC I0.0
@@ -14,26 +14,34 @@ XIC I0.1
 OTE Q0.2
 EOR
 SOR ; rede 1
+XIC I0.3
+OTL M0.0
+EOR
+SOR ; rede 2
+XIO I0.2
+OTU M0.0
+EOR
+SOR ; rede 3
 XIC Q0.2
 BST
 XIO I0.2
 NXB
-XIC I0.3
+XIC M0.0
 BND
 OTE Q0.0
 EOR
-SOR ; rede 2
+SOR ; rede 4
 XIC Q0.2
 XIC I0.2
-XIO I0.3
+XIO M0.0
 BST
 OTE Q0.1
 NXB
 OTE Q0.3
 BND
 EOR
-SOR ; rede 3
+SOR ; rede 5
 XIC Q0.2
-XIC I0.3
+XIC M0.0
 OTE Q0.4
 EOR

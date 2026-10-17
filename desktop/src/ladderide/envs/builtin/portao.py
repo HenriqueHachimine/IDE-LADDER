@@ -6,11 +6,18 @@ from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 
 from .. import draw
 from ..base import BUTTON, Environment, IOPoint
+from ..physics import approach
 from ..registry import register
 
-DOOR = QRectF(210, 70, 270, 260)     # vao do portao
-SPEED = 12.5                         # % por segundo (8 s de curso)
+DOOR = QRectF(210, 70, 270, 260)     # vao do portao (2,6 m de altura)
+SPEED_UP = 12.5                      # %/s subindo (8 s de curso)
+SPEED_DOWN = 14.0                    # %/s descendo: a gravidade ajuda o motor
+ACCEL = 40.0                         # %/s^2: partida do motor (~0,3 s)
+BRAKE = 60.0                         # %/s^2: freio do motor ao desligar (~1,5% de deslocamento)
 VEHICLE_TOP = 35.0                   # % de abertura abaixo da qual o portao toca o veiculo
+LS1_ON, LS1_OFF = 98.0, 96.5         # fim de curso superior com histerese
+LS2_ON, LS2_OFF = 2.0, 3.5           # fim de curso inferior com histerese
+REVERSE_SPEED = 3.0                  # %/s: inverter acima disso e uma reversao brusca
 STRAIN_MS = 300
 
 
@@ -19,8 +26,9 @@ class GarageDoorEnvironment(Environment):
     id = "portao"
     name = "Portao de garagem"
     description = ("ABRIR e FECHAR acionam o motor (sobe/desce) ate os fins de curso LS1 (aberto) e LS2 "
-                   "(fechado). PARAR e um botao NF. A fotocelula detecta um veiculo sob o portao: o portao "
-                   "nao pode descer sobre ele. Clique no botao 'Veiculo' para colocar ou retirar o carro.")
+                   "(fechado), que tem histerese. A folha tem inercia: o motor leva ~0,3 s para acelerar e o "
+                   "freio deixa ~1,5% de deslocamento. Inverter com o portao em movimento e uma falha. PARAR e "
+                   "um botao NF. A fotocelula detecta o veiculo ('Veiculo' coloca ou retira o carro).")
     example = "ambientes/portao.ladproj"
     inputs = [
         IOPoint("OPEN", "I0.0", "Abrir", "Botao ABRIR (NA)", BUTTON),
@@ -40,10 +48,15 @@ class GarageDoorEnvironment(Environment):
 
     def reset(self) -> None:
         self.pos = 0.0               # 0 = fechado, 100 = aberto
+        self.v = 0.0                 # %/s (positivo = subindo)
+        self.ls1, self.ls2 = False, True
         self.vehicle = False
         self.both_ms = 0
         self.strain_ms = 0
         self.hit_vehicle = False
+        self.hit_speed = 0.0
+        self.reversals = 0
+        self._last_cmd = 0
         self.cycles = 0
         self._was_open = False
 
@@ -58,43 +71,65 @@ class GarageDoorEnvironment(Environment):
             super().press(key, down)
 
     def step(self, dt_ms: int, out: dict[str, bool]) -> None:
+        dt = dt_ms / 1000.0
         up, down = out["UP"], out["DOWN"]
-        delta = SPEED * dt_ms / 1000.0
-        if up and down:
+        if up and down:                          # contatores dos dois sentidos: motor travado
             self.both_ms += dt_ms
-            return
-        self.both_ms = 0
+            cmd = 0
+        else:
+            self.both_ms = 0
+            cmd = 1 if up else (-1 if down else 0)
+        if cmd and cmd != self._last_cmd and cmd * self.v < 0 and abs(self.v) > REVERSE_SPEED:
+            self.reversals += 1                  # inverteu com a folha ainda em movimento
+        self._last_cmd = cmd
+        target = SPEED_UP if cmd > 0 else (-SPEED_DOWN if cmd < 0 else 0.0)
+        if cmd == 0 or target * self.v < 0:      # desligado ou invertendo: freio do motor
+            self.v = approach(self.v, 0.0, BRAKE, BRAKE, dt)
+            if cmd and self.v == 0.0:
+                self.v = approach(0.0, target, ACCEL, ACCEL, dt)
+        else:
+            self.v = approach(self.v, target, ACCEL, ACCEL, dt)
         floor = VEHICLE_TOP if self.vehicle else 0.0
-        blocked = (up and self.pos >= 100) or (down and self.pos <= floor)
+        new = self.pos + self.v * dt
+        if new >= 100.0:                         # batente superior
+            new, self.v = 100.0, 0.0
+        if new <= floor:                         # batente inferior ou teto do veiculo
+            if self.vehicle and self.pos > floor and self.v < 0:
+                self.hit_vehicle = True
+                self.hit_speed = max(self.hit_speed, -self.v)
+            new, self.v = floor, 0.0
+        self.pos = new
+        blocked = (cmd > 0 and self.pos >= 100.0) or (cmd < 0 and self.pos <= floor)
         self.strain_ms = self.strain_ms + dt_ms if blocked else 0
-        if down and self.vehicle and self.pos <= floor:
-            self.hit_vehicle = True
-        if up:
-            self.pos = min(100.0, self.pos + delta)
-        elif down:
-            self.pos = max(floor, self.pos - delta)
-        if self.pos >= 99.5:
+        # fins de curso com histerese (contato mecanico)
+        self.ls1 = self.pos >= LS1_ON or (self.ls1 and self.pos > LS1_OFF)
+        self.ls2 = self.pos <= LS2_ON or (self.ls2 and self.pos < LS2_OFF)
+        if self.ls1:
             self._was_open = True
-        elif self.pos <= 0.5 and self._was_open:
+        elif self.ls2 and self._was_open:
             self._was_open = False
             self.cycles += 1
 
     def sensors(self) -> dict[str, bool]:
-        return {"LS1": self.pos >= 99.5, "LS2": self.pos <= 0.5, "PHOTO": self.vehicle}
+        return {"LS1": self.ls1, "LS2": self.ls2, "PHOTO": self.vehicle}
 
     def alarms(self) -> list[str]:
         out = []
         if self.both_ms > 0:
             out.append("PERIGO: motor comandado para subir e descer ao mesmo tempo (falta intertravamento)")
         if self.hit_vehicle:
-            out.append("O portao desceu sobre o veiculo! Use a fotocelula (I0.5) para impedir")
+            out.append(f"O portao bateu no veiculo a {self.hit_speed / 100 * 2.6:.2f} m/s! "
+                       "Use a fotocelula (I0.5) para impedir")
+        if self.reversals:
+            out.append(f"{self.reversals} reversao(oes) com o portao em movimento: pare o motor antes de inverter")
         if self.strain_ms > STRAIN_MS and not self.hit_vehicle:
             end = "superior" if self.pos >= 99.5 else "inferior"
             out.append(f"Motor forcando contra o fim de curso {end}: desligue o motor no fim de curso")
         return out
 
     def stats(self) -> list[str]:
-        return [f"Abertura: {self.pos:.0f}%", f"Ciclos completos (abrir e fechar): {self.cycles}"]
+        return [f"Abertura: {self.pos:.0f}% | velocidade {self.v / 100 * 2.6:+.2f} m/s",
+                f"Ciclos completos (abrir e fechar): {self.cycles}"]
 
     # ------------------------------------------------------------ desenho
     def controls(self):

@@ -17,6 +17,33 @@ Cada ambiente também detecta erros de lógica e mostra **alarmes**, por exemplo
 produto derramado, verdes simultâneos, colisão no cruzamento, motor comandado
 nos dois sentidos, portão descendo sobre o veículo ou motor forçando o fim de curso.
 
+## Modelos físicos
+
+A física é integrada com passo fixo, igual ao período de varredura e em tempo
+virtual, então os resultados são reproduzíveis. As utilidades comuns ficam em
+`ladderide/envs/physics.py`.
+
+| Ambiente | Fenômeno | Modelo | Efeito na lógica |
+|---|---|---|---|
+| Silo | Esteira | aceleração 2,4 m/s², desaceleração 4 m/s² (inércia) | a caixa passa ~4,5 cm do ponto em que o motor desliga |
+| Silo | Fotocélula | feixe físico interrompido pela caixa inteira | o feixe continua interrompido enquanto a caixa cheia sai, e é preciso memorizar "caixa cheia" |
+| Silo | Válvula | abre em 0,15 s e fecha em 0,10 s | a vazão não começa nem para no mesmo instante |
+| Silo | Vazão | Torricelli: Q ∝ √(nível do silo) | o tempo de enchimento varia com o nível do silo |
+| Silo | Queda do produto | atraso de transporte de 0,35 s | o produto ainda cai depois de a válvula fechar, e a caixa termina com 101–107% |
+| Silo | Abastecimento | reabastece de 20% a 90% (fora do CLP) | o nível do silo oscila |
+| Semáforo | Veículos | IDM (Intelligent Driver Model), 50 km/h, a = 1,5 m/s², b = 2 m/s², T = 1,2 s | aceleração gradual e fila saindo a cada ~2 s |
+| Semáforo | Amarelo | segue se precisar de mais de 3,5 m/s² para parar (zona de dilema) | o amarelo e o vermelho geral precisam dar tempo de o cruzamento esvaziar |
+| Semáforo | Vermelho repentino | só passa quem fisicamente não consegue parar (mais de 8 m/s²) | a falta de amarelo causa colisões |
+| Semáforo | Pedestres | 1,3 m/s (~10 s para atravessar), carros param diante deles | a travessia precisa terminar antes do verde conflitante; há alarme de atropelamento |
+| Portão | Folha | rampa de 0,3 s, freio do motor (~1,5% de deslocamento), sobe 8 s e desce 7 s (gravidade) | o portão passa um pouco do fim de curso |
+| Portão | Fins de curso | histerese (98/96,5% e 2/3,5%) | um contato não "pisca" na borda |
+| Portão | Reversão | inverter acima de 3%/s é falha mecânica | é preciso parar e esperar antes de reabrir |
+| Portão | Veículo | batente na altura do teto, com velocidade de impacto | a fotocélula é obrigatória |
+
+Os programas de `examples/ambientes/` já tratam esses efeitos: memória de
+caixa cheia no silo, tempos de engenharia de tráfego e janela de pedestres no
+semáforo, e espera de 0,6 s antes de reabrir o portão.
+
 ## Uso na IDE
 
 1. No painel **Ambiente** (Ctrl+E, embaixo do diagrama), escolha o processo. A escolha fica salva no projeto.

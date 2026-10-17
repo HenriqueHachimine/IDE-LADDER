@@ -2,10 +2,10 @@
   "format": "ladderide-project",
   "format_version": 1,
   "name": "Portao de garagem",
-  "description": "Abre/fecha com selo, para nos fins de curso, intertravamento sobe/desce e reabre se a fotocelula detectar um veiculo durante o fechamento.",
+  "description": "Abre/fecha com selo, para nos fins de curso, intertravamento sobe/desce e, se a fotocelula detectar um veiculo durante o fechamento, para o motor e so reabre depois de 0,6 s (o portao tem inercia: inverter com ele em movimento danifica o redutor).",
   "version": "0.1.0",
-  "created": "2026-10-17T12:05:37",
-  "modified": "2026-10-17T12:05:37",
+  "created": "2026-10-17T13:17:57",
+  "modified": "2026-10-17T13:17:57",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -76,11 +76,16 @@
       "name": "Lampada_Fechado",
       "address": "Q0.4",
       "comment": "Lampada FECHADO"
+    },
+    {
+      "name": "Espera_Reversao",
+      "address": "T0",
+      "comment": "0,6 s parado antes de reabrir"
     }
   ],
   "rungs": [
     {
-      "comment": "Abrir (selo); a fotocelula forca a abertura",
+      "comment": "Abrir (selo); reabre sozinho depois da espera da fotocelula",
       "condition": [
         {
           "type": "parallel",
@@ -103,7 +108,7 @@
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Fotocelula"
+                "operand": "Espera_Reversao.DN"
               }
             ]
           ]
@@ -133,7 +138,7 @@
       ]
     },
     {
-      "comment": "Fechar (selo) com intertravamento e fotocelula",
+      "comment": "Fechar (selo) com intertravamento; a fotocelula para o motor",
       "condition": [
         {
           "type": "parallel",
@@ -180,6 +185,39 @@
           "type": "coil",
           "kind": "OTE",
           "operand": "Motor_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "Veiculo detectado: espera o portao parar antes de reabrir",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fotocelula"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fim_Curso_Aberto"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Desce"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Sobe"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Espera_Reversao",
+          "preset": 600
         }
       ]
     },
@@ -242,18 +280,18 @@
   ],
   "history": [
     {
-      "date": "2026-10-17T12:05:37",
+      "date": "2026-10-17T13:17:57",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 5
+      "rungs": 6
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 1.0",
-    "build_id": "0x9011bcce",
-    "size": 188,
-    "instructions": 38,
-    "date": "2026-10-17T12:05:37"
+    "build_id": "0x9ec5823e",
+    "size": 224,
+    "instructions": 45,
+    "date": "2026-10-17T13:17:57"
   },
   "environment": "portao"
 }

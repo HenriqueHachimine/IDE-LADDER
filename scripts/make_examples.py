@@ -132,17 +132,23 @@ def env_project(env_id: str, name: str, description: str) -> Project:
 
 def silo() -> Project:
     p = env_project("silo", "Silo de envase", (
-        "Esteira para com a caixa sob a valvula, enche ate o sensor de nivel e segue. "
-        "Stop e NF: o programa usa contato NA (XIC) porque a entrada le 1 com o botao solto."))
+        "Esteira para com a caixa sob o bico, enche ate o sensor de nivel e segue. A caixa cheia e "
+        "memorizada (M0.0) porque o sensor de nivel deixa de ve-la quando ela anda, enquanto a fotocelula "
+        "continua interrompida ate a caixa sair. Stop e NF: o programa usa contato NA (XIC)."))
+    p.symbols.append(Symbol("Caixa_Cheia", "M0.0", "caixa sob o bico ja foi enchida"))
     p.rungs = [
         Rung([Parallel([[Contact("XIC", "Start")], [Contact("XIC", "Lampada_Run")]]), Contact("XIC", "Stop")],
              [Coil("OTE", "Lampada_Run")], "Liga/desliga o processo (selo)"),
+        Rung([Contact("XIC", "Sensor_Nivel")], [Coil("OTL", "Caixa_Cheia")],
+             "Memoriza caixa cheia (o sensor de nivel para de ver a caixa quando ela anda)"),
+        Rung([Contact("XIO", "Sensor_Presenca")], [Coil("OTU", "Caixa_Cheia")],
+             "Feixe livre: a caixa cheia saiu, espera a proxima"),
         Rung([Contact("XIC", "Lampada_Run"),
-              Parallel([[Contact("XIO", "Sensor_Presenca")], [Contact("XIC", "Sensor_Nivel")]])],
-             [Coil("OTE", "Motor_Esteira")], "Esteira anda sem caixa posicionada ou com caixa cheia"),
-        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Sensor_Presenca"), Contact("XIO", "Sensor_Nivel")],
+              Parallel([[Contact("XIO", "Sensor_Presenca")], [Contact("XIC", "Caixa_Cheia")]])],
+             [Coil("OTE", "Motor_Esteira")], "Esteira anda sem caixa no bico ou com a caixa cheia"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Sensor_Presenca"), Contact("XIO", "Caixa_Cheia")],
              [Coil("OTE", "Valvula"), Coil("OTE", "Lampada_Fill")], "Enche a caixa posicionada"),
-        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Sensor_Nivel")], [Coil("OTE", "Lampada_Full")],
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Caixa_Cheia")], [Coil("OTE", "Lampada_Full")],
              "Sinaliza caixa cheia"),
     ]
     return p
@@ -150,54 +156,70 @@ def silo() -> Project:
 
 def traffic_light() -> Project:
     p = env_project("semaforo", "Semaforo de cruzamento", (
-        "Ciclo por tempo: NS verde 6 s, amarelo 2 s, vermelho geral 1 s; LO verde 6 s, amarelo 2 s, "
-        "vermelho geral 1 s. Pedestres atravessam a via que esta no vermelho, se pediram."))
-    p.symbols += [Symbol("Fase_NS_Verde", "T0", "6 s"), Symbol("Fase_NS_Amarelo", "T1", "2 s"),
-                  Symbol("Fase_Todos_Vermelho1", "T2", "1 s"), Symbol("Fase_LO_Verde", "T3", "6 s"),
-                  Symbol("Fase_LO_Amarelo", "T4", "2 s"), Symbol("Fase_Todos_Vermelho2", "T5", "1 s"),
+        "Ciclo por tempo com valores de engenharia de trafego: verde 8 s, amarelo 3 s (50 km/h) e "
+        "vermelho geral 2 s para o cruzamento esvaziar. Pedestres (1,3 m/s, ~10 s para atravessar) so "
+        "iniciam a travessia nos 2 primeiros segundos da fase, para terminar antes do verde conflitante."))
+    p.symbols += [Symbol("Fase_NS_Verde", "T0", "8 s"), Symbol("Fase_NS_Amarelo", "T1", "3 s"),
+                  Symbol("Fase_Todos_Vermelho1", "T2", "2 s"), Symbol("Fase_LO_Verde", "T3", "8 s"),
+                  Symbol("Fase_LO_Amarelo", "T4", "3 s"), Symbol("Fase_Todos_Vermelho2", "T5", "2 s"),
+                  Symbol("Janela_Pedestre_LO", "T6", "2 s no inicio do verde NS"),
+                  Symbol("Janela_Pedestre_NS", "T7", "2 s no inicio do verde LO"),
                   Symbol("Pedido_NS", "M0.0", "pedestre pediu travessia da via NS"),
                   Symbol("Pedido_LO", "M0.1", "pedestre pediu travessia da via LO")]
+    verde_ns = [Contact("XIO", "Fase_NS_Verde.DN")]
+    verde_lo = [Contact("XIC", "Fase_Todos_Vermelho1.DN"), Contact("XIO", "Fase_LO_Verde.DN")]
     p.rungs = [
-        Rung([Contact("XIO", "Fase_Todos_Vermelho2.DN")], [TimerBox("TON", "Fase_NS_Verde", 6000)],
+        Rung([Contact("XIO", "Fase_Todos_Vermelho2.DN")], [TimerBox("TON", "Fase_NS_Verde", 8000)],
              "Sequenciador: cada fase comeca quando a anterior termina"),
-        Rung([Contact("XIC", "Fase_NS_Verde.DN")], [TimerBox("TON", "Fase_NS_Amarelo", 2000)]),
-        Rung([Contact("XIC", "Fase_NS_Amarelo.DN")], [TimerBox("TON", "Fase_Todos_Vermelho1", 1000)]),
-        Rung([Contact("XIC", "Fase_Todos_Vermelho1.DN")], [TimerBox("TON", "Fase_LO_Verde", 6000)]),
-        Rung([Contact("XIC", "Fase_LO_Verde.DN")], [TimerBox("TON", "Fase_LO_Amarelo", 2000)]),
-        Rung([Contact("XIC", "Fase_LO_Amarelo.DN")], [TimerBox("TON", "Fase_Todos_Vermelho2", 1000)],
+        Rung([Contact("XIC", "Fase_NS_Verde.DN")], [TimerBox("TON", "Fase_NS_Amarelo", 3000)]),
+        Rung([Contact("XIC", "Fase_NS_Amarelo.DN")], [TimerBox("TON", "Fase_Todos_Vermelho1", 2000)]),
+        Rung([Contact("XIC", "Fase_Todos_Vermelho1.DN")], [TimerBox("TON", "Fase_LO_Verde", 8000)]),
+        Rung([Contact("XIC", "Fase_LO_Verde.DN")], [TimerBox("TON", "Fase_LO_Amarelo", 3000)]),
+        Rung([Contact("XIC", "Fase_LO_Amarelo.DN")], [TimerBox("TON", "Fase_Todos_Vermelho2", 2000)],
              "Fim do ciclo: reinicia a fase 1"),
-        Rung([Contact("XIO", "Fase_NS_Verde.DN")], [Coil("OTE", "Verde_NS")], "Via Norte-Sul"),
+        Rung(list(verde_ns), [Coil("OTE", "Verde_NS")], "Via Norte-Sul"),
         Rung([Contact("XIC", "Fase_NS_Verde.DN"), Contact("XIO", "Fase_NS_Amarelo.DN")], [Coil("OTE", "Amarelo_NS")]),
         Rung([Contact("XIC", "Fase_NS_Amarelo.DN")], [Coil("OTE", "Vermelho_NS")]),
-        Rung([Contact("XIC", "Fase_Todos_Vermelho1.DN"), Contact("XIO", "Fase_LO_Verde.DN")],
-             [Coil("OTE", "Verde_LO")], "Via Leste-Oeste"),
+        Rung(list(verde_lo), [Coil("OTE", "Verde_LO")], "Via Leste-Oeste"),
         Rung([Contact("XIC", "Fase_LO_Verde.DN"), Contact("XIO", "Fase_LO_Amarelo.DN")], [Coil("OTE", "Amarelo_LO")]),
         Rung([Parallel([[Contact("XIO", "Fase_Todos_Vermelho1.DN")], [Contact("XIC", "Fase_LO_Amarelo.DN")]])],
              [Coil("OTE", "Vermelho_LO")]),
         Rung([Contact("XIC", "Botao_Pedestre_NS")], [Coil("OTL", "Pedido_NS")], "Pedestres: memoriza o pedido"),
         Rung([Contact("XIC", "Botao_Pedestre_LO")], [Coil("OTL", "Pedido_LO")]),
-        Rung([Contact("XIC", "Pedido_NS"), Contact("XIC", "Fase_Todos_Vermelho1.DN"),
-              Contact("XIO", "Fase_LO_Verde.DN")], [Coil("OTE", "Pedestre_NS")],
-             "Atravessa a via NS enquanto ela esta no vermelho e LO no verde"),
-        Rung([Contact("XIC", "Fase_LO_Verde.DN")], [Coil("OTU", "Pedido_NS")]),
-        Rung([Contact("XIC", "Pedido_LO"), Contact("XIO", "Fase_NS_Verde.DN")], [Coil("OTE", "Pedestre_LO")],
-             "Atravessa a via LO enquanto NS esta no verde"),
-        Rung([Contact("XIC", "Fase_NS_Verde.DN")], [Coil("OTU", "Pedido_LO")]),
+        Rung(list(verde_ns), [TimerBox("TON", "Janela_Pedestre_LO", 2000)],
+             "Janela de 2 s para iniciar a travessia (o resto do verde e o tempo de terminar)"),
+        Rung([Contact("XIC", "Fase_Todos_Vermelho1.DN"), Contact("XIO", "Fase_LO_Verde.DN")],
+             [TimerBox("TON", "Janela_Pedestre_NS", 2000)]),
+        Rung([Contact("XIO", "Fase_NS_Verde.DN"), Contact("XIO", "Janela_Pedestre_LO.DN"),
+              Parallel([[Contact("XIC", "Pedido_LO")], [Contact("XIC", "Pedestre_LO")]])],
+             [Coil("OTE", "Pedestre_LO")], "Atravessa a via LO (parada) no inicio do verde NS"),
+        Rung([Contact("XIC", "Pedestre_LO")], [Coil("OTU", "Pedido_LO")], "Pedido atendido"),
+        Rung([Contact("XIC", "Fase_Todos_Vermelho1.DN"), Contact("XIO", "Fase_LO_Verde.DN"),
+              Contact("XIO", "Janela_Pedestre_NS.DN"),
+              Parallel([[Contact("XIC", "Pedido_NS")], [Contact("XIC", "Pedestre_NS")]])],
+             [Coil("OTE", "Pedestre_NS")], "Atravessa a via NS (parada) no inicio do verde LO"),
+        Rung([Contact("XIC", "Pedestre_NS")], [Coil("OTU", "Pedido_NS")]),
     ]
     return p
 
 
 def garage_door() -> Project:
     p = env_project("portao", "Portao de garagem", (
-        "Abre/fecha com selo, para nos fins de curso, intertravamento sobe/desce e reabre se a "
-        "fotocelula detectar um veiculo durante o fechamento."))
+        "Abre/fecha com selo, para nos fins de curso, intertravamento sobe/desce e, se a fotocelula "
+        "detectar um veiculo durante o fechamento, para o motor e so reabre depois de 0,6 s (o portao tem "
+        "inercia: inverter com ele em movimento danifica o redutor)."))
+    p.symbols.append(Symbol("Espera_Reversao", "T0", "0,6 s parado antes de reabrir"))
     p.rungs = [
-        Rung([Parallel([[Contact("XIC", "Abrir")], [Contact("XIC", "Motor_Sobe")], [Contact("XIC", "Fotocelula")]]),
+        Rung([Parallel([[Contact("XIC", "Abrir")], [Contact("XIC", "Motor_Sobe")],
+                        [Contact("XIC", "Espera_Reversao.DN")]]),
               Contact("XIC", "Parar"), Contact("XIO", "Fim_Curso_Aberto"), Contact("XIO", "Motor_Desce")],
-             [Coil("OTE", "Motor_Sobe")], "Abrir (selo); a fotocelula forca a abertura"),
+             [Coil("OTE", "Motor_Sobe")], "Abrir (selo); reabre sozinho depois da espera da fotocelula"),
         Rung([Parallel([[Contact("XIC", "Fechar")], [Contact("XIC", "Motor_Desce")]]), Contact("XIC", "Parar"),
               Contact("XIO", "Fim_Curso_Fechado"), Contact("XIO", "Motor_Sobe"), Contact("XIO", "Fotocelula")],
-             [Coil("OTE", "Motor_Desce")], "Fechar (selo) com intertravamento e fotocelula"),
+             [Coil("OTE", "Motor_Desce")], "Fechar (selo) com intertravamento; a fotocelula para o motor"),
+        Rung([Contact("XIC", "Fotocelula"), Contact("XIO", "Fim_Curso_Aberto"), Contact("XIO", "Motor_Desce"),
+              Contact("XIO", "Motor_Sobe")], [TimerBox("TON", "Espera_Reversao", 600)],
+             "Veiculo detectado: espera o portao parar antes de reabrir"),
         Rung([Contact("XIO", "Fim_Curso_Aberto"), Contact("XIO", "Fim_Curso_Fechado")],
              [Coil("OTE", "Lampada_Entreaberto")], "Sinalizacao"),
         Rung([Contact("XIC", "Fim_Curso_Aberto")], [Coil("OTE", "Lampada_Aberto")]),
