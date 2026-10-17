@@ -43,8 +43,8 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(argv)
     app.setApplicationName("LadderIDE")
     app.setOrganizationName("CLP-ESP32")
-    from .ui.theme import apply_theme
-    apply_theme(app)
+    from .ui.theme import apply_theme, load_mode
+    apply_theme(app, load_mode())          # claro, escuro ou seguir o Windows (Exibir > Tema)
     window = MainWindow()
     if len(argv) > 1:
         window.file_open(argv[1])

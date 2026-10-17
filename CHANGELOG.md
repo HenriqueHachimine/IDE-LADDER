@@ -17,6 +17,8 @@ ensaios na placa real.
 - Blocos de instrução (F12 e `ladderide.cli il`): lista de instruções por rede,
   sincronizada com o diagrama e animada na simulação.
 - Visual renovado: tema próprio, ícones, redes em cartões.
+- Tema escuro (Exibir → Tema: claro, escuro ou seguir o Windows; Ctrl+Shift+T),
+  aplicado sem reiniciar e lembrado entre sessões.
 
 ### Corrigido
 - Travamento ao arrastar um elemento para outra rede (a edição era aplicada

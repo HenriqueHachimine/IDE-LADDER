@@ -11,9 +11,16 @@ from ..core.asm import format_operand, parse_operand
 from ..core.isa import Area
 from ..model.project import Project
 
+from . import theme
+
 LED_ON = "background:#16a34a; border:1px solid #14532d;"
-LED_OFF = "background:#e2e8f0; border:1px solid #94a3b8;"
-LED_UNKNOWN = "background:#f8fafc; border:1px dashed #94a3b8;"
+
+
+def _led_style(value: bool | None) -> str:
+    c = theme.colors
+    if value is None:
+        return f"background:{c['LED_UNKNOWN']}; border:1px dashed {c['LED_OFF_BORDER']};"
+    return LED_ON if value else f"background:{c['LED_OFF']}; border:1px solid {c['LED_OFF_BORDER']};"
 
 
 class Led(QLabel):
@@ -23,8 +30,8 @@ class Led(QLabel):
         self.set(False)
 
     def set(self, value: bool | None) -> None:
-        style = LED_UNKNOWN if value is None else (LED_ON if value else LED_OFF)
-        self.setStyleSheet(f"border-radius:8px; {style}")
+        self.value = value
+        self.setStyleSheet(f"border-radius:8px; {_led_style(value)}")
 
 
 class IOPanel(QWidget):
@@ -153,6 +160,10 @@ class IOPanel(QWidget):
         self.editable = editable
         self.momentary.setVisible(editable)
         self._apply_owned()
+
+    def theme_changed(self) -> None:
+        for led in self.out_leds + self.cmd_leds:
+            led.set(led.value)
 
     def set_owned(self, mask: int) -> None:
         """Entradas controladas por um ambiente de simulacao (ficam somente leitura)."""

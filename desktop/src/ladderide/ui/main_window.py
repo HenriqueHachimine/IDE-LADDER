@@ -4,9 +4,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence
-from PySide6.QtWidgets import (QDockWidget, QFileDialog, QHBoxLayout, QInputDialog, QLabel, QListWidget,
-                               QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTableWidget,
+from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
+from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHBoxLayout, QInputDialog, QLabel,
+                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTableWidget,
                                QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget, QHeaderView)
 
 from .. import __version__
@@ -26,6 +26,7 @@ from .env_panel import EnvironmentPanel
 from .icons import make_icon
 from .il_panel import ILPanel
 from .verify_dialog import VerifyDialog
+from . import theme
 from .ladder_view import COND_TOOLS, OUTPUT_TOOLS, LadderView
 from .palette import Palette
 from .sim_panel import SimPanel
@@ -70,6 +71,10 @@ class MainWindow(QMainWindow):
         self.device_timer.setInterval(200)
         self.device_timer.timeout.connect(self.device_tick)
         self.device_timer.start()
+        try:
+            QGuiApplication.styleHints().colorSchemeChanged.connect(self.on_system_scheme_changed)
+        except AttributeError:      # Qt < 6.5: sem deteccao do tema do sistema
+            pass
         self.refresh()
 
     # ================================================================ acoes
@@ -117,6 +122,7 @@ class MainWindow(QMainWindow):
           "Mostra o diagrama convertido em lista de instrucoes, bloco por rede")
         A("environment", "Ambiente de simulacao", self.show_environment, "Ctrl+E",
           "Processos animados (silo, semaforo, portao...) controlados pelo programa")
+        A("theme_toggle", "Alternar tema claro/escuro", self.toggle_theme, "Ctrl+Shift+T")
         A("about", "Sobre", self.about)
         A("help", "Referencia das instrucoes", self.instruction_help, "F1")
         for key, icon in (("new", "new"), ("open", "open"), ("save", "save"), ("undo", "undo"), ("redo", "redo"),
@@ -124,8 +130,14 @@ class MainWindow(QMainWindow):
                           ("sim_pause", "pause"), ("sim_scan", "scan"), ("sim_step", "step"),
                           ("sim_reset", "reset"), ("sim_stop", "stop"), ("zoom_in", "zoom_in"),
                           ("zoom_out", "zoom_out"), ("device_transfer", "transfer"), ("verify", "verify"),
-                          ("il_blocks", "il"), ("environment", "env")):
+                          ("il_blocks", "il"), ("environment", "env"), ("theme_toggle", "theme")):
             self.actions_[key].setIcon(make_icon(icon))
+        self._icon_names = {"new": "new", "open": "open", "save": "save", "undo": "undo", "redo": "redo",
+                            "delete": "delete", "rung_add": "rung", "compile": "compile", "sim_run": "run",
+                            "sim_pause": "pause", "sim_scan": "scan", "sim_step": "step", "sim_reset": "reset",
+                            "sim_stop": "stop", "zoom_in": "zoom_in", "zoom_out": "zoom_out",
+                            "device_transfer": "transfer", "verify": "verify", "il_blocks": "il",
+                            "environment": "env", "theme_toggle": "theme"}
         self.actions_["device_transfer"].setIconText("Transferir")
         self.actions_["verify"].setIconText("Verificar ESP32")
         self.actions_["il_blocks"].setIconText("Blocos IL")
@@ -164,6 +176,19 @@ class MainWindow(QMainWindow):
         for k in ("zoom_in", "zoom_out", "zoom_reset"):
             m.addAction(a[k])
         m.addSeparator()
+        self.theme_menu = m.addMenu("Tema")
+        self.theme_actions = {}
+        group = QActionGroup(self)
+        for mode, label in theme.MODES.items():
+            act = QAction(label, self, checkable=True)
+            act.setChecked(mode == theme.current_mode)
+            act.triggered.connect(lambda _=False, md=mode: self.set_theme(md))
+            group.addAction(act)
+            self.theme_menu.addAction(act)
+            self.theme_actions[mode] = act
+        self.theme_menu.addSeparator()
+        self.theme_menu.addAction(a["theme_toggle"])
+        m.addSeparator()
         for dock in (self.palette_dock, self.sim_dock, self.env_dock, self.il_dock, self.bottom_dock):
             m.addAction(dock.toggleViewAction())
         m = mb.addMenu("Aj&uda")
@@ -177,10 +202,10 @@ class MainWindow(QMainWindow):
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         for k in ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "compile", "verify",
                   "il_blocks", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
-                  "environment", None, "device_transfer", None, "zoom_in", "zoom_out"):
+                  "environment", None, "device_transfer", None, "zoom_in", "zoom_out", None, "theme_toggle"):
             tb.addSeparator() if k is None else tb.addAction(a[k])
         for k in ("new", "undo", "redo", "zoom_in", "zoom_out", "sim_reset", "sim_pause", "sim_scan", "sim_step",
-                  "rung_add"):
+                  "rung_add", "theme_toggle"):
             tb.widgetForAction(a[k]).setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.toolbar = tb
 
@@ -663,11 +688,41 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "il_dock") or not self.il_dock.isVisible():
             return
         result = self.result if self.result is not None else compile_project(self.project)
-        key = (id(self.project), result.build_id, result.ok, len(result.diagnostics))
+        key = (id(self.project), result.build_id, result.ok, len(result.diagnostics), theme.current_name)
         if getattr(self, "_il_key", None) != key or self.il_panel.tree.topLevelItemCount() == 0:
             self._il_key = key
             self.il_panel.set_program(self.project, result)
             self.il_panel.highlight(self.view.selection)
+
+    # ================================================================ tema
+    def set_theme(self, mode: str, save: bool = True) -> None:
+        app = QApplication.instance()
+        theme.apply_theme(app, mode)
+        if save:
+            theme.save_mode(mode)
+        if mode in getattr(self, "theme_actions", {}):
+            self.theme_actions[mode].setChecked(True)
+        self.theme_changed()
+
+    def toggle_theme(self) -> None:
+        self.set_theme("light" if theme.is_dark() else "dark")
+
+    def on_system_scheme_changed(self, *_args) -> None:
+        if theme.current_mode == "system":
+            self.set_theme("system", save=False)
+
+    def theme_changed(self) -> None:
+        """Redesenha o que guarda cores ja calculadas (icones, cena, listas)."""
+        for key, name in self._icon_names.items():
+            self.actions_[key].setIcon(make_icon(name))
+        self.palette.theme_changed()
+        self.view.theme_changed()
+        self.view.set_errors({d.element_id for d in (self.result.errors if self.result else []) if d.element_id})
+        self.sim_panel.io.theme_changed()
+        self.device_panel.io.theme_changed()
+        self._il_key = None
+        self._refresh_il()
+        self._update_live()
 
     # ================================================== ambientes de simulacao
     def show_environment(self) -> None:

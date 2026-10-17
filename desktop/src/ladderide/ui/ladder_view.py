@@ -17,14 +17,18 @@ from ..model.project import Coil, Contact, CounterBox, NotOp, Parallel, Project,
 from .layout import RUNG_HEAD, RUNG_PAD, Layout, PlacedElem, Slot, build_layout
 from .symbols import (CURRENT_BORDER, DEENERGIZED, ENERGIZED, ERROR_FILL, NEUTRAL, SELECTED_BORDER,
                       SELECTED_FILL, SymbolState, paint_symbol)
+from .theme import themed
 
 SX, SY = 100.0, 66.0       # pixels por unidade de grade
 LABEL_W = 0.3              # margem entre a borda do cartao e o trilho esquerdo
-CARD_BORDER = QColor(216, 224, 234)
-CARD_HEAD_LINE = QColor(238, 242, 247)
-BADGE_FILL = QColor(238, 242, 255)
-BADGE_TEXT = QColor(55, 48, 163)
-COMMENT_TEXT = QColor(100, 116, 139)
+CANVAS = themed((238, 242, 247), (11, 17, 32))
+CARD_FILL = themed((255, 255, 255), (21, 30, 46))
+CARD_BORDER = themed((216, 224, 234), (42, 54, 73))
+CARD_HEAD_LINE = themed((238, 242, 247), (31, 42, 61))
+BADGE_FILL = themed((238, 242, 255), (49, 46, 129))
+BADGE_TEXT = themed((55, 48, 163), (199, 210, 254))
+COMMENT_TEXT = themed((100, 116, 139), (148, 163, 184))
+HINT_BORDER = themed((148, 163, 184), (71, 85, 105))
 MIME_TOOL = "application/x-ladder-tool"
 MIME_MOVE = "application/x-ladder-move"
 OUTPUT_TOOLS = {"OTE", "OTL", "OTU", "TON", "TOF", "RTO", "CTU", "CTD", "RES"}
@@ -134,7 +138,7 @@ class RungCard(QGraphicsRectItem):
         r = self.rect()
         p.setRenderHint(QPainter.Antialiasing, True)
         p.setPen(QPen(SELECTED_BORDER if self.selected else CARD_BORDER, 2 if self.selected else 1))
-        p.setBrush(QColor(255, 255, 255))
+        p.setBrush(CARD_FILL)
         p.drawRoundedRect(r, 8, 8)
         head_h = RUNG_HEAD * SY
         p.setPen(QPen(CARD_HEAD_LINE, 1))
@@ -173,7 +177,7 @@ class LadderView(QGraphicsView):
         self.setAcceptDrops(True)
         self.setDragMode(QGraphicsView.NoDrag)
         self.setAlignment(Qt.AlignLeft | Qt.AlignTop)
-        self.setBackgroundBrush(QColor(238, 242, 247))
+        self.setBackgroundBrush(CANVAS)
         self.project: Project | None = None
         self.layout_: Layout | None = None
         self.items_by_id: dict[str, ElementItem] = {}
@@ -213,10 +217,10 @@ class LadderView(QGraphicsView):
         # area para criar uma nova rede (alvo de arrastar e soltar)
         new_y = (lay.height - 1.0) * SY
         hint = scene.addRect(QRectF(left, new_y, right - left, 0.6 * SY),
-                             QPen(QColor(148, 163, 184), 1.2, Qt.DashLine), QColor(0, 0, 0, 0))
+                             QPen(HINT_BORDER, 1.2, Qt.DashLine), QColor(0, 0, 0, 0))
         hint.setZValue(-5)
         text = scene.addText("+  Solte uma instrucao aqui para criar uma nova rede", QFont("Segoe UI", 8))
-        text.setDefaultTextColor(QColor(100, 116, 139))
+        text.setDefaultTextColor(COMMENT_TEXT)
         text.setPos(left + 12, new_y + 0.3 * SY - text.boundingRect().height() / 2)
         for w in lay.wires:
             item = scene.addLine(w.x1 * SX, w.y1 * SY, w.x2 * SX, w.y2 * SY, QPen(NEUTRAL, 2))
@@ -232,6 +236,11 @@ class LadderView(QGraphicsView):
         self.highlight.hide()
         scene.setSceneRect(QRectF(left - 16, -16, right - left + 32, new_y + 0.6 * SY + 32))
         self._apply_selection()
+
+    def theme_changed(self) -> None:
+        self.setBackgroundBrush(CANVAS)
+        if self.project is not None:
+            self.rebuild(self.project)
 
     def set_errors(self, ids: set[str]) -> None:
         self.error_ids = ids

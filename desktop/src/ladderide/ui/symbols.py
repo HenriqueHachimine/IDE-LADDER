@@ -6,21 +6,24 @@ from dataclasses import dataclass
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap
 
-ENERGIZED = QColor(22, 163, 74)
-DEENERGIZED = QColor(148, 163, 184)
-NEUTRAL = QColor(51, 65, 85)
-CLOSED_FILL = QColor(22, 163, 74, 60)
-COIL_ON_FILL = QColor(22, 163, 74, 45)
-SELECTED_FILL = QColor(37, 99, 235, 28)
-SELECTED_BORDER = QColor(37, 99, 235)
-ERROR_FILL = QColor(220, 38, 38, 40)
-CURRENT_BORDER = QColor(234, 88, 12)
-LABEL = QColor(15, 23, 42)
-SUBLABEL = QColor(100, 116, 139)
-BOX_FILL = QColor(255, 255, 255)
-TIMER_HEAD = (QColor(224, 231, 255), QColor(55, 48, 163))
-COUNTER_HEAD = (QColor(254, 243, 199), QColor(146, 64, 14))
-DONE_OFF = QColor(203, 213, 225)
+from .theme import themed
+
+# (cor no tema claro, cor no tema escuro)
+ENERGIZED = themed((22, 163, 74), (34, 197, 94))
+DEENERGIZED = themed((148, 163, 184), (100, 116, 139))
+NEUTRAL = themed((51, 65, 85), (203, 213, 225))
+CLOSED_FILL = themed((22, 163, 74, 60), (34, 197, 94, 70))
+COIL_ON_FILL = themed((22, 163, 74, 45), (34, 197, 94, 55))
+SELECTED_FILL = themed((37, 99, 235, 28), (96, 165, 250, 45))
+SELECTED_BORDER = themed((37, 99, 235), (96, 165, 250))
+ERROR_FILL = themed((220, 38, 38, 40), (248, 113, 113, 60))
+CURRENT_BORDER = themed((234, 88, 12), (251, 146, 60))
+LABEL = themed((15, 23, 42), (226, 232, 240))
+SUBLABEL = themed((100, 116, 139), (148, 163, 184))
+BOX_FILL = themed((255, 255, 255), (21, 30, 46))
+TIMER_HEAD = (themed((224, 231, 255), (49, 46, 129)), themed((55, 48, 163), (199, 210, 254)))
+COUNTER_HEAD = (themed((254, 243, 199), (120, 53, 15)), themed((146, 64, 14), (253, 230, 138)))
+DONE_OFF = themed((203, 213, 225), (71, 85, 105))
 
 
 @dataclass

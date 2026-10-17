@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QHeaderView, QLabel, Q
                                QTableWidgetItem, QVBoxLayout)
 
 from ..verify.esp32 import ERROR, INFO, OK, SKIP, WARN, VerifyReport
+from . import theme
 
 STYLE = {OK: ("✔", "#15803d"), WARN: ("⚠", "#b45309"), ERROR: ("✖", "#b91c1c"),
          SKIP: ("–", "#64748b"), INFO: ("i", "#2563eb")}
@@ -29,7 +30,7 @@ class VerifyDialog(QDialog):
                      f"({report.board.inputs} entradas, {report.board.outputs} reles, varredura "
                      f"{report.board.scan_period_ms} ms, watchdog {report.board.watchdog_us // 1000} ms).")
         sub.setWordWrap(True)
-        sub.setStyleSheet("color:#475569;")
+        sub.setObjectName("muted")
         layout.addWidget(sub)
         self.table = QTableWidget(len(report.checks), 3)
         self.table.setHorizontalHeaderLabels(["", "Verificacao", "Resultado"])
@@ -49,7 +50,7 @@ class VerifyDialog(QDialog):
             cells = [QTableWidgetItem(icon), QTableWidgetItem(c.title), QTableWidgetItem(c.detail)]
             cells[0].setForeground(QColor(color))
             cells[0].setTextAlignment(Qt.AlignCenter)
-            cells[1].setForeground(QColor(color) if c.status in (ERROR, WARN) else QColor("#0f172a"))
+            cells[1].setForeground(QColor(color) if c.status in (ERROR, WARN) else theme.color("TEXT"))
             cells[1].setToolTip(c.status)
             for col, cell in enumerate(cells):
                 if col:

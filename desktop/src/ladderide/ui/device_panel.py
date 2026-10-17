@@ -233,7 +233,7 @@ class DevicePanel(QWidget):
         note = QLabel("\"Comandado\" e o que o firmware enviou aos reles. A placa nao tem realimentacao: "
                       "o estado fisico dos contatos NAO e medido.")
         note.setWordWrap(True)
-        note.setStyleSheet("color:#b45309;")
+        note.setObjectName("warn")
         layout.addWidget(note)
         layout.addWidget(self.io, 1)
 

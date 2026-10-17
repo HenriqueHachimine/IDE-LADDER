@@ -88,3 +88,23 @@ def test_verify_action_opens_report(window, monkeypatch):
     w.verify_esp32()
     assert shown and shown[0].ok
     assert w.result is not None and w.result.ok
+
+
+def test_dark_theme_switches_at_runtime(window, monkeypatch):
+    from ladderide.ui import symbols, theme
+    app, w = window
+    saved = []
+    monkeypatch.setattr(theme, "save_mode", saved.append)     # nao grava preferencia do usuario
+    w.file_open(str(PORTAO))
+    light_label = symbols.LABEL.name()
+    try:
+        w.set_theme("dark")
+        assert theme.is_dark() and saved == ["dark"]
+        assert w.theme_actions["dark"].isChecked()
+        assert symbols.LABEL.name() != light_label                # cores compartilhadas mudam no lugar
+        assert theme.colors["BG"] in app.styleSheet()
+        assert w.view.items_by_id                                  # cena reconstruida
+        w.toggle_theme()
+        assert not theme.is_dark() and symbols.LABEL.name() == light_label
+    finally:
+        theme.apply_theme(app, "light")

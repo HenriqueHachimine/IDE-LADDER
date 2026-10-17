@@ -74,7 +74,7 @@ class ElementDialog(QDialog):
         help_text = QLabel("Enderecos: I0.0-I1.7 entradas, Q0.0-Q1.7 saidas, M0.0-M31.7 memorias,\n"
                            "Tn / Cn temporizador e contador, Tn.DN / Cn.DN bit de conclusao,\n"
                            "S0.0 primeira varredura, S0.3 relogio de 1 s.")
-        help_text.setStyleSheet("color: #64748b;")
+        help_text.setObjectName("muted")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
@@ -128,7 +128,7 @@ class ProjectDialog(QDialog):
         warn = QLabel("Atencao: desenergizar nem sempre e o estado seguro da carga. "
                       "Defina conforme a aplicacao.")
         warn.setWordWrap(True)
-        warn.setStyleSheet("color: #b45309;")
+        warn.setObjectName("warn")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)

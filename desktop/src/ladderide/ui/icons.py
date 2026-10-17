@@ -6,8 +6,10 @@ import math
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 
-INK = QColor("#334155")
-BLUE = QColor("#2563eb")
+from .theme import themed
+
+INK = themed("#334155", "#cbd5e1")
+BLUE = themed("#2563eb", "#60a5fa")
 GREEN = QColor("#16a34a")
 RED = QColor("#dc2626")
 AMBER = QColor("#d97706")
@@ -127,6 +129,15 @@ def _draw(name: str, p: QPainter) -> None:
         p.drawRect(QRectF(6, 9.5, 5, 4.5))
         p.setBrush(GREEN); p.setPen(Qt.NoPen)
         p.drawEllipse(QPointF(16, 7.5), 2, 2)
+    elif name == "theme":
+        p.setPen(Qt.NoPen); p.setBrush(INK)
+        moon = QPainterPath()
+        moon.addEllipse(QRectF(4, 4, 14, 14))
+        cut = QPainterPath()
+        cut.addEllipse(QRectF(8.5, 1.5, 13, 13))
+        p.drawPath(moon.subtracted(cut))
+        p.setBrush(AMBER)
+        p.drawEllipse(QPointF(17, 5), 1.4, 1.4)
     elif name == "delete":
         p.setPen(QPen(RED, 2, Qt.SolidLine, Qt.RoundCap))
         p.drawLine(QPointF(6, 6), QPointF(16, 16)); p.drawLine(QPointF(16, 6), QPointF(6, 16))

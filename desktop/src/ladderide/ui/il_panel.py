@@ -7,11 +7,13 @@ from PySide6.QtWidgets import (QFileDialog, QHBoxLayout, QHeaderView, QLabel, QP
                                QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from ..verify.il_blocks import il_blocks, il_text
+from .theme import themed
 
-POWER_ON = QColor("#15803d")
-POWER_OFF = QColor("#64748b")
-CURRENT_BG = QColor("#ffedd5")
-BLOCK_BG = QColor("#eef2ff")
+POWER_ON = themed("#15803d", "#4ade80")
+POWER_OFF = themed("#64748b", "#64748b")
+CURRENT_BG = themed("#ffedd5", "#7c2d12")
+BLOCK_BG = themed("#eef2ff", "#1e2a4a")
+PLAIN_TEXT = themed("#0f172a", "#e2e8f0")
 
 
 class ILPanel(QWidget):
@@ -23,7 +25,7 @@ class ILPanel(QWidget):
         layout.setContentsMargins(8, 8, 8, 8)
         self.info = QLabel()
         self.info.setWordWrap(True)
-        self.info.setStyleSheet("color:#475569;")
+        self.info.setObjectName("muted")
         layout.addWidget(self.info)
         self.tree = QTreeWidget()
         self.tree.setColumnCount(5)
@@ -103,6 +105,9 @@ class ILPanel(QWidget):
         for b in (self.copy_btn, self.save_btn):
             b.setEnabled(True)
 
+    def theme_changed(self, project, result) -> None:
+        self.set_program(project, result)
+
     def _clicked(self, item: QTreeWidgetItem) -> None:
         element_id = item.data(0, Qt.UserRole)
         if element_id:
@@ -128,7 +133,7 @@ class ILPanel(QWidget):
         self._last_power, self._last_pc = power, pc
         for k, item in enumerate(self.line_items):
             if power is None:
-                color = QColor("#0f172a")
+                color = PLAIN_TEXT
             else:
                 color = POWER_ON if k < len(power) and power[k] else POWER_OFF
             for col in (1, 2, 3):

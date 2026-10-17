@@ -47,8 +47,8 @@ class SimPanel(QWidget):
         self.io = IOPanel(show_commanded=False)
         layout.addWidget(self.io, 1)
 
-    def _badge(self, bg: str, fg: str) -> None:
-        self.state.setStyleSheet(f"background:{bg}; color:{fg};")
+    def _badge(self, bg: str | None, fg: str | None) -> None:
+        self.state.setStyleSheet(f"background:{bg}; color:{fg};" if bg else "")
 
     @property
     def speed_factor(self) -> float:
@@ -57,7 +57,7 @@ class SimPanel(QWidget):
     def refresh(self, sim: Simulator | None) -> None:
         if sim is None:
             self.state.setText("sem programa compilado")
-            self._badge("#e2e8f0", "#334155")
+            self._badge(None, None)
             self.scans.setText("0")
             self.vtime.setText("0,000 s")
             self.pc.setText("-")
@@ -69,7 +69,7 @@ class SimPanel(QWidget):
             text += " (no meio da varredura)"
         self.state.setText(text)
         self._badge(*{SimState.RUNNING: ("#dcfce7", "#166534"), SimState.PAUSED: ("#fef3c7", "#92400e")}
-                    .get(sim.state, ("#e2e8f0", "#334155")))
+                    .get(sim.state, (None, None)))
         self.scans.setText(str(vm.scan_count))
         self.vtime.setText(f"{sim.virtual_ms / 1000:.3f} s".replace(".", ","))
         if vm.in_scan and vm.pc < len(sim.program.code):

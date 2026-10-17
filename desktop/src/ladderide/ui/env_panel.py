@@ -8,6 +8,10 @@ from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel, QPus
 
 from ..envs import BUTTON, SWITCH, Environment, EnvironmentPlant, available, create
 from ..envs.registry import load_errors
+from .theme import themed
+
+VIEW_BG = themed("#e2e8f0", "#0b1120")
+VIEW_TEXT = themed("#64748b", "#94a3b8")
 
 KIND_TEXT = {BUTTON: "botao", SWITCH: "chave", "sensor": "sensor"}
 
@@ -36,9 +40,9 @@ class EnvironmentView(QWidget):
     def paintEvent(self, event) -> None:
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(self.rect(), QColor("#e2e8f0"))
+        p.fillRect(self.rect(), VIEW_BG)
         if self.env is None:
-            p.setPen(QColor("#64748b"))
+            p.setPen(VIEW_TEXT)
             p.setFont(QFont("Segoe UI", 10))
             p.drawText(self.rect(), Qt.AlignCenter, "Escolha um ambiente de simulacao acima")
             return
@@ -114,7 +118,7 @@ class EnvironmentPanel(QWidget):
         layout.addLayout(row)
         self.description = QLabel()
         self.description.setWordWrap(True)
-        self.description.setStyleSheet("color:#475569;")
+        self.description.setObjectName("muted")
         layout.addWidget(self.description)
         buttons = QHBoxLayout()
         self.reset_btn = QPushButton("Reiniciar processo")
@@ -130,7 +134,7 @@ class EnvironmentPanel(QWidget):
         self.view.on_change = self._refresh_table
         layout.addWidget(self.view, 1)
         self.stats = QLabel()
-        self.stats.setStyleSheet("color:#334155; font-weight:600;")
+        self.stats.setObjectName("stats")
         layout.addWidget(self.stats)
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Endereco", "Nome", "Tipo", "Valor"])
@@ -145,7 +149,7 @@ class EnvironmentPanel(QWidget):
         if load_errors:
             warn = QLabel("Ambientes com erro: " + "; ".join(load_errors))
             warn.setWordWrap(True)
-            warn.setStyleSheet("color:#b91c1c;")
+            warn.setObjectName("danger")
             layout.addWidget(warn)
         self._set(None)
 
@@ -215,4 +219,4 @@ class EnvironmentPanel(QWidget):
             v = values.get(pt.key) if direction == "in" else self.env.out.get(pt.key)
             item = self.table.item(row, 3)
             item.setText("1" if v else "0")
-            item.setForeground(QColor("#16a34a") if v else QColor("#64748b"))
+            item.setForeground(QColor("#16a34a") if v else VIEW_TEXT)

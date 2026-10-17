@@ -24,6 +24,10 @@ O dispositivo virtual e os testes de equivalência precisam de `gcc` no PATH
 - **Simulador / Dispositivo** (direita, abas).
 - **Mensagens / Variáveis** (embaixo).
 
+**Tema:** em **Exibir → Tema**, escolha Claro, Escuro ou Seguir o Windows.
+O atalho **Ctrl+Shift+T** (botão de lua na barra) alterna entre claro e escuro.
+A escolha fica salva para as próximas aberturas.
+
 ## 3. Editando
 
 | Ação | Como |

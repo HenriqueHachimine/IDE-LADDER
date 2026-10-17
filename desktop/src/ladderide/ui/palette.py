@@ -83,10 +83,14 @@ class Palette(QScrollArea):
                 self.buttons.append(b)
             layout.addWidget(box)
         hint = QLabel("Arraste para o diagrama ou clique para\ninserir apos o elemento selecionado.")
-        hint.setStyleSheet("color: #64748b; font-size: 8pt; padding: 4px;")
+        hint.setObjectName("hint")
         layout.addWidget(hint)
         layout.addStretch(1)
         self.setWidget(body)
+
+    def theme_changed(self) -> None:
+        for b in self.buttons:
+            b.setIcon(tool_icon(b.tool))
 
     def set_enabled(self, enabled: bool) -> None:
         for b in self.buttons:
