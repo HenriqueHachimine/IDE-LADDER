@@ -1,0 +1,941 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Elevador de 4 andares",
+  "description": "Chamadas registradas nas lampadas (SET), posicao memorizada pelo ultimo sensor de andar, direcao mantida enquanto houver chamadas no mesmo sentido e parada em qualquer andar com chamada. A porta fica aberta 3 s; como nao ha sensor de porta, o TOF Porta_Fechando espera 2,8 s (fechador leva 2,5 s) antes de liberar o motor.",
+  "version": "0.1.0",
+  "created": "2026-10-17T19:41:32",
+  "modified": "2026-10-17T19:41:32",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Chamada_1",
+      "address": "I0.0",
+      "comment": "Botao do 1o andar (cabine ou pavimento)"
+    },
+    {
+      "name": "Chamada_2",
+      "address": "I0.1",
+      "comment": "Botao do 2o andar"
+    },
+    {
+      "name": "Chamada_3",
+      "address": "I0.2",
+      "comment": "Botao do 3o andar"
+    },
+    {
+      "name": "Chamada_4",
+      "address": "I0.3",
+      "comment": "Botao do 4o andar"
+    },
+    {
+      "name": "Andar_1",
+      "address": "I0.4",
+      "comment": "Cabine no nivel do 1o andar (+-10 cm)"
+    },
+    {
+      "name": "Andar_2",
+      "address": "I0.5",
+      "comment": "Cabine no nivel do 2o andar"
+    },
+    {
+      "name": "Andar_3",
+      "address": "I0.6",
+      "comment": "Cabine no nivel do 3o andar"
+    },
+    {
+      "name": "Andar_4",
+      "address": "I0.7",
+      "comment": "Cabine no nivel do 4o andar"
+    },
+    {
+      "name": "Motor_Sobe",
+      "address": "Q0.0",
+      "comment": "Motor no sentido de subir"
+    },
+    {
+      "name": "Motor_Desce",
+      "address": "Q0.1",
+      "comment": "Motor no sentido de descer"
+    },
+    {
+      "name": "Abrir_Porta",
+      "address": "Q0.2",
+      "comment": "Operador de porta: abre (desligado, o fechador fecha)"
+    },
+    {
+      "name": "Lampada_1",
+      "address": "Q0.3",
+      "comment": "Chamada registrada no 1o andar"
+    },
+    {
+      "name": "Lampada_2",
+      "address": "Q0.4",
+      "comment": "Chamada registrada no 2o andar"
+    },
+    {
+      "name": "Lampada_3",
+      "address": "Q0.5",
+      "comment": "Chamada registrada no 3o andar"
+    },
+    {
+      "name": "Lampada_4",
+      "address": "Q0.6",
+      "comment": "Chamada registrada no 4o andar"
+    },
+    {
+      "name": "Pos_1",
+      "address": "M0.0",
+      "comment": "ultimo andar visto: 1"
+    },
+    {
+      "name": "Pos_2",
+      "address": "M0.1",
+      "comment": "ultimo andar visto: 2"
+    },
+    {
+      "name": "Pos_3",
+      "address": "M0.2",
+      "comment": "ultimo andar visto: 3"
+    },
+    {
+      "name": "Pos_4",
+      "address": "M0.3",
+      "comment": "ultimo andar visto: 4"
+    },
+    {
+      "name": "Chamada_Acima",
+      "address": "M0.4",
+      "comment": "ha chamada acima da posicao"
+    },
+    {
+      "name": "Chamada_Abaixo",
+      "address": "M0.5",
+      "comment": "ha chamada abaixo da posicao"
+    },
+    {
+      "name": "Subindo",
+      "address": "M0.6",
+      "comment": "sentido de viagem: subida"
+    },
+    {
+      "name": "Descendo",
+      "address": "M0.7",
+      "comment": "sentido de viagem: descida"
+    },
+    {
+      "name": "Parar_Aqui",
+      "address": "M1.0",
+      "comment": "cabine num andar com chamada"
+    },
+    {
+      "name": "Atendendo",
+      "address": "M1.1",
+      "comment": "porta aberta atendendo o andar"
+    },
+    {
+      "name": "Tempo_Porta",
+      "address": "T0",
+      "comment": "porta aberta 3 s"
+    },
+    {
+      "name": "Porta_Fechando",
+      "address": "T1",
+      "comment": "TOF: porta ainda nao fechou (2,8 s)"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Registra as chamadas (a lampada e a memoria)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chamada_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Lampada_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chamada_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Lampada_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chamada_3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Lampada_3"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chamada_4"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Lampada_4"
+        }
+      ]
+    },
+    {
+      "comment": "Memoriza o ultimo andar visto",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pos_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_3"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_4"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pos_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_3"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_4"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pos_3"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_4"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_4"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pos_4"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pos_3"
+        }
+      ]
+    },
+    {
+      "comment": "Ha chamadas acima / abaixo da posicao",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pos_1"
+              },
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_2"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_3"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_4"
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pos_2"
+              },
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_3"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_4"
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pos_3"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_4"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Chamada_Acima"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pos_4"
+              },
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_2"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_3"
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pos_3"
+              },
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Lampada_2"
+                    }
+                  ]
+                ]
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pos_2"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_1"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Chamada_Abaixo"
+        }
+      ]
+    },
+    {
+      "comment": "Cabine num andar com chamada",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Andar_1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Andar_2"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Andar_3"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_3"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Andar_4"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_4"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Parar_Aqui"
+        }
+      ]
+    },
+    {
+      "comment": "Chegou: atende o andar",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Parar_Aqui"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Sobe"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Desce"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Atendendo"
+        }
+      ]
+    },
+    {
+      "comment": "Porta aberta por 3 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Atendendo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Abrir_Porta"
+        },
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Porta",
+          "preset": 3000
+        }
+      ]
+    },
+    {
+      "comment": "Apaga a chamada atendida",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Atendendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Lampada_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Atendendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Lampada_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Atendendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Lampada_3"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Atendendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Andar_4"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Lampada_4"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Porta.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Atendendo"
+        }
+      ]
+    },
+    {
+      "comment": "Sem sensor de porta: espera o fechador (2,5 s) com folga",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abrir_Porta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TOF",
+          "operand": "Porta_Fechando",
+          "preset": 2800
+        }
+      ]
+    },
+    {
+      "comment": "Sentido de viagem: mantem enquanto houver chamadas no mesmo sentido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chamada_Acima"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Descendo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Subindo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Chamada_Acima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Subindo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chamada_Abaixo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Subindo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Descendo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Chamada_Abaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Descendo"
+        }
+      ]
+    },
+    {
+      "comment": "Motor com intertravamento e porta fechada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Subindo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Parar_Aqui"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Atendendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Porta_Fechando.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Desce"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Sobe"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Descendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Parar_Aqui"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Atendendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Porta_Fechando.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Sobe"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Desce"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-17T19:41:32",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 25
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0xe17fa3ab",
+    "size": 860,
+    "instructions": 202,
+    "date": "2026-10-17T19:41:32"
+  },
+  "environment": "elevador"
+}

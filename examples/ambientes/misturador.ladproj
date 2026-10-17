@@ -1,0 +1,488 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Misturador de batelada",
+  "description": "Doses contadas pelos fluxometros (CTU 40 L de A, depois 30 L de B), agitacao e aquecimento ate o termostato, 5 s de mistura na temperatura e descarga ate o nivel baixo mais 2 s. Repete enquanto RUN estiver ligado.",
+  "version": "0.1.0",
+  "created": "2026-10-17T19:41:32",
+  "modified": "2026-10-17T19:41:32",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Start",
+      "address": "I0.0",
+      "comment": "Botao de partida (NA)"
+    },
+    {
+      "name": "Stop",
+      "address": "I0.1",
+      "comment": "Botao de parada (NF: le 1 quando solto)"
+    },
+    {
+      "name": "Nivel_Baixo",
+      "address": "I0.2",
+      "comment": "Chave de nivel: liquido acima de 10 L"
+    },
+    {
+      "name": "Nivel_Alto",
+      "address": "I0.3",
+      "comment": "Chave de nivel: liquido acima de 90 L"
+    },
+    {
+      "name": "Termostato",
+      "address": "I0.4",
+      "comment": "Fecha com 40 degC (abre abaixo de 39 degC)"
+    },
+    {
+      "name": "Fluxometro_1",
+      "address": "I0.5",
+      "comment": "1 pulso por litro do produto A"
+    },
+    {
+      "name": "Fluxometro_2",
+      "address": "I0.6",
+      "comment": "1 pulso por litro do produto B"
+    },
+    {
+      "name": "Bomba_1",
+      "address": "Q0.0",
+      "comment": "Bomba do produto A"
+    },
+    {
+      "name": "Bomba_2",
+      "address": "Q0.1",
+      "comment": "Bomba do produto B"
+    },
+    {
+      "name": "Misturador",
+      "address": "Q0.2",
+      "comment": "Motor do agitador"
+    },
+    {
+      "name": "Bomba_Saida",
+      "address": "Q0.3",
+      "comment": "Bomba de descarga"
+    },
+    {
+      "name": "Aquecedor",
+      "address": "Q0.4",
+      "comment": "Resistencia de aquecimento"
+    },
+    {
+      "name": "Lampada_Run",
+      "address": "Q0.5",
+      "comment": "Lampada RUN"
+    },
+    {
+      "name": "Lampada_Cheio",
+      "address": "Q0.6",
+      "comment": "Lampada nivel alto"
+    },
+    {
+      "name": "Litros_A",
+      "address": "C0",
+      "comment": "40 L do produto A"
+    },
+    {
+      "name": "Litros_B",
+      "address": "C1",
+      "comment": "30 L do produto B"
+    },
+    {
+      "name": "Temperatura_OK",
+      "address": "M0.0",
+      "comment": "lote ja chegou a 40 degC"
+    },
+    {
+      "name": "Descarregando",
+      "address": "M0.1",
+      "comment": "descarga do lote"
+    },
+    {
+      "name": "Tempo_Mistura",
+      "address": "T0",
+      "comment": "5 s misturando na temperatura"
+    },
+    {
+      "name": "Fim_Descarga",
+      "address": "T1",
+      "comment": "2 s depois do nivel baixo"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Liga/desliga (selo)",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Start"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_Run"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Stop"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Run"
+        }
+      ]
+    },
+    {
+      "comment": "Dosagem pelos fluxometros",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fluxometro_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Litros_A",
+          "preset": 40
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fluxometro_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Litros_B",
+          "preset": 30
+        }
+      ]
+    },
+    {
+      "comment": "Produto A, depois produto B",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Litros_A.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Descarregando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Litros_A.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Litros_B.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Descarregando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba_2"
+        }
+      ]
+    },
+    {
+      "comment": "Agita depois da dosagem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Litros_B.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Descarregando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Misturador"
+        }
+      ]
+    },
+    {
+      "comment": "Aquece so com agitacao e resistencia coberta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Misturador"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Baixo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Termostato"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Aquecedor"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Misturador"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Termostato"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Temperatura_OK"
+        }
+      ]
+    },
+    {
+      "comment": "Mistura 5 s na temperatura",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Misturador"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Temperatura_OK"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Mistura",
+          "preset": 5000
+        }
+      ]
+    },
+    {
+      "comment": "Descarrega o lote",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Mistura.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Descarregando"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Descarregando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fim_Descarga.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba_Saida"
+        }
+      ]
+    },
+    {
+      "comment": "Abaixo do nivel baixo restam ~10 L: mais 2 s e o tanque esvazia",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Descarregando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Nivel_Baixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fim_Descarga",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "Fim do lote: prepara o proximo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fim_Descarga.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Descarregando"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Temperatura_OK"
+        },
+        {
+          "type": "reset",
+          "operand": "Litros_A"
+        },
+        {
+          "type": "reset",
+          "operand": "Litros_B"
+        }
+      ]
+    },
+    {
+      "comment": "Sinalizacao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Alto"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Cheio"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-17T19:41:32",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 14
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0xed7af0b7",
+    "size": 400,
+    "instructions": 83,
+    "date": "2026-10-17T19:41:32"
+  },
+  "environment": "misturador"
+}

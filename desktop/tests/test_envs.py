@@ -39,7 +39,7 @@ def closed_loop(project: Project, actions=(), total_ms=60000, env_id=None):
 
 def test_builtin_environments_are_registered_with_valid_io():
     ids = {cls.id for cls in available()}
-    assert {"silo", "semaforo", "portao"} <= ids
+    assert {"silo", "semaforo", "portao", "elevador", "garrafas", "compressores", "misturador"} <= ids
     for cls in available():
         env = cls()
         plant = EnvironmentPlant(env)          # enderecos validos (I/Q) e sem bits repetidos
@@ -230,3 +230,82 @@ def test_gate_overrun_hysteresis_and_reversal_alarm():
     _, alarms, _ = closed_loop(naive, [(100, "OPEN", True), (200, "OPEN", False), (10000, "CLOSE", True),
                                        (10100, "CLOSE", False), (12000, "VEHICLE", True)], 16000)
     assert any("reversao" in a for a in alarms)
+
+
+# ------------------------------------------------------------ elevador
+def _press(t, key):
+    return [(t, key, True), (t + 200, key, False)]
+
+
+def test_elevator_example_serves_calls_with_door_closed_while_moving():
+    actions = _press(500, "CALL3") + _press(2000, "CALL2") + _press(30000, "CALL1") + _press(31000, "CALL4")
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "elevador.ladproj"), actions, 90000)
+    assert alarms == set()
+    assert len(env.waits) == 4 and not env.pending
+    assert abs(env.y - 3 * 3.0) < 0.10                       # parou no 4o andar, dentro da zona de porta
+    assert env.last_level_cm is not None and abs(env.last_level_cm) < 6
+
+
+def test_elevator_without_floor_stop_hits_buffer_and_moving_open_door_is_detected():
+    from ladderide.model import Parallel
+    runaway = Project(environment="elevador", rungs=[
+        Rung([Parallel([[Contact("XIC", "I0.3")], [Contact("XIC", "Q0.0")]])], [Coil("OTE", "Q0.0")]),
+        Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.2")])])
+    env, alarms, _ = closed_loop(runaway, _press(100, "CALL1") + _press(300, "CALL4"), 25000)
+    assert any("para-choque" in a for a in alarms)
+    assert any("porta aberta" in a for a in alarms)
+
+
+# ------------------------------------------------------------ garrafas
+def test_bottle_line_example_fills_inspects_and_boxes_both_sizes():
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "garrafas.ladproj"), _press(100, "START"), 60000)
+    assert alarms == set() and env.boxes_shipped >= 1 and env.packed_small >= 12 and env.scrap == 0
+    big = [(100, "LARGE", True), (150, "LARGE", False)] + _press(300, "START")
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "garrafas.ladproj"), big, 90000)
+    assert alarms == set() and env.packed_large >= 6 and env.packed_small == 0
+
+
+def test_bottle_line_rejects_wrong_fill_and_detects_bad_logic():
+    project = Project.load(EXAMPLES / "garrafas.ladproj")
+    timer = next(o for r in project.rungs for o in r.outputs if getattr(o, "operand", "") == "Tempo_Pequena")
+    timer.preset = 1600                                      # 0,4 L em garrafa de 0,5 L: 80%
+    env, alarms, _ = closed_loop(project, _press(100, "START"), 40000)
+    assert env.scrap >= 3 and env.bad_packed == 0 and alarms == set()
+    naive = Project(environment="garrafas", rungs=[
+        Rung([Contact("XIC", "I0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1")])])
+    env, alarms, _ = closed_loop(naive, (), 30000)
+    assert any("derramados" in a for a in alarms) and any("6 garrafas" in a or "quebraram" in a for a in alarms)
+
+
+# -------------------------------------------------------- compressores
+def test_compressor_example_alternates_lead_and_keeps_pressure():
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "compressores.ladproj"), _press(100, "START"), 180000)
+    assert alarms == set()
+    assert env.run_ms[0] > 30000 and env.run_ms[1] > 30000      # desgaste dividido entre os dois
+    assert 85 <= env.psi <= 125
+
+
+def test_compressor_takes_over_when_thermal_trips_and_naive_logic_alarms():
+    project = Project.load(EXAMPLES / "compressores.ladproj")
+    env, alarms, _ = closed_loop(project, _press(100, "START") + [(20000, "FAULT1", True)], 120000)
+    assert env.forced[0] and env.psi >= 85 and not any("60 psi" in a for a in alarms)
+    naive = Project(environment="compressores", rungs=[
+        Rung([Contact("XIC", "I0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1")])])
+    env, alarms, _ = closed_loop(naive, (), 120000)
+    assert any("simultanea" in a for a in alarms) and any("seguranca" in a for a in alarms)
+    assert any("condensado" in a for a in alarms)
+
+
+# ----------------------------------------------------------- misturador
+def test_batch_mixer_example_makes_good_batches():
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "misturador.ladproj"), _press(100, "START"), 120000)
+    assert alarms == set() and env.good >= 2 and not env.bad
+
+
+def test_batch_mixer_detects_dry_heating_unstirred_and_overflow():
+    naive = Project(environment="misturador", rungs=[
+        Rung([Contact("XIC", "I0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.4")])])
+    env, alarms, _ = closed_loop(naive, (), 40000)
+    assert any("abaixo do nivel" in a for a in alarms)
+    assert any("sem o misturador" in a for a in alarms)
+    assert any("transbordou" in a for a in alarms)

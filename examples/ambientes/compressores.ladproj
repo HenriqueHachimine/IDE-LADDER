@@ -1,0 +1,490 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Central de ar comprimido",
+  "description": "O pressostato 1 chama o compressor lider e o 2 o reserva; o lider alterna a cada ciclo (pulso na subida do pressostato 1) para dividir o desgaste. O reserva so parte 2 s depois do lider (sem pico de corrente) e assume se o termico do outro desarmar. Dreno: 1,5 s a cada 30 s.",
+  "version": "0.1.0",
+  "created": "2026-10-17T19:41:32",
+  "modified": "2026-10-17T19:41:32",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Start",
+      "address": "I0.0",
+      "comment": "Botao de partida (NA)"
+    },
+    {
+      "name": "Stop",
+      "address": "I0.1",
+      "comment": "Botao de parada (NF: le 1 quando solto)"
+    },
+    {
+      "name": "Pressostato_1",
+      "address": "I0.2",
+      "comment": "Fechado abaixo de 100 psi (abre em 120 psi)"
+    },
+    {
+      "name": "Pressostato_2",
+      "address": "I0.3",
+      "comment": "Fechado abaixo de 90 psi (abre em 110 psi)"
+    },
+    {
+      "name": "Termico_1",
+      "address": "I0.4",
+      "comment": "Rele termico do motor 1 (NF: 1 = normal)"
+    },
+    {
+      "name": "Termico_2",
+      "address": "I0.5",
+      "comment": "Rele termico do motor 2 (NF: 1 = normal)"
+    },
+    {
+      "name": "Motor_1",
+      "address": "Q0.0",
+      "comment": "Contator do compressor 1"
+    },
+    {
+      "name": "Motor_2",
+      "address": "Q0.1",
+      "comment": "Contator do compressor 2"
+    },
+    {
+      "name": "Valvula_Dreno",
+      "address": "Q0.2",
+      "comment": "Valvula solenoide de dreno do condensado"
+    },
+    {
+      "name": "Lampada_Run",
+      "address": "Q0.3",
+      "comment": "Lampada RUN"
+    },
+    {
+      "name": "Lampada_Falha",
+      "address": "Q0.4",
+      "comment": "Lampada de falha (termico desarmado)"
+    },
+    {
+      "name": "PE1_Anterior",
+      "address": "M0.0",
+      "comment": "pressostato 1 na varredura anterior"
+    },
+    {
+      "name": "Pulso_PE1",
+      "address": "M0.1",
+      "comment": "subida do pressostato 1 (uma varredura)"
+    },
+    {
+      "name": "Lider_2",
+      "address": "M0.2",
+      "comment": "1 = compressor 2 e o lider"
+    },
+    {
+      "name": "Partida_Escalonada",
+      "address": "T0",
+      "comment": "2 s entre as partidas"
+    },
+    {
+      "name": "Intervalo_Dreno",
+      "address": "T1",
+      "comment": "30 s"
+    },
+    {
+      "name": "Tempo_Dreno",
+      "address": "T2",
+      "comment": "1,5 s"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Liga/desliga (selo)",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Start"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_Run"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Stop"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Run"
+        }
+      ]
+    },
+    {
+      "comment": "Pulso na subida do pressostato 1",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pressostato_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "PE1_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pulso_PE1"
+        }
+      ]
+    },
+    {
+      "comment": "Alterna o lider a cada ciclo (flip-flop)",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pulso_PE1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Lider_2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Pulso_PE1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lider_2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lider_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pressostato_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "PE1_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Reserva so parte 2 s depois do lider",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Partida_Escalonada",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "Compressores: lider pelo PE1, reserva pelo PE2, assume se o outro desarmar",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Termico_1"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pressostato_1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Lider_2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pressostato_2"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lider_2"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Partida_Escalonada.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pressostato_1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Termico_2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Termico_2"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pressostato_1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lider_2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pressostato_2"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Lider_2"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Partida_Escalonada.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pressostato_1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Termico_1"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_2"
+        }
+      ]
+    },
+    {
+      "comment": "Dreno do condensado: 1,5 s a cada 30 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Tempo_Dreno.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Intervalo_Dreno",
+          "preset": 30000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Intervalo_Dreno.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Dreno"
+        },
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Dreno",
+          "preset": 1500
+        }
+      ]
+    },
+    {
+      "comment": "Sinaliza termico desarmado",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Termico_1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Termico_2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Falha"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-17T19:41:32",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 10
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0x7678cd4c",
+    "size": 416,
+    "instructions": 89,
+    "date": "2026-10-17T19:41:32"
+  },
+  "environment": "compressores"
+}

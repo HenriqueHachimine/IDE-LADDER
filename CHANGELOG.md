@@ -16,6 +16,10 @@ ensaios na placa real.
   varredura medido no dispositivo.
 - Blocos de instrução (F12 e `ladderide.cli il`): lista de instruções por rede,
   sincronizada com o diagrama e animada na simulação.
+- Novos ambientes: elevador de 4 andares, linha de garrafas (enchimento, inspeção, rejeitor e
+  encaixotamento), central de ar comprimido (dois compressores, pressostatos, térmicos e dreno) e
+  misturador de batelada (fluxômetros, termostato, agitação e descarga), com programas de exemplo
+  e testes em malha fechada.
 - Código C++ (Ctrl+F7, painel ao lado dos blocos de instrução e
   `ladderide.cli cpp`): o diagrama traduzido para C++ legível a cada edição,
   sem precisar compilar, com erros marcados nas redes. O teste

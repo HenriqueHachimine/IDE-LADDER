@@ -1,0 +1,87 @@
+; Linha de garrafas - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0xf8a1278f
+.timer T0 RTO 2000
+.timer T1 RTO 4000
+.counter C0 UP 6
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC Q0.4
+BND
+XIC I0.1
+OTE Q0.4
+EOR
+SOR ; rede 1
+XIC Q0.4
+XIC I0.2
+XIO M0.0
+XIO I0.5
+RTO T0
+EOR
+SOR ; rede 2
+XIC Q0.4
+XIC I0.2
+XIO M0.0
+XIC I0.5
+RTO T1
+EOR
+SOR ; rede 3
+BST
+XIC T0.DN
+NXB
+XIC T1.DN
+BND
+OTE M0.0
+EOR
+SOR ; rede 4
+XIO I0.2
+BST
+RES T0
+NXB
+RES T1
+BND
+EOR
+SOR ; rede 5
+XIC Q0.4
+XIC I0.2
+XIO M0.0
+OTE Q0.1
+EOR
+SOR ; rede 6
+XIC Q0.4
+BST
+XIO I0.2
+NXB
+XIC M0.0
+BND
+XIC I0.7
+XIO C0.DN
+OTE Q0.0
+EOR
+SOR ; rede 7
+XIC I0.4
+XIO I0.3
+OTE Q0.2
+EOR
+SOR ; rede 8
+XIC I0.6
+CTU C0
+EOR
+SOR ; rede 9
+XIC Q0.4
+BST
+XIC C0.DN
+NXB
+XIO I0.7
+BND
+OTE Q0.3
+EOR
+SOR ; rede 10
+XIO I0.7
+RES C0
+EOR

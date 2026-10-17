@@ -1,6 +1,6 @@
 # Ambientes de simulação
 
-Os ambientes são processos físicos animados (silo, semáforo, portão...)
+Os ambientes são processos físicos animados (silo, semáforo, portão, elevador...)
 controlados pelo programa LADDER durante a simulação offline. Eles são
 **plugins**: o simulador e a interface conhecem apenas um contrato genérico,
 e cada ambiente fica em um arquivo independente.
@@ -12,6 +12,12 @@ e cada ambiente fica em um arquivo independente.
 | **Silo de envase** (`silo`) | I0.0 Start, I0.1 Stop (NF), I0.2 sensor de presença, I0.3 sensor de nível | Q0.0 motor da esteira, Q0.1 válvula, Q0.2 RUN, Q0.3 FILL, Q0.4 FULL | `examples/ambientes/silo.ladproj` |
 | **Semáforo de cruzamento** (`semaforo`) | I0.0/I0.1 botões de pedestre, I0.2/I0.3 sensores de carro | Q0.0–Q0.2 vermelho/amarelo/verde NS, Q0.3 pedestre NS, Q0.4–Q0.6 vermelho/amarelo/verde LO, Q0.7 pedestre LO | `examples/ambientes/semaforo.ladproj` |
 | **Portão de garagem** (`portao`) | I0.0 Abrir, I0.1 Fechar, I0.2 Parar (NF), I0.3 LS1 aberto, I0.4 LS2 fechado, I0.5 fotocélula | Q0.0 sobe, Q0.1 desce, Q0.2 entreaberto, Q0.3 aberto, Q0.4 fechado | `examples/ambientes/portao.ladproj` |
+| **Elevador de 4 andares** (`elevador`) | I0.0–I0.3 botões dos andares 1–4 (cabine ou pavimento), I0.4–I0.7 sensores de andar | Q0.0 sobe, Q0.1 desce, Q0.2 abrir porta, Q0.3–Q0.6 lâmpadas de chamada | `examples/ambientes/elevador.ladproj` |
+| **Linha de garrafas** (`garrafas`) | I0.0 Start, I0.1 Stop (NF), I0.2 garrafa no bico, I0.3 nível OK, I0.4 garrafa na inspeção, I0.5 chave garrafa grande, I0.6 garrafa caindo na caixa, I0.7 caixa posicionada | Q0.0 esteira de garrafas, Q0.1 válvula, Q0.2 rejeitor, Q0.3 esteira de caixas, Q0.4 RUN | `examples/ambientes/garrafas.ladproj` |
+| **Central de ar comprimido** (`compressores`) | I0.0 Start, I0.1 Stop (NF), I0.2 pressostato 1 (100/120 psi), I0.3 pressostato 2 (90/110 psi), I0.4/I0.5 relés térmicos (NF) | Q0.0 motor 1, Q0.1 motor 2, Q0.2 dreno, Q0.3 RUN, Q0.4 falha | `examples/ambientes/compressores.ladproj` |
+| **Misturador de batelada** (`misturador`) | I0.0 Start, I0.1 Stop (NF), I0.2 nível baixo, I0.3 nível alto, I0.4 termostato, I0.5/I0.6 fluxômetros (1 pulso/L) | Q0.0 bomba A, Q0.1 bomba B, Q0.2 misturador, Q0.3 bomba de saída, Q0.4 aquecedor, Q0.5 RUN, Q0.6 cheio | `examples/ambientes/misturador.ladproj` |
+
+Todos usam no máximo 8 entradas e 8 saídas digitais, como a placa. Grandezas analógicas do processo (pressão, temperatura, nível, vazão) chegam ao CLP como em instalações reais com entradas digitais: pressostatos e termostatos com diferencial, chaves de nível e fluxômetros de pulso.
 
 Cada ambiente também detecta erros de lógica e mostra **alarmes**, por exemplo:
 produto derramado, verdes simultâneos, colisão no cruzamento, motor comandado
@@ -39,10 +45,22 @@ virtual, então os resultados são reproduzíveis. As utilidades comuns ficam em
 | Portão | Fins de curso | histerese (98/96,5% e 2/3,5%) | um contato não "pisca" na borda |
 | Portão | Reversão | inverter acima de 3%/s é falha mecânica | é preciso parar e esperar antes de reabrir |
 | Portão | Veículo | batente na altura do teto, com velocidade de impacto | a fotocélula é obrigatória |
+| Elevador | Cabine | 0,5 m/s, partida 0,6 m/s², freio 2 m/s² (para em ~6 cm) | o sensor de andar atua 10 cm antes do nível e a cabine para a ~4 cm |
+| Elevador | Porta | operador abre em 1,5 s; o fechador (mola) fecha em 2,5 s; sem sensor de porta | é preciso esperar com temporizador antes de mover a cabine |
+| Elevador | Segurança | andar com porta aberta, abrir fora do andar, passar do último andar, chamada esperando mais de 60 s | alarmes de lógica |
+| Garrafas | Esteiras | inércia (garrafas ~4,5 px, caixas ~6 px de deslocamento) | sensores com janela para a parada |
+| Garrafas | Enchimento | 0,25 L/s com válvula de 0,10/0,08 s; 0,5 L ou 1 L | o tempo de enchimento depende do tamanho; a inspeção aceita 92–103% |
+| Garrafas | Rejeitor e caixas | cilindro de 0,2 s; 6 garrafas por caixa | rejeitar no ponto certo e contar com CTU |
+| Compressores | Reservatório | pressão integra (vazão dos compressores − consumo √p); válvula de segurança em 140 psi | ciclo de 100 a 120 psi depende do consumo |
+| Compressores | Motores | rampa de 1,5 s; mais de 6 partidas/min desarma o térmico, que rearma em 30 s | alternar o líder, escalonar partidas e assumir na falha |
+| Compressores | Condensado | acumula com o ar comprimido; o dreno remove água e perde ar | dreno temporizado |
+| Misturador | Bombas e fluxômetros | 4 L/s, rampa de 0,5 s, 1 pulso por litro | dosagem por contador; a bomba ainda gira um pouco ao desligar |
+| Misturador | Temperatura | aquecimento proporcional ao volume, perdas para o ambiente, termostato 40/39 °C | aquecer só com agitação e resistência coberta |
+| Misturador | Lote | receita 40 L A + 30 L B (±3%), 4 s de agitação para homogeneizar | lote fora da receita, frio ou mal misturado é rejeitado |
 
 Os programas de `examples/ambientes/` já tratam esses efeitos: memória de
 caixa cheia no silo, tempos de engenharia de tráfego e janela de pedestres no
-semáforo, e espera de 0,6 s antes de reabrir o portão.
+semáforo, espera de 0,6 s antes de reabrir o portão, porta temporizada no elevador, enchimento por RTO na linha de garrafas, líder alternado no ar comprimido e dosagem por contador no misturador.
 
 ## Uso na IDE
 

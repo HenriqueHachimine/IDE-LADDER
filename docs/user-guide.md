@@ -150,7 +150,8 @@ retenção ou, marcando "Botões pulsadores", momentâneos. O tempo é virtual
 ### Ambientes de simulação (Ctrl+E)
 
 No painel **Ambiente** (embaixo do diagrama), escolha um processo animado: silo de envase, semáforo
-de cruzamento ou portão de garagem. O programa controla o processo: as saídas
+de cruzamento, portão de garagem, elevador de 4 andares, linha de garrafas, central de ar
+comprimido ou misturador de batelada. O programa controla o processo: as saídas
 Q acionam motores, válvulas e lâmpadas, e os sensores do processo alimentam as
 entradas I. Clique nos botões desenhados no ambiente. **Criar símbolos no
 projeto** adiciona os nomes dos pontos de E/S, e **Abrir programa exemplo**

@@ -1,0 +1,447 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Linha de garrafas",
+  "description": "Para a garrafa sob o bico e enche por tempo (RTO: pequena 2 s, grande 4 s a 0,25 L/s; retentivo para nao encher de novo depois de um STOP). Rejeita garrafa fora do nivel na inspecao. Conta 6 garrafas por caixa (CTU) e troca a caixa; a esteira de garrafas so anda com caixa posicionada.",
+  "version": "0.1.0",
+  "created": "2026-10-17T19:41:32",
+  "modified": "2026-10-17T19:41:32",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Start",
+      "address": "I0.0",
+      "comment": "Botao de partida (NA)"
+    },
+    {
+      "name": "Stop",
+      "address": "I0.1",
+      "comment": "Botao de parada (NF: le 1 quando solto)"
+    },
+    {
+      "name": "Garrafa_No_Bico",
+      "address": "I0.2",
+      "comment": "Fotocelula: garrafa sob o bico de enchimento"
+    },
+    {
+      "name": "Nivel_OK",
+      "address": "I0.3",
+      "comment": "Inspecao: garrafa no ponto com nivel entre 92% e 103%"
+    },
+    {
+      "name": "Garrafa_Inspecao",
+      "address": "I0.4",
+      "comment": "Fotocelula: garrafa no ponto de inspecao/rejeitor"
+    },
+    {
+      "name": "Seletor_Grande",
+      "address": "I0.5",
+      "comment": "Chave: 1 = garrafas grandes (1 L), 0 = pequenas (0,5 L)"
+    },
+    {
+      "name": "Garrafa_Na_Caixa",
+      "address": "I0.6",
+      "comment": "Sensor na boca da caixa: pulso a cada garrafa que cai"
+    },
+    {
+      "name": "Caixa_Posicionada",
+      "address": "I0.7",
+      "comment": "Caixa vazia alinhada sob o fim da esteira"
+    },
+    {
+      "name": "Esteira_Garrafas",
+      "address": "Q0.0",
+      "comment": "Motor da esteira de garrafas"
+    },
+    {
+      "name": "Valvula_Enchimento",
+      "address": "Q0.1",
+      "comment": "Valvula do bico de enchimento"
+    },
+    {
+      "name": "Rejeitor",
+      "address": "Q0.2",
+      "comment": "Cilindro que empurra a garrafa para o refugo"
+    },
+    {
+      "name": "Esteira_Caixas",
+      "address": "Q0.3",
+      "comment": "Motor da esteira de caixas"
+    },
+    {
+      "name": "Lampada_Run",
+      "address": "Q0.4",
+      "comment": "Lampada RUN"
+    },
+    {
+      "name": "Tempo_Pequena",
+      "address": "T0",
+      "comment": "2 s = 0,5 L"
+    },
+    {
+      "name": "Tempo_Grande",
+      "address": "T1",
+      "comment": "4 s = 1 L"
+    },
+    {
+      "name": "Garrafas_Caixa",
+      "address": "C0",
+      "comment": "6 garrafas por caixa"
+    },
+    {
+      "name": "Cheia",
+      "address": "M0.0",
+      "comment": "garrafa sob o bico ja foi enchida"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Liga/desliga (selo)",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Start"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_Run"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Stop"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Run"
+        }
+      ]
+    },
+    {
+      "comment": "Tempo de enchimento conforme o tamanho",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garrafa_No_Bico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Cheia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Seletor_Grande"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "RTO",
+          "operand": "Tempo_Pequena",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garrafa_No_Bico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Cheia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Seletor_Grande"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "RTO",
+          "operand": "Tempo_Grande",
+          "preset": 4000
+        }
+      ]
+    },
+    {
+      "comment": "Garrafa cheia",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Tempo_Pequena.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Tempo_Grande.DN"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Cheia"
+        }
+      ]
+    },
+    {
+      "comment": "Garrafa saiu: prepara a proxima",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Garrafa_No_Bico"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Tempo_Pequena"
+        },
+        {
+          "type": "reset",
+          "operand": "Tempo_Grande"
+        }
+      ]
+    },
+    {
+      "comment": "Enche",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garrafa_No_Bico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Cheia"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Enchimento"
+        }
+      ]
+    },
+    {
+      "comment": "Esteira: para para encher e sem caixa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Garrafa_No_Bico"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Cheia"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_Posicionada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Garrafas_Caixa.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Garrafas"
+        }
+      ]
+    },
+    {
+      "comment": "Inspecao: garrafa fora do nivel vai para o refugo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garrafa_Inspecao"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Nivel_OK"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Rejeitor"
+        }
+      ]
+    },
+    {
+      "comment": "Conta as garrafas na caixa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garrafa_Na_Caixa"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Garrafas_Caixa",
+          "preset": 6
+        }
+      ]
+    },
+    {
+      "comment": "Caixa completa sai; a proxima vem ate o sensor",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Garrafas_Caixa.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Caixa_Posicionada"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Caixas"
+        }
+      ]
+    },
+    {
+      "comment": "Caixa nova: zera a contagem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixa_Posicionada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Garrafas_Caixa"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-17T19:41:32",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 11
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0xf8a1278f",
+    "size": 372,
+    "instructions": 78,
+    "date": "2026-10-17T19:41:32"
+  },
+  "environment": "garrafas"
+}

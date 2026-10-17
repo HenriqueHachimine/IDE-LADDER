@@ -228,13 +228,195 @@ def garage_door() -> Project:
     return p
 
 
+def elevator() -> Project:
+    p = env_project("elevador", "Elevador de 4 andares", (
+        "Chamadas registradas nas lampadas (SET), posicao memorizada pelo ultimo sensor de andar, "
+        "direcao mantida enquanto houver chamadas no mesmo sentido e parada em qualquer andar com "
+        "chamada. A porta fica aberta 3 s; como nao ha sensor de porta, o TOF Porta_Fechando espera "
+        "2,8 s (fechador leva 2,5 s) antes de liberar o motor."))
+    p.symbols += [Symbol(f"Pos_{k + 1}", f"M0.{k}", f"ultimo andar visto: {k + 1}") for k in range(4)]
+    p.symbols += [Symbol("Chamada_Acima", "M0.4", "ha chamada acima da posicao"),
+                  Symbol("Chamada_Abaixo", "M0.5", "ha chamada abaixo da posicao"),
+                  Symbol("Subindo", "M0.6", "sentido de viagem: subida"),
+                  Symbol("Descendo", "M0.7", "sentido de viagem: descida"),
+                  Symbol("Parar_Aqui", "M1.0", "cabine num andar com chamada"),
+                  Symbol("Atendendo", "M1.1", "porta aberta atendendo o andar"),
+                  Symbol("Tempo_Porta", "T0", "porta aberta 3 s"),
+                  Symbol("Porta_Fechando", "T1", "TOF: porta ainda nao fechou (2,8 s)")]
+    andar = [f"Andar_{k + 1}" for k in range(4)]
+    lamp = [f"Lampada_{k + 1}" for k in range(4)]
+    pos = [f"Pos_{k + 1}" for k in range(4)]
+
+    def any_of(names):
+        return [Parallel([[Contact("XIC", n)] for n in names])] if len(names) > 1 else [Contact("XIC", names[0])]
+
+    rungs = []
+    for k in range(4):
+        rungs.append(Rung([Contact("XIC", f"Chamada_{k + 1}")], [Coil("OTL", lamp[k])],
+                          "Registra as chamadas (a lampada e a memoria)" if k == 0 else ""))
+    for k in range(4):
+        rungs.append(Rung([Contact("XIC", andar[k])],
+                          [Coil("OTL", pos[k])] + [Coil("OTU", pos[j]) for j in range(4) if j != k],
+                          "Memoriza o ultimo andar visto" if k == 0 else ""))
+    rungs.append(Rung([Parallel([[Contact("XIC", pos[k])] + any_of(lamp[k + 1:]) for k in range(3)])],
+                      [Coil("OTE", "Chamada_Acima")], "Ha chamadas acima / abaixo da posicao"))
+    rungs.append(Rung([Parallel([[Contact("XIC", pos[k])] + any_of(lamp[:k]) for k in range(3, 0, -1)])],
+                      [Coil("OTE", "Chamada_Abaixo")]))
+    rungs.append(Rung([Parallel([[Contact("XIC", andar[k]), Contact("XIC", lamp[k])] for k in range(4)])],
+                      [Coil("OTE", "Parar_Aqui")], "Cabine num andar com chamada"))
+    rungs.append(Rung([Contact("XIC", "Parar_Aqui"), Contact("XIO", "Motor_Sobe"), Contact("XIO", "Motor_Desce")],
+                      [Coil("OTL", "Atendendo")], "Chegou: atende o andar"))
+    rungs.append(Rung([Contact("XIC", "Atendendo")],
+                      [Coil("OTE", "Abrir_Porta"), TimerBox("TON", "Tempo_Porta", 3000)], "Porta aberta por 3 s"))
+    for k in range(4):
+        rungs.append(Rung([Contact("XIC", "Atendendo"), Contact("XIC", andar[k])], [Coil("OTU", lamp[k])],
+                          "Apaga a chamada atendida" if k == 0 else ""))
+    rungs.append(Rung([Contact("XIC", "Tempo_Porta.DN")], [Coil("OTU", "Atendendo")]))
+    rungs.append(Rung([Contact("XIC", "Abrir_Porta")], [TimerBox("TOF", "Porta_Fechando", 2800)],
+                      "Sem sensor de porta: espera o fechador (2,5 s) com folga"))
+    rungs.append(Rung([Contact("XIC", "Chamada_Acima"), Contact("XIO", "Descendo")], [Coil("OTL", "Subindo")],
+                      "Sentido de viagem: mantem enquanto houver chamadas no mesmo sentido"))
+    rungs.append(Rung([Contact("XIO", "Chamada_Acima")], [Coil("OTU", "Subindo")]))
+    rungs.append(Rung([Contact("XIC", "Chamada_Abaixo"), Contact("XIO", "Subindo")], [Coil("OTL", "Descendo")]))
+    rungs.append(Rung([Contact("XIO", "Chamada_Abaixo")], [Coil("OTU", "Descendo")]))
+    rungs.append(Rung([Contact("XIC", "Subindo"), Contact("XIO", "Parar_Aqui"), Contact("XIO", "Atendendo"),
+                       Contact("XIO", "Porta_Fechando.DN"), Contact("XIO", "Motor_Desce")],
+                      [Coil("OTE", "Motor_Sobe")], "Motor com intertravamento e porta fechada"))
+    rungs.append(Rung([Contact("XIC", "Descendo"), Contact("XIO", "Parar_Aqui"), Contact("XIO", "Atendendo"),
+                       Contact("XIO", "Porta_Fechando.DN"), Contact("XIO", "Motor_Sobe")],
+                      [Coil("OTE", "Motor_Desce")]))
+    p.rungs = rungs
+    return p
+
+
+def bottle_line() -> Project:
+    p = env_project("garrafas", "Linha de garrafas", (
+        "Para a garrafa sob o bico e enche por tempo (RTO: pequena 2 s, grande 4 s a 0,25 L/s; retentivo "
+        "para nao encher de novo depois de um STOP). Rejeita garrafa fora do nivel na inspecao. Conta 6 "
+        "garrafas por caixa (CTU) e troca a caixa; a esteira de garrafas so anda com caixa posicionada."))
+    p.symbols += [Symbol("Tempo_Pequena", "T0", "2 s = 0,5 L"), Symbol("Tempo_Grande", "T1", "4 s = 1 L"),
+                  Symbol("Garrafas_Caixa", "C0", "6 garrafas por caixa"),
+                  Symbol("Cheia", "M0.0", "garrafa sob o bico ja foi enchida")]
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Start")], [Contact("XIC", "Lampada_Run")]]), Contact("XIC", "Stop")],
+             [Coil("OTE", "Lampada_Run")], "Liga/desliga (selo)"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Garrafa_No_Bico"), Contact("XIO", "Cheia"),
+              Contact("XIO", "Seletor_Grande")], [TimerBox("RTO", "Tempo_Pequena", 2000)],
+             "Tempo de enchimento conforme o tamanho"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Garrafa_No_Bico"), Contact("XIO", "Cheia"),
+              Contact("XIC", "Seletor_Grande")], [TimerBox("RTO", "Tempo_Grande", 4000)]),
+        Rung([Parallel([[Contact("XIC", "Tempo_Pequena.DN")], [Contact("XIC", "Tempo_Grande.DN")]])],
+             [Coil("OTE", "Cheia")], "Garrafa cheia"),
+        Rung([Contact("XIO", "Garrafa_No_Bico")], [ResetBox("Tempo_Pequena"), ResetBox("Tempo_Grande")],
+             "Garrafa saiu: prepara a proxima"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Garrafa_No_Bico"), Contact("XIO", "Cheia")],
+             [Coil("OTE", "Valvula_Enchimento")], "Enche"),
+        Rung([Contact("XIC", "Lampada_Run"), Parallel([[Contact("XIO", "Garrafa_No_Bico")], [Contact("XIC", "Cheia")]]),
+              Contact("XIC", "Caixa_Posicionada"), Contact("XIO", "Garrafas_Caixa.DN")],
+             [Coil("OTE", "Esteira_Garrafas")], "Esteira: para para encher e sem caixa"),
+        Rung([Contact("XIC", "Garrafa_Inspecao"), Contact("XIO", "Nivel_OK")], [Coil("OTE", "Rejeitor")],
+             "Inspecao: garrafa fora do nivel vai para o refugo"),
+        Rung([Contact("XIC", "Garrafa_Na_Caixa")], [CounterBox("CTU", "Garrafas_Caixa", 6)],
+             "Conta as garrafas na caixa"),
+        Rung([Contact("XIC", "Lampada_Run"),
+              Parallel([[Contact("XIC", "Garrafas_Caixa.DN")], [Contact("XIO", "Caixa_Posicionada")]])],
+             [Coil("OTE", "Esteira_Caixas")], "Caixa completa sai; a proxima vem ate o sensor"),
+        Rung([Contact("XIO", "Caixa_Posicionada")], [ResetBox("Garrafas_Caixa")], "Caixa nova: zera a contagem"),
+    ]
+    return p
+
+
+def air_compressors() -> Project:
+    p = env_project("compressores", "Central de ar comprimido", (
+        "O pressostato 1 chama o compressor lider e o 2 o reserva; o lider alterna a cada ciclo (pulso na "
+        "subida do pressostato 1) para dividir o desgaste. O reserva so parte 2 s depois do lider (sem pico "
+        "de corrente) e assume se o termico do outro desarmar. Dreno: 1,5 s a cada 30 s."))
+    p.symbols += [Symbol("PE1_Anterior", "M0.0", "pressostato 1 na varredura anterior"),
+                  Symbol("Pulso_PE1", "M0.1", "subida do pressostato 1 (uma varredura)"),
+                  Symbol("Lider_2", "M0.2", "1 = compressor 2 e o lider"),
+                  Symbol("Partida_Escalonada", "T0", "2 s entre as partidas"),
+                  Symbol("Intervalo_Dreno", "T1", "30 s"), Symbol("Tempo_Dreno", "T2", "1,5 s")]
+
+    def motor(me: str, other_trip: str, lead_when: str, comment: str = "") -> Rung:
+        lag_when = "XIO" if lead_when == "XIC" else "XIC"
+        return Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", f"Termico_{me}"),
+                     Parallel([[Contact("XIC", "Pressostato_1"), Contact(lead_when, "Lider_2")],
+                               [Contact("XIC", "Pressostato_2"), Contact(lag_when, "Lider_2"),
+                                Contact("XIC", "Partida_Escalonada.DN")],
+                               [Contact("XIC", "Pressostato_1"), Contact("XIO", other_trip)]])],
+                    [Coil("OTE", f"Motor_{me}")], comment)
+
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Start")], [Contact("XIC", "Lampada_Run")]]), Contact("XIC", "Stop")],
+             [Coil("OTE", "Lampada_Run")], "Liga/desliga (selo)"),
+        Rung([Contact("XIC", "Pressostato_1"), Contact("XIO", "PE1_Anterior")], [Coil("OTE", "Pulso_PE1")],
+             "Pulso na subida do pressostato 1"),
+        Rung([Parallel([[Contact("XIC", "Pulso_PE1"), Contact("XIO", "Lider_2")],
+                        [Contact("XIO", "Pulso_PE1"), Contact("XIC", "Lider_2")]])],
+             [Coil("OTE", "Lider_2")], "Alterna o lider a cada ciclo (flip-flop)"),
+        Rung([Contact("XIC", "Pressostato_1")], [Coil("OTE", "PE1_Anterior")]),
+        Rung([Parallel([[Contact("XIC", "Motor_1")], [Contact("XIC", "Motor_2")]])],
+             [TimerBox("TON", "Partida_Escalonada", 2000)], "Reserva so parte 2 s depois do lider"),
+        motor("1", "Termico_2", "XIO", "Compressores: lider pelo PE1, reserva pelo PE2, assume se o outro desarmar"),
+        motor("2", "Termico_1", "XIC"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIO", "Tempo_Dreno.DN")],
+             [TimerBox("TON", "Intervalo_Dreno", 30000)], "Dreno do condensado: 1,5 s a cada 30 s"),
+        Rung([Contact("XIC", "Intervalo_Dreno.DN")],
+             [Coil("OTE", "Valvula_Dreno"), TimerBox("TON", "Tempo_Dreno", 1500)]),
+        Rung([Parallel([[Contact("XIO", "Termico_1")], [Contact("XIO", "Termico_2")]])],
+             [Coil("OTE", "Lampada_Falha")], "Sinaliza termico desarmado"),
+    ]
+    return p
+
+
+def batch_mixer() -> Project:
+    p = env_project("misturador", "Misturador de batelada", (
+        "Doses contadas pelos fluxometros (CTU 40 L de A, depois 30 L de B), agitacao e aquecimento ate "
+        "o termostato, 5 s de mistura na temperatura e descarga ate o nivel baixo mais 2 s. Repete "
+        "enquanto RUN estiver ligado."))
+    p.symbols += [Symbol("Litros_A", "C0", "40 L do produto A"), Symbol("Litros_B", "C1", "30 L do produto B"),
+                  Symbol("Temperatura_OK", "M0.0", "lote ja chegou a 40 degC"),
+                  Symbol("Descarregando", "M0.1", "descarga do lote"),
+                  Symbol("Tempo_Mistura", "T0", "5 s misturando na temperatura"),
+                  Symbol("Fim_Descarga", "T1", "2 s depois do nivel baixo")]
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Start")], [Contact("XIC", "Lampada_Run")]]), Contact("XIC", "Stop")],
+             [Coil("OTE", "Lampada_Run")], "Liga/desliga (selo)"),
+        Rung([Contact("XIC", "Fluxometro_1")], [CounterBox("CTU", "Litros_A", 40)], "Dosagem pelos fluxometros"),
+        Rung([Contact("XIC", "Fluxometro_2")], [CounterBox("CTU", "Litros_B", 30)]),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIO", "Litros_A.DN"), Contact("XIO", "Descarregando")],
+             [Coil("OTE", "Bomba_1")], "Produto A, depois produto B"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Litros_A.DN"), Contact("XIO", "Litros_B.DN"),
+              Contact("XIO", "Descarregando")], [Coil("OTE", "Bomba_2")]),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Litros_B.DN"), Contact("XIO", "Descarregando")],
+             [Coil("OTE", "Misturador")], "Agita depois da dosagem"),
+        Rung([Contact("XIC", "Misturador"), Contact("XIC", "Nivel_Baixo"), Contact("XIO", "Termostato")],
+             [Coil("OTE", "Aquecedor")], "Aquece so com agitacao e resistencia coberta"),
+        Rung([Contact("XIC", "Misturador"), Contact("XIC", "Termostato")], [Coil("OTL", "Temperatura_OK")]),
+        Rung([Contact("XIC", "Misturador"), Contact("XIC", "Temperatura_OK")],
+             [TimerBox("TON", "Tempo_Mistura", 5000)], "Mistura 5 s na temperatura"),
+        Rung([Contact("XIC", "Tempo_Mistura.DN")], [Coil("OTL", "Descarregando")], "Descarrega o lote"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Descarregando"), Contact("XIO", "Fim_Descarga.DN")],
+             [Coil("OTE", "Bomba_Saida")]),
+        Rung([Contact("XIC", "Descarregando"), Contact("XIO", "Nivel_Baixo")],
+             [TimerBox("TON", "Fim_Descarga", 2000)], "Abaixo do nivel baixo restam ~10 L: mais 2 s e o tanque esvazia"),
+        Rung([Contact("XIC", "Fim_Descarga.DN")],
+             [Coil("OTU", "Descarregando"), Coil("OTU", "Temperatura_OK"), ResetBox("Litros_A"),
+              ResetBox("Litros_B")], "Fim do lote: prepara o proximo"),
+        Rung([Contact("XIC", "Nivel_Alto")], [Coil("OTE", "Lampada_Cheio")], "Sinalizacao"),
+    ]
+    return p
+
+
 def main() -> int:
     prefix = sys.argv[1] if len(sys.argv) > 1 else ""
     targets = {"demo/demonstracao.ladproj": demo, "combinational/portas_logicas.ladproj": combinational,
                "timers/temporizadores.ladproj": timers, "counters/contadores.ladproj": counters,
                "hardware/teste_reles.ladproj": relay_chase, "hardware/espelho_entradas.ladproj": input_mirror,
                "ambientes/silo.ladproj": silo, "ambientes/semaforo.ladproj": traffic_light,
-               "ambientes/portao.ladproj": garage_door}
+               "ambientes/portao.ladproj": garage_door, "ambientes/elevador.ladproj": elevator,
+               "ambientes/garrafas.ladproj": bottle_line, "ambientes/compressores.ladproj": air_compressors,
+               "ambientes/misturador.ladproj": batch_mixer}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

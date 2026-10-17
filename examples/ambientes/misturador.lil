@@ -1,0 +1,93 @@
+; Misturador de batelada - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0xed7af0b7
+.timer T0 TON 5000
+.timer T1 TON 2000
+.counter C0 UP 40
+.counter C1 UP 30
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC Q0.5
+BND
+XIC I0.1
+OTE Q0.5
+EOR
+SOR ; rede 1
+XIC I0.5
+CTU C0
+EOR
+SOR ; rede 2
+XIC I0.6
+CTU C1
+EOR
+SOR ; rede 3
+XIC Q0.5
+XIO C0.DN
+XIO M0.1
+OTE Q0.0
+EOR
+SOR ; rede 4
+XIC Q0.5
+XIC C0.DN
+XIO C1.DN
+XIO M0.1
+OTE Q0.1
+EOR
+SOR ; rede 5
+XIC Q0.5
+XIC C1.DN
+XIO M0.1
+OTE Q0.2
+EOR
+SOR ; rede 6
+XIC Q0.2
+XIC I0.2
+XIO I0.4
+OTE Q0.4
+EOR
+SOR ; rede 7
+XIC Q0.2
+XIC I0.4
+OTL M0.0
+EOR
+SOR ; rede 8
+XIC Q0.2
+XIC M0.0
+TON T0
+EOR
+SOR ; rede 9
+XIC T0.DN
+OTL M0.1
+EOR
+SOR ; rede 10
+XIC Q0.5
+XIC M0.1
+XIO T1.DN
+OTE Q0.3
+EOR
+SOR ; rede 11
+XIC M0.1
+XIO I0.2
+TON T1
+EOR
+SOR ; rede 12
+XIC T1.DN
+BST
+OTU M0.1
+NXB
+OTU M0.0
+NXB
+RES C0
+NXB
+RES C1
+BND
+EOR
+SOR ; rede 13
+XIC I0.3
+OTE Q0.6
+EOR
