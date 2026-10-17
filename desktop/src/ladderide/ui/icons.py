@@ -84,8 +84,10 @@ def _draw(name: str, p: QPainter) -> None:
         p.setPen(Qt.NoPen); p.setBrush(BLUE)
         p.drawPolygon(QPolygonF([QPointF(4, 5), QPointF(13, 11), QPointF(4, 17)]))
         p.drawRoundedRect(QRectF(14.5, 5, 3, 12), 1, 1)
-    elif name == "reset":
-        _arrow_arc(p, QRectF(4, 4, 14, 14), 60, 280, INK)
+    elif name == "reset":                       # voltar ao inicio: barra + triangulo para a esquerda
+        p.setPen(Qt.NoPen); p.setBrush(INK)
+        p.drawRoundedRect(QRectF(4.5, 5, 3, 12), 1, 1)
+        p.drawPolygon(QPolygonF([QPointF(18, 5), QPointF(9, 11), QPointF(18, 17)]))
     elif name in ("zoom_in", "zoom_out"):
         p.setPen(QPen(INK, 1.8, Qt.SolidLine, Qt.RoundCap))
         p.drawEllipse(QRectF(3, 3, 12, 12))

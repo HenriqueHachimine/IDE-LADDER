@@ -18,15 +18,38 @@ O dispositivo virtual e os testes de equivalência precisam de `gcc` no PATH
 
 ## 2. Tela
 
+```
++------------+--------------------------------+---------------------------+
+| Instrucoes | DIAGRAMA LADDER                | Simulador | Dispositivo | |
+| (paleta)   |                                | Blocos de instrucao       |
+|            +--------------------------------+  (altura total)           |
+|            | Mensagens | Simbolos | Ambiente|                           |
++------------+--------------------------------+---------------------------+
+| EDICAO / SIMULACAO / ONLINE   compilacao   simulacao   ESP32: estado    |
++--------------------------------------------------------------------------+
+```
+
+- **Barras de ferramentas**, na ordem do trabalho: *Edição* (arquivo, desfazer,
+  nova rede, zoom), *Simulação* (compilar, executar... parar, ambiente) e
+  *Dispositivo* (verificar ESP32, transferir, blocos de instrução).
 - **Instruções** (esquerda): arraste para o diagrama ou clique para inserir
-  depois do elemento selecionado.
+  depois do elemento selecionado. Some sozinha durante a simulação e o
+  monitor online, porque nesses modos o programa não pode ser editado.
 - **Diagrama** (centro): redes numeradas entre os trilhos.
-- **Simulador / Dispositivo** (direita, abas).
-- **Mensagens / Variáveis** (embaixo).
+- **Direita** (abas): Simulador (entradas, saídas, temporizadores, monitor de
+  variáveis), Dispositivo e Blocos de instrução.
+- **Embaixo do diagrama** (abas): Mensagens, Símbolos e Ambiente. O ambiente
+  fica embaixo para a cena e o painel Simulador ficarem visíveis juntos.
+- **Barra de status:** o selo mostra o modo atual (EDIÇÃO, SIMULAÇÃO ou
+  ONLINE) e, à direita, o estado do ESP32.
+
+Os painéis podem ser arrastados, soltos como janelas ou fechados; a posição
+é lembrada. **Exibir → Painéis** reabre um painel fechado e **Exibir →
+Restaurar layout padrão** volta à organização original.
 
 **Tema:** em **Exibir → Tema**, escolha Claro, Escuro ou Seguir o Windows.
-O atalho **Ctrl+Shift+T** (botão de lua na barra) alterna entre claro e escuro.
-A escolha fica salva para as próximas aberturas.
+O atalho **Ctrl+Shift+T** alterna entre claro e escuro. A escolha fica salva
+para as próximas aberturas.
 
 ## 3. Editando
 
@@ -74,7 +97,7 @@ retenção ou, marcando "Botões pulsadores", momentâneos. O tempo é virtual
 
 ### Ambientes de simulação (Ctrl+E)
 
-Na aba **Ambiente**, escolha um processo animado: silo de envase, semáforo
+No painel **Ambiente** (embaixo do diagrama), escolha um processo animado: silo de envase, semáforo
 de cruzamento ou portão de garagem. O programa controla o processo: as saídas
 Q acionam motores, válvulas e lâmpadas, e os sensores do processo alimentam as
 entradas I. Clique nos botões desenhados no ambiente. **Criar símbolos no
@@ -111,11 +134,12 @@ do gcc (MinGW). No executável da IDE, essa VM já vem incluída.
 
 ## 7. Dispositivo
 
-1. Aba **Dispositivo** → Meio: Serial (escolha a COM) ou Dispositivo virtual → **Conectar**.
+1. Aba **Dispositivo** (direita) → Meio: Serial (escolha a COM) ou Dispositivo virtual → **Conectar**.
 2. **Transferir programa** (F8): compila, confirma se o CLP estiver em RUN,
    envia em blocos com CRC, o firmware valida e só então substitui o programa.
    Falhas preservam o programa anterior.
-3. **RUN / STOP / Limpar falha**.
+3. **RUN / STOP / Limpar falha** (também no menu **Dispositivo**, junto com
+   Verificar, Transferir e Monitor online).
 4. **Monitor online**: lê o dispositivo a cada 200 ms. O diagrama só é animado
    se o programa no dispositivo for igual ao projeto aberto (mesmo build_id).
    "Lógico" = resultado do programa; "Comandado" = enviado aos relés. A placa

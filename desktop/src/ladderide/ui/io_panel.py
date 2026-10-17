@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox, QHeaderView, QLabel, QPushButton,
+from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox, QHeaderView, QLabel, QPushButton, QSplitter,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.asm import format_operand, parse_operand
@@ -55,20 +55,27 @@ class IOPanel(QWidget):
             t.verticalHeader().hide()
             t.setEditTriggers(QTableWidget.NoEditTriggers)
             t.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-            t.setMinimumHeight(110)
+            t.setMinimumHeight(60)
             t.setAlternatingRowColors(True)
             t.setShowGrid(False)
         layout.addWidget(self.inputs_box)
         layout.addWidget(self.momentary)
         layout.addWidget(self.outputs_box)
-        title = QLabel("Temporizadores e contadores")
-        title.setObjectName("sectionTitle")
-        layout.addWidget(title)
-        layout.addWidget(self.elements, 1)
-        title = QLabel("Variaveis")
-        title.setObjectName("sectionTitle")
-        layout.addWidget(title)
-        layout.addWidget(self.variables, 1)
+        split = QSplitter(Qt.Vertical)      # o usuario ajusta a divisao entre as duas tabelas
+        split.setChildrenCollapsible(False)
+        for text, table in (("Temporizadores e contadores", self.elements), ("Monitor de variaveis", self.variables)):
+            box = QWidget()
+            box_l = QVBoxLayout(box)
+            box_l.setContentsMargins(0, 0, 0, 0)
+            box_l.setSpacing(2)
+            title = QLabel(text)
+            title.setObjectName("sectionTitle")
+            box_l.addWidget(title)
+            box_l.addWidget(table, 1)
+            split.addWidget(box)
+        split.setStretchFactor(0, 2)
+        split.setStretchFactor(1, 3)
+        layout.addWidget(split, 1)
         self.input_buttons: list[QPushButton] = []
         self.out_leds: list[Led] = []
         self.cmd_leds: list[Led] = []
@@ -96,7 +103,7 @@ class IOPanel(QWidget):
             name = project.symbol_for(addr)
             b = QPushButton(f"{addr}\n{name}" if name else addr)
             b.setCheckable(True)
-            b.setMinimumHeight(42)
+            b.setMinimumHeight(42 if self.editable else 28)
             b.pressed.connect(lambda k=k: self._pressed(k))
             b.released.connect(lambda k=k: self._released(k))
             b.toggled.connect(lambda v, k=k: self._toggled(k, v))

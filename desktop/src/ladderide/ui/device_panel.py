@@ -230,10 +230,11 @@ class DevicePanel(QWidget):
         self.io = IOPanel(show_commanded=True)
         self.io.set_inputs_editable(False)
         self.io.inputChanged.connect(self._sim_input)
-        note = QLabel("\"Comandado\" e o que o firmware enviou aos reles. A placa nao tem realimentacao: "
-                      "o estado fisico dos contatos NAO e medido.")
+        note = QLabel("Comandado = enviado aos reles (estado fisico nao medido).")
+        note.setToolTip("\"Comandado\" e o que o firmware enviou aos reles. A placa nao tem realimentacao: "
+                        "o estado fisico dos contatos NAO e medido.")
         note.setWordWrap(True)
-        note.setObjectName("warn")
+        note.setObjectName("muted")
         layout.addWidget(note)
         layout.addWidget(self.io, 1)
 

@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QElapsedTimer, QSize, Qt, QTimer
+from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHBoxLayout, QInputDialog, QLabel,
-                               QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QTableWidget,
-                               QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget, QHeaderView)
+                               QListWidget, QListWidgetItem, QMainWindow, QScrollArea, QMessageBox, QPushButton, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView)
 
 from .. import __version__
 from ..compiler import ImportError_, compile_project, import_image, import_lil
@@ -35,8 +35,11 @@ FILE_FILTER = "Projeto LADDER (*.ladproj)"
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, project: Project | None = None, path: str | None = None):
+    LAYOUT_VERSION = 2          # mude ao reorganizar os paineis: invalida layouts salvos antigos
+
+    def __init__(self, project: Project | None = None, path: str | None = None, persist_layout: bool = False):
         super().__init__()
+        self.persist_layout = persist_layout
         self.project = project or Project()
         self.path: str | None = path
         self.dirty = False
@@ -44,7 +47,8 @@ class MainWindow(QMainWindow):
         self.sim: Simulator | None = None
         self.undo_stack: list[dict] = []
         self.redo_stack: list[dict] = []
-        self.resize(1400, 860)
+        screen = self.screen().availableGeometry() if self.screen() else None
+        self.resize(min(1400, screen.width()) if screen else 1400, min(860, screen.height()) if screen else 860)
 
         self.view = LadderView()
         self.setCentralWidget(self.view)
@@ -56,10 +60,17 @@ class MainWindow(QMainWindow):
         self.view.editRequested.connect(self.edit_element)
         self.view.selectionChangedTo.connect(lambda _: self._update_actions())
 
+        self.status_mode = QLabel()
+        self.status_mode.setObjectName("modeBadge")
         self.status_compile = QLabel()
         self.status_sim = QLabel()
+        self.status_device = QLabel("ESP32: desconectado")
+        self.statusBar().addWidget(self.status_mode)
         self.statusBar().addPermanentWidget(self.status_compile)
         self.statusBar().addPermanentWidget(self.status_sim)
+        self.statusBar().addPermanentWidget(self.status_device)
+        self._was_editing = True
+        self._palette_was_visible = True
 
         self.clock = QElapsedTimer()
         self.timer = QTimer(self)
@@ -75,6 +86,10 @@ class MainWindow(QMainWindow):
             QGuiApplication.styleHints().colorSchemeChanged.connect(self.on_system_scheme_changed)
         except AttributeError:      # Qt < 6.5: sem deteccao do tema do sistema
             pass
+        self._sync_device_status()
+        self._default_layout = self.saveState(self.LAYOUT_VERSION)
+        if persist_layout:
+            self._restore_layout()
         self.refresh()
 
     # ================================================================ acoes
@@ -123,6 +138,15 @@ class MainWindow(QMainWindow):
         A("environment", "Ambiente de simulacao", self.show_environment, "Ctrl+E",
           "Processos animados (silo, semaforo, portao...) controlados pelo programa")
         A("theme_toggle", "Alternar tema claro/escuro", self.toggle_theme, "Ctrl+Shift+T")
+        A("dev_run", "RUN (executar no ESP32)", lambda: self.device_panel.run_btn.click(), None,
+          "Coloca o dispositivo em RUN")
+        A("dev_stop", "STOP (parar o ESP32)", lambda: self.device_panel.stop_btn.click(), None,
+          "Coloca o dispositivo em STOP (saidas no estado seguro)")
+        A("dev_monitor", "Monitor online", lambda on: self.device_panel.monitor.setChecked(on), None,
+          "Anima o diagrama com o estado lido do dispositivo")
+        self.actions_["dev_monitor"].setCheckable(True)
+        A("layout_reset", "Restaurar layout padrao", self.reset_layout, None,
+          "Volta os paineis para a posicao original")
         A("about", "Sobre", self.about)
         A("help", "Referencia das instrucoes", self.instruction_help, "F1")
         for key, icon in (("new", "new"), ("open", "open"), ("save", "save"), ("undo", "undo"), ("redo", "redo"),
@@ -162,7 +186,6 @@ class MainWindow(QMainWindow):
         m.addAction(a["project"])
         m = mb.addMenu("&Programa")
         m.addAction(a["compile"])
-        m.addAction(a["verify"])
         m.addAction(a["il_blocks"])
         m = mb.addMenu("&Simulacao")
         for k in ("sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop"):
@@ -170,7 +193,9 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction(a["environment"])
         self.device_menu = mb.addMenu("&Dispositivo")
-        self.device_menu.addAction(a["device_transfer"])
+        for k in ("verify", "device_transfer", None, "dev_run", "dev_stop", "dev_monitor"):
+            self.device_menu.addSeparator() if k is None else self.device_menu.addAction(a[k])
+        self.device_menu.addSeparator()
         self.device_menu.addAction(self.device_dock.toggleViewAction())
         m = mb.addMenu("E&xibir")
         for k in ("zoom_in", "zoom_out", "zoom_reset"):
@@ -189,34 +214,51 @@ class MainWindow(QMainWindow):
         self.theme_menu.addSeparator()
         self.theme_menu.addAction(a["theme_toggle"])
         m.addSeparator()
-        for dock in (self.palette_dock, self.sim_dock, self.env_dock, self.il_dock, self.bottom_dock):
-            m.addAction(dock.toggleViewAction())
+        panels = m.addMenu("Paineis")
+        for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.env_dock,
+                     self.msgs_dock, self.symbols_dock):
+            panels.addAction(dock.toggleViewAction())
+        m.addAction(a["layout_reset"])
         m = mb.addMenu("Aj&uda")
         m.addAction(a["help"])
         m.addAction(a["about"])
 
-        tb = self.addToolBar("Principal")
-        tb.setObjectName("main_toolbar")
-        tb.setMovable(False)
-        tb.setIconSize(QSize(20, 20))
-        tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        for k in ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "compile", "verify",
-                  "il_blocks", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
-                  "environment", None, "device_transfer", None, "zoom_in", "zoom_out", None, "theme_toggle"):
-            tb.addSeparator() if k is None else tb.addAction(a[k])
-        for k in ("new", "undo", "redo", "zoom_in", "zoom_out", "sim_reset", "sim_pause", "sim_scan", "sim_step",
-                  "rung_add", "theme_toggle"):
-            tb.widgetForAction(a[k]).setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.toolbar = tb
+        # Tres barras na ordem do fluxo de trabalho: editar -> compilar/simular -> dispositivo.
+        # Texto so nas acoes principais; as demais mostram icone e dica com o atalho.
+        groups = {
+            "Edicao": ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "zoom_in", "zoom_out"),
+            "Simulacao": ("compile", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
+                          None, "environment"),
+            "Dispositivo": ("verify", "device_transfer", None, "il_blocks"),
+        }
+        with_text = {"compile", "sim_run", "sim_stop", "environment", "device_transfer"}
+        self.toolbars = []
+        for title, keys in groups.items():
+            tb = self.addToolBar(title)
+            tb.setObjectName(f"toolbar_{title.lower()}")
+            tb.setMovable(False)
+            tb.setIconSize(QSize(20, 20))
+            for k in keys:
+                if k is None:
+                    tb.addSeparator()
+                    continue
+                tb.addAction(a[k])
+                tb.widgetForAction(a[k]).setToolButtonStyle(
+                    Qt.ToolButtonTextBesideIcon if k in with_text else Qt.ToolButtonIconOnly)
+            self.toolbars.append(tb)
+        self.toolbar = self.toolbars[0]
 
     def _create_docks(self) -> None:
+        # colunas laterais com altura total; o painel de baixo fica so sob o diagrama
+        self.setCorner(Qt.BottomLeftCorner, Qt.LeftDockWidgetArea)
+        self.setCorner(Qt.BottomRightCorner, Qt.RightDockWidgetArea)
         self.palette = Palette()
         self.palette.toolClicked.connect(self.tool_clicked)
-        self.palette_dock = self._dock("Instrucoes", self.palette, Qt.LeftDockWidgetArea)
+        self.palette_dock = self._dock("Instrucoes", self.palette, Qt.LeftDockWidgetArea, "dock_palette")
 
         self.sim_panel = SimPanel(self.actions_)
         self.sim_panel.io.inputChanged.connect(self.on_input)
-        self.sim_dock = self._dock("Simulador", self.sim_panel, Qt.RightDockWidgetArea)
+        self.sim_dock = self._dock("Simulador", self.sim_panel, Qt.RightDockWidgetArea, "dock_sim", scroll=True)
 
         self.messages = QListWidget()
         self.messages.setAlternatingRowColors(True)
@@ -239,27 +281,29 @@ class MainWindow(QMainWindow):
         row.addStretch(1)
         lay.addLayout(row)
         lay.addWidget(self.symbols)
-        self.bottom_tabs = QTabWidget()
-        self.bottom_tabs.addTab(self.messages, "Mensagens")
-        self.bottom_tabs.addTab(sym_box, "Variaveis (simbolos)")
-        self.bottom_dock = self._dock("Projeto", self.bottom_tabs, Qt.BottomDockWidgetArea)
+        self.msgs_dock = self._dock("Mensagens", self.messages, Qt.BottomDockWidgetArea, "dock_msgs")
+        self.symbols_dock = self._dock("Simbolos", sym_box, Qt.BottomDockWidgetArea, "dock_symbols")
+        self.tabifyDockWidget(self.msgs_dock, self.symbols_dock)
 
         self.session = DeviceSession(self)
         self.device_panel = DevicePanel(self.session)
-        self.device_dock = self._dock("Dispositivo", self.device_panel, Qt.RightDockWidgetArea)
+        self.device_dock = self._dock("Dispositivo", self.device_panel, Qt.RightDockWidgetArea, "dock_device",
+                                      scroll=True)
         self.tabifyDockWidget(self.sim_dock, self.device_dock)
 
+        self.il_panel = ILPanel()
+        self.il_panel.elementActivated.connect(self.view.select)
+        self.il_dock = self._dock("Blocos de instrucao", self.il_panel, Qt.RightDockWidgetArea, "dock_il")
+        self.tabifyDockWidget(self.device_dock, self.il_dock)
+
+        # o ambiente fica sob o diagrama: cena larga e Simulador visivel ao mesmo tempo
         self.env_panel = EnvironmentPanel()
         self.env_panel.environmentChanged.connect(self.on_environment_changed)
         self.env_panel.symbolsRequested.connect(self.add_environment_symbols)
         self.env_panel.exampleRequested.connect(self.open_example)
-        self.env_dock = self._dock("Ambiente", self.env_panel, Qt.RightDockWidgetArea)
-        self.tabifyDockWidget(self.device_dock, self.env_dock)
-
-        self.il_panel = ILPanel()
-        self.il_panel.elementActivated.connect(self.view.select)
-        self.il_dock = self._dock("Blocos de instrucao", self.il_panel, Qt.RightDockWidgetArea)
-        self.tabifyDockWidget(self.env_dock, self.il_dock)
+        self.env_dock = self._dock("Ambiente", self.env_panel, Qt.BottomDockWidgetArea, "dock_env")
+        self.tabifyDockWidget(self.symbols_dock, self.env_dock)
+        self.msgs_dock.raise_()
         self.il_dock.visibilityChanged.connect(lambda visible: visible and self._refresh_il())
         self.view.selectionChangedTo.connect(self.il_panel.highlight)
         self.sim_dock.raise_()
@@ -273,17 +317,72 @@ class MainWindow(QMainWindow):
         self.monitoring = False
         self.last_snapshot = None
         self.progress_dialog = None
-        self.resizeDocks([self.palette_dock, self.sim_dock], [190, 470], Qt.Horizontal)
-        self.resizeDocks([self.bottom_dock], [120], Qt.Vertical)
+        self._sized = False
+        self._apply_default_sizes()
 
-    def _dock(self, title: str, widget, area) -> QDockWidget:
+    def _apply_default_sizes(self) -> None:
+        """Larguras/alturas padrao dos paineis (proporcionais a janela)."""
+        self.resizeDocks([self.palette_dock, self.sim_dock], [200, max(400, int(0.30 * self.width()))],
+                         Qt.Horizontal)
+        self.resizeDocks([self.msgs_dock], [max(120, int(0.20 * self.height()))], Qt.Vertical)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._sized:                 # tamanhos so valem depois que a janela tem geometria real
+            self._sized = True
+            if not (self.persist_layout and self._settings().value("ui/state") is not None):
+                QTimer.singleShot(0, self._initial_sizes)
+
+    def _initial_sizes(self) -> None:
+        self._apply_default_sizes()
+        self._default_layout = self.saveState(self.LAYOUT_VERSION)
+
+    def _dock(self, title: str, widget, area, name: str, scroll: bool = False) -> QDockWidget:
         dock = QDockWidget(title, self)
-        dock.setObjectName(title)
+        dock.setObjectName(name)            # nome estavel: usado para salvar o layout
         dock.setFeatures(QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
                          | QDockWidget.DockWidgetClosable)
-        dock.setWidget(widget)
+        if scroll:                          # paineis longos rolam em vez de exigir altura da janela
+            area_w = QScrollArea()
+            area_w.setWidget(widget)
+            area_w.setWidgetResizable(True)
+            area_w.setFrameShape(QScrollArea.NoFrame)
+            area_w.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            dock.setWidget(area_w)
+        else:
+            dock.setWidget(widget)
         self.addDockWidget(area, dock)
         return dock
+
+    # ================================================================ layout
+    def _settings(self) -> QSettings:
+        return QSettings("CLP-ESP32", "LadderIDE")
+
+    def _restore_layout(self) -> None:
+        s = self._settings()
+        geometry, state = s.value("ui/geometry"), s.value("ui/state")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        if state is not None:
+            self.restoreState(state, self.LAYOUT_VERSION)
+
+    def _save_layout(self) -> None:
+        s = self._settings()
+        s.setValue("ui/geometry", self.saveGeometry())
+        s.setValue("ui/state", self.saveState(self.LAYOUT_VERSION))
+
+    def reset_layout(self) -> None:
+        for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.env_dock,
+                     self.msgs_dock, self.symbols_dock):
+            dock.setFloating(False)
+            dock.show()
+        self.restoreState(self._default_layout, self.LAYOUT_VERSION)
+        self._apply_default_sizes()
+        self._palette_was_visible = True
+        self._was_editing = not (self.sim is not None and self.sim.active)
+        self.palette_dock.setVisible(self._was_editing and not self.monitoring)
+        self.sim_dock.raise_()
+        self.msgs_dock.raise_()
 
     # ============================================================ estado geral
     def refresh(self) -> None:
@@ -317,6 +416,7 @@ class MainWindow(QMainWindow):
         a["sim_stop"].setEnabled(sim_active)
         a["sim_reset"].setEnabled(sim_active)
         self.view.readonly = sim_active
+        self._apply_work_mode(editing and not getattr(self, "monitoring", False))
         self.palette.set_enabled(editing)
         self.symbols.setEnabled(editing)
         for b in self.symbol_buttons:
@@ -324,7 +424,7 @@ class MainWindow(QMainWindow):
         if self.sim is not None:
             self.status_sim.setText(f"Simulacao: {self.sim.state.value}")
         else:
-            self.status_sim.setText("Modo edicao")
+            self.status_sim.setText("")
         if self.result is None:
             self.status_compile.setText("Nao compilado")
         elif self.result.ok:
@@ -332,6 +432,45 @@ class MainWindow(QMainWindow):
                                         f"{len(self.result.image)} bytes, id 0x{self.result.build_id:08x}")
         else:
             self.status_compile.setText(f"{len(self.result.errors)} erro(s) de compilacao")
+
+    MODE_STYLE = {"EDICAO": ("#e2e8f0", "#334155"), "SIMULACAO": ("#16a34a", "#ffffff"),
+                  "ONLINE": ("#ea580c", "#ffffff")}
+
+    def _apply_work_mode(self, editing: bool) -> None:
+        """Paleta so aparece na edicao; selo de modo na barra de status."""
+        if editing != self._was_editing:
+            if editing:
+                self.palette_dock.setVisible(self._palette_was_visible)
+            else:
+                self._palette_was_visible = self.palette_dock.isVisible()
+                self.palette_dock.hide()
+            self._was_editing = editing
+        if getattr(self, "monitoring", False) and self.device_panel.connected:
+            mode = "ONLINE"
+        elif self.sim is not None and self.sim.active:
+            mode = "SIMULACAO"
+        else:
+            mode = "EDICAO"
+        bg, fg = self.MODE_STYLE[mode]
+        self.status_mode.setText({"EDICAO": "EDICAO", "SIMULACAO": "SIMULACAO", "ONLINE": "ONLINE (ESP32)"}[mode])
+        self.status_mode.setStyleSheet(f"background:{bg}; color:{fg}; border-radius:8px; padding:1px 10px; "
+                                       "font-weight:600;")
+
+    def _sync_device_status(self) -> None:
+        panel = self.device_panel
+        a = self.actions_
+        a["dev_run"].setEnabled(panel.run_btn.isEnabled())
+        a["dev_stop"].setEnabled(panel.stop_btn.isEnabled())
+        a["dev_monitor"].setEnabled(panel.connected)
+        if a["dev_monitor"].isChecked() != panel.monitor.isChecked():
+            a["dev_monitor"].setChecked(panel.monitor.isChecked())
+        if not panel.connected:
+            text = "ESP32: reconectando..." if self.session.auto_reconnect else "ESP32: desconectado"
+        else:
+            where = "virtual" if self.session.is_virtual else (panel.port.currentText() or "serial")
+            state = panel.last_status.state.name if panel.last_status else "..."
+            text = f"ESP32: {where} - {state}"
+        self.status_device.setText(text)
 
     def _monitor_source(self) -> MonitorSource | None:
         snap, r = self.last_snapshot, self.result
@@ -566,7 +705,8 @@ class MainWindow(QMainWindow):
         while f"Var{k}" in used:
             k += 1
         self.apply_edit(lambda: self.project.symbols.append(Symbol(f"Var{k}", "M0.0")))
-        self.bottom_tabs.setCurrentIndex(1)
+        self.symbols_dock.show()
+        self.symbols_dock.raise_()
 
     def symbol_remove(self) -> None:
         row = self.symbols.currentRow()
@@ -587,7 +727,9 @@ class MainWindow(QMainWindow):
                 f"Compilacao concluida: {len(self.result.program.code)} instrucoes, {len(self.result.image)} bytes, "
                 f"{len(self.result.warnings)} aviso(s). Compilador {COMPILER_VERSION}, formato "
                 f"{TARGET_FORMAT}, id 0x{self.result.build_id:08x}."))
-        self.bottom_tabs.setCurrentIndex(0)
+        if self.result.diagnostics:          # nao esconde o Ambiente quando compila sem avisos
+            self.msgs_dock.show()
+            self.msgs_dock.raise_()
         self.view.set_errors({d.element_id for d in self.result.errors if d.element_id})
         self.device_panel.expected_build_id = self.result.build_id if self.result.ok else None
         if self.result.ok and self._device_io_build != self.result.build_id:
@@ -628,6 +770,8 @@ class MainWindow(QMainWindow):
     def sim_run(self) -> None:
         sim = self._ensure_sim()
         if sim:
+            if not self.device_dock.visibleRegion().isEmpty() or not self.il_dock.visibleRegion().isEmpty():
+                self.sim_dock.raise_()       # entradas/saidas a vista ao iniciar a simulacao
             sim.start()
             self.clock.restart()
             self._after_sim_command()
@@ -728,6 +872,14 @@ class MainWindow(QMainWindow):
     def show_environment(self) -> None:
         self.env_dock.show()
         self.env_dock.raise_()
+        self._grow_environment()
+
+    def _grow_environment(self) -> None:
+        """Com um ambiente em uso, o painel de baixo cresce para a cena ficar legivel."""
+        if self.env_dock.isVisible() and not self.env_dock.isFloating() and self.env_panel.env is not None:
+            target = int(0.42 * self.height())
+            if self.env_dock.height() < target:
+                self.resizeDocks([self.env_dock], [target], Qt.Vertical)
 
     def on_environment_changed(self, env_id: str) -> None:
         if self.project.environment != env_id:
@@ -737,6 +889,7 @@ class MainWindow(QMainWindow):
         if self.sim is not None:
             self.sim.attach_plant(self.env_panel.plant)
         self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
+        self._grow_environment()
         self._update_live()
 
     def add_environment_symbols(self) -> None:
@@ -778,6 +931,7 @@ class MainWindow(QMainWindow):
     def device_tick(self) -> None:
         """Polling: 200 ms com monitor ligado, 1 s sem monitor, reconexao a cada 2 s."""
         self.device_ticks += 1
+        self._sync_device_status()
         if self.device_panel.connected:
             if self.monitoring or self.device_ticks % 5 == 0:
                 self.session.poll()
@@ -788,6 +942,8 @@ class MainWindow(QMainWindow):
         self.monitoring = on
         if on and (self.result is None or not self.result.ok):
             self.compile()
+        self._update_actions()
+        self._sync_device_status()
         self._update_live()
 
     def on_snapshot(self, snap) -> None:
@@ -884,7 +1040,9 @@ class MainWindow(QMainWindow):
         self.env_panel.select(project.environment)
         self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
         if project.environment and self.env_panel.env is not None:
+            self.env_dock.show()
             self.env_dock.raise_()
+            QTimer.singleShot(0, self._grow_environment)
         self.refresh()
 
     def file_new(self) -> None:
@@ -968,6 +1126,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         if self.maybe_save():
+            if self.persist_layout:
+                self._save_layout()
             self.session.close()
             event.accept()
         else:

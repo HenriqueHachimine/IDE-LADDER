@@ -20,6 +20,15 @@ ensaios na placa real.
 - Tema escuro (Exibir → Tema: claro, escuro ou seguir o Windows; Ctrl+Shift+T),
   aplicado sem reiniciar e lembrado entre sessões.
 
+### Alterado
+- Disposição da tela revisada com um agente de UX: a janela cabe em 1366×768
+  (antes exigia 1402 px de altura); colunas laterais com altura total;
+  Ambiente embaixo do diagrama (cena e Simulador visíveis juntos); três barras
+  de ferramentas pelo fluxo de trabalho; paleta oculta na simulação; menu
+  Dispositivo com Verificar, Transferir, RUN, STOP e Monitor online; selo de
+  modo e estado do ESP32 na barra de status; layout salvo, com "Restaurar
+  layout padrão".
+
 ### Corrigido
 - Travamento ao arrastar um elemento para outra rede (a edição era aplicada
   dentro do evento de soltar, durante o laço de arrastar do Windows).

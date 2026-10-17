@@ -23,7 +23,6 @@ GROUPS = [
     ("Contadores", [("CTU", "CTU", "Contador crescente (borda de subida)"),
                     ("CTD", "CTD", "Contador decrescente (borda de subida)"),
                     ("RES", "RES", "Reset de temporizador ou contador")]),
-    ("Rede", [("RUNG", "Nova rede", "Adiciona uma nova rede ao final")]),
 ]
 
 
@@ -34,10 +33,10 @@ class ToolButton(QToolButton):
         self.setText(text)
         self.setToolTip(tip + "\n\nArraste para o diagrama ou clique para inserir apos a selecao.")
         self.setIcon(tool_icon(tool))
-        self.setIconSize(QSize(56, 34))
+        self.setIconSize(QSize(44, 27))
         self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
         self.setAutoRaise(True)
-        self.setMinimumWidth(72)
+        self.setMinimumWidth(56)
         self._press = None
 
     def mousePressEvent(self, event) -> None:
@@ -79,10 +78,12 @@ class Palette(QScrollArea):
             for k, (tool, text, tip) in enumerate(tools):
                 b = ToolButton(tool, text, tip)
                 b.clicked.connect(lambda _=False, t=tool: self.toolClicked.emit(t))
-                grid.addWidget(b, k // 2, k % 2)
+                grid.addWidget(b, k // 3, k % 3)
                 self.buttons.append(b)
             layout.addWidget(box)
-        hint = QLabel("Arraste para o diagrama ou clique para\ninserir apos o elemento selecionado.")
+        hint = QLabel("Arraste para o diagrama ou clique para inserir apos o elemento selecionado. "
+                      "Nova rede: Ctrl+R.")
+        hint.setWordWrap(True)
         hint.setObjectName("hint")
         layout.addWidget(hint)
         layout.addStretch(1)

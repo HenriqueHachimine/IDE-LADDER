@@ -108,3 +108,26 @@ def test_dark_theme_switches_at_runtime(window, monkeypatch):
         assert not theme.is_dark() and symbols.LABEL.name() == light_label
     finally:
         theme.apply_theme(app, "light")
+
+
+def test_layout_fits_laptop_screen_and_follows_work_mode(window):
+    app, w = window
+    assert w.minimumSizeHint().height() <= 700                  # cabe em 1366x768
+    buttons = [tb.widgetForAction(act) for tb in w.toolbars for act in tb.actions() if not act.isSeparator()]
+    texts = [b for b in buttons if b.toolButtonStyle() == mw.Qt.ToolButtonTextBesideIcon]
+    assert len(texts) == 5                                      # demais acoes: so icone (cabe em 1366 px)
+    assert w.env_dock.objectName() == "dock_env" and w.dockWidgetArea(w.env_dock) == mw.Qt.BottomDockWidgetArea
+    w.file_open(str(PORTAO))
+    assert w.status_mode.text() == "EDICAO" and w.palette_dock.isVisible()
+    w.sim_run()
+    assert w.status_mode.text() == "SIMULACAO" and not w.palette_dock.isVisible()
+    w.sim_stop()
+    w._update_actions()
+    assert w.status_mode.text() == "EDICAO" and w.palette_dock.isVisible()
+    menu = [a.text() for a in w.device_menu.actions()]
+    assert "Verificar para ESP32" in menu and "Monitor online" in menu
+    assert not w.actions_["dev_run"].isEnabled()                 # sem dispositivo conectado
+    assert w.status_device.text() == "ESP32: desconectado"
+    w.palette_dock.hide()
+    w.reset_layout()
+    assert w.palette_dock.isVisible()

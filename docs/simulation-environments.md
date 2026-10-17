@@ -19,7 +19,7 @@ nos dois sentidos, portão descendo sobre o veículo ou motor forçando o fim de
 
 ## Uso na IDE
 
-1. Na aba **Ambiente** (Ctrl+E), escolha o processo. A escolha fica salva no projeto.
+1. No painel **Ambiente** (Ctrl+E, embaixo do diagrama), escolha o processo. A escolha fica salva no projeto.
 2. **Criar símbolos no projeto** adiciona os nomes dos pontos de E/S (Start, Valvula...).
 3. **Abrir programa exemplo** carrega uma solução pronta.
 4. Simule (F5) e clique nos botões desenhados no ambiente. As entradas que pertencem

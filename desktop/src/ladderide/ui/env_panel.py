@@ -24,7 +24,7 @@ class EnvironmentView(QWidget):
         self.env: Environment | None = None
         self.pressed_key: str | None = None
         self.setMouseTracking(True)
-        self.setMinimumSize(320, 210)
+        self.setMinimumSize(220, 120)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.on_change = lambda: None
 
@@ -107,7 +107,7 @@ class EnvironmentPanel(QWidget):
         self.plant: EnvironmentPlant | None = None
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        row = QHBoxLayout()
+        row = QHBoxLayout()                 # escolha e acoes numa linha so: mais altura para a cena
         row.addWidget(QLabel("Ambiente:"))
         self.combo = QComboBox()
         self.combo.addItem("(nenhum - usar apenas o painel de E/S)", "")
@@ -116,26 +116,31 @@ class EnvironmentPanel(QWidget):
         self.combo.currentIndexChanged.connect(self._combo_changed)
         row.addWidget(self.combo, 1)
         layout.addLayout(row)
-        self.description = QLabel()
+        self._row = row
+        self.description = QLabel()         # fica na coluna lateral, ao lado da cena
         self.description.setWordWrap(True)
         self.description.setObjectName("muted")
-        layout.addWidget(self.description)
-        buttons = QHBoxLayout()
-        self.reset_btn = QPushButton("Reiniciar processo")
-        self.symbols_btn = QPushButton("Criar simbolos no projeto")
-        self.example_btn = QPushButton("Abrir programa exemplo")
+        self.reset_btn = QPushButton("Reiniciar")
+        self.symbols_btn = QPushButton("Criar simbolos")
+        self.example_btn = QPushButton("Abrir exemplo")
+        self.reset_btn.setToolTip("Volta o processo ao estado inicial")
+        self.symbols_btn.setToolTip("Adiciona ao projeto os nomes dos pontos de E/S do ambiente")
+        self.example_btn.setToolTip("Abre um programa LADDER pronto para este ambiente")
         self.reset_btn.clicked.connect(self.reset_process)
         self.symbols_btn.clicked.connect(self.symbolsRequested)
         self.example_btn.clicked.connect(lambda: self.env and self.exampleRequested.emit(self.env.example))
         for b in (self.reset_btn, self.symbols_btn, self.example_btn):
-            buttons.addWidget(b)
-        layout.addLayout(buttons)
+            self._row.addWidget(b)
         self.view = EnvironmentView()
         self.view.on_change = self._refresh_table
-        layout.addWidget(self.view, 1)
+        body = QHBoxLayout()                # cena (paisagem) ao lado da tabela de E/S
+        body.addWidget(self.view, 3)
+        side = QVBoxLayout()
+        side.addWidget(self.description)
         self.stats = QLabel()
         self.stats.setObjectName("stats")
-        layout.addWidget(self.stats)
+        self.stats.setWordWrap(True)
+        side.addWidget(self.stats)
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Endereco", "Nome", "Tipo", "Valor"])
         self.table.verticalHeader().hide()
@@ -144,8 +149,12 @@ class EnvironmentPanel(QWidget):
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table.setMaximumHeight(190)
-        layout.addWidget(self.table)
+        self.table.setMinimumWidth(200)
+        self.table.setMinimumHeight(60)
+        self.table.setMaximumWidth(340)
+        side.addWidget(self.table, 1)
+        body.addLayout(side, 2)
+        layout.addLayout(body, 1)
         if load_errors:
             warn = QLabel("Ambientes com erro: " + "; ".join(load_errors))
             warn.setWordWrap(True)
@@ -205,7 +214,7 @@ class EnvironmentPanel(QWidget):
         if self.plant is not None and outputs is not None:
             self.plant.show_outputs(outputs)
         if self.env is not None:
-            self.stats.setText("   |   ".join(self.env.stats()))
+            self.stats.setText("\n".join(self.env.stats()))
         else:
             self.stats.setText("")
         self._refresh_table()
