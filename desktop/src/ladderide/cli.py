@@ -72,6 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     m = sub.add_parser("monitor")
     m.add_argument("--interval", type=float, default=0.2)
     m.add_argument("--count", type=int, default=0)
+    v = sub.add_parser("verify", help="verifica o programa para o ESP32 (VM C do firmware, limites da placa)")
+    v.add_argument("project")
+    v.add_argument("--scans", type=int, default=400, help="varreduras comparadas simulador x firmware")
+    il = sub.add_parser("il", help="converte o diagrama em blocos de instrucao (lista IL por rede)")
+    il.add_argument("project")
+    il.add_argument("-o", "--output")
     e = sub.add_parser("equivalence")
     e.add_argument("--vectors", default=str(ROOT / "shared" / "test-vectors" / "scan"))
     args = ap.parse_args(argv)
@@ -87,6 +93,19 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.output).write_bytes(r.image)
         if args.lil:
             Path(args.lil).write_text(r.lil, encoding="utf-8")
+        return 0
+    if args.cmd in ("verify", "il"):
+        from .verify import il_blocks, il_text, verify_for_esp32
+        project, r = _compile(args.project)
+        if args.cmd == "verify":
+            report = verify_for_esp32(project, r, scans=args.scans)
+            print(report.as_text())
+            return 0 if report.ok else 1
+        text = il_text(il_blocks(project, r), f"{project.name} (id 0x{r.build_id:08x})")
+        if args.output:
+            Path(args.output).write_text(text, encoding="utf-8")
+        else:
+            print(text, end="")
         return 0
 
     try:

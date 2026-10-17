@@ -68,7 +68,44 @@ valor do operando. Caixas mostram PRE, ACC e bits. Entradas: botões de
 retenção ou, marcando "Botões pulsadores", momentâneos. O tempo é virtual
 (cada varredura avança o período configurado em Propriedades do projeto).
 
-## 6. Dispositivo
+### Ambientes de simulação (Ctrl+E)
+
+Na aba **Ambiente**, escolha um processo animado: silo de envase, semáforo
+de cruzamento ou portão de garagem. O programa controla o processo: as saídas
+Q acionam motores, válvulas e lâmpadas, e os sensores do processo alimentam as
+entradas I. Clique nos botões desenhados no ambiente. **Criar símbolos no
+projeto** adiciona os nomes dos pontos de E/S, e **Abrir programa exemplo**
+carrega uma solução. Erros de lógica aparecem como alarmes vermelhos sobre o
+desenho. Para criar novos ambientes, veja `docs/simulation-environments.md`.
+
+### Blocos de instrução (F12)
+
+Mostra o diagrama convertido em lista de instruções (IL), um bloco por rede,
+na ordem exata em que o ESP32 executa: mnemônico, operando, símbolo e o que
+a instrução faz. Clicar numa linha seleciona o elemento no diagrama e vice-versa.
+Na simulação, as linhas ficam verdes quando o resultado lógico é 1, e no passo
+a passo (F11) a próxima instrução fica destacada. **Copiar texto** e
+**Salvar .il** exportam a lista.
+
+## 6. Verificar para o ESP32 (F9)
+
+Antes de transferir, **Programa → Verificar para ESP32** gera um relatório:
+
+| Verificação | O que confere |
+|---|---|
+| Compilação e imagem LDRB | erros, CRC e formato |
+| Validação pelo código C do firmware | o mesmo `lv_image_validate` do ESP32, compilado no PC, aceita a imagem |
+| Equivalência simulador × firmware | 400 varreduras com entradas variadas: estado completo idêntico nas duas VMs |
+| Entradas e saídas da placa | endereços dentro das 8 entradas e 8 relés (`firmware/src/board_config.h`) |
+| Memória e limites | bytes usados, instruções, temporizadores, contadores, aninhamento |
+| Temporização | período de varredura do projeto × firmware; presets curtos demais |
+| Dispositivo conectado | formato do firmware e **tempo de varredura medido** comparado ao watchdog |
+
+Sem placa conectada, o tempo de varredura real aparece como "não verificado":
+a IDE não estima esse valor. As verificações que dependem da VM C precisam
+do gcc (MinGW). No executável da IDE, essa VM já vem incluída.
+
+## 7. Dispositivo
 
 1. Aba **Dispositivo** → Meio: Serial (escolha a COM) ou Dispositivo virtual → **Conectar**.
 2. **Transferir programa** (F8): compila, confirma se o CLP estiver em RUN,
@@ -83,7 +120,7 @@ retenção ou, marcando "Botões pulsadores", momentâneos. O tempo é virtual
 Em caso de perda de comunicação, a IDE mostra o aviso e tenta reconectar a
 cada 2 s. O CLP continua executando sem a IDE.
 
-## 7. Linha de comando
+## 8. Linha de comando
 
 ```powershell
 python -m ladderide.cli ports
@@ -93,9 +130,11 @@ python -m ladderide.cli --port COM5 run
 python -m ladderide.cli --port COM5 monitor --count 20
 python -m ladderide.cli --port COM5 equivalence
 python -m ladderide.cli --virtual status          # dispositivo virtual
+python -m ladderide.cli verify projeto.ladproj      # verificacao para o ESP32 (codigo de saida 1 se houver erro)
+python -m ladderide.cli il projeto.ladproj -o projeto.il   # blocos de instrucao
 ```
 
-## 8. Segurança
+## 9. Segurança
 
 Este equipamento não é um CLP de segurança. Defina o estado seguro das saídas
 (Propriedades do projeto) conforme a carga; desenergizar nem sempre é seguro.

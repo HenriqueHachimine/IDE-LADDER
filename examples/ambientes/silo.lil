@@ -1,0 +1,39 @@
+; Silo de envase - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0xcf596eef
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC Q0.2
+BND
+XIC I0.1
+OTE Q0.2
+EOR
+SOR ; rede 1
+XIC Q0.2
+BST
+XIO I0.2
+NXB
+XIC I0.3
+BND
+OTE Q0.0
+EOR
+SOR ; rede 2
+XIC Q0.2
+XIC I0.2
+XIO I0.3
+BST
+OTE Q0.1
+NXB
+OTE Q0.3
+BND
+EOR
+SOR ; rede 3
+XIC Q0.2
+XIC I0.3
+OTE Q0.4
+EOR

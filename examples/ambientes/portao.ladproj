@@ -1,0 +1,259 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Portao de garagem",
+  "description": "Abre/fecha com selo, para nos fins de curso, intertravamento sobe/desce e reabre se a fotocelula detectar um veiculo durante o fechamento.",
+  "version": "0.1.0",
+  "created": "2026-10-17T12:05:37",
+  "modified": "2026-10-17T12:05:37",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Abrir",
+      "address": "I0.0",
+      "comment": "Botao ABRIR (NA)"
+    },
+    {
+      "name": "Fechar",
+      "address": "I0.1",
+      "comment": "Botao FECHAR (NA)"
+    },
+    {
+      "name": "Parar",
+      "address": "I0.2",
+      "comment": "Botao PARAR (NF: le 1 quando solto)"
+    },
+    {
+      "name": "Fim_Curso_Aberto",
+      "address": "I0.3",
+      "comment": "LS1: portao totalmente aberto"
+    },
+    {
+      "name": "Fim_Curso_Fechado",
+      "address": "I0.4",
+      "comment": "LS2: portao totalmente fechado"
+    },
+    {
+      "name": "Fotocelula",
+      "address": "I0.5",
+      "comment": "Veiculo/obstaculo sob o portao"
+    },
+    {
+      "name": "Motor_Sobe",
+      "address": "Q0.0",
+      "comment": "Motor no sentido de abrir"
+    },
+    {
+      "name": "Motor_Desce",
+      "address": "Q0.1",
+      "comment": "Motor no sentido de fechar"
+    },
+    {
+      "name": "Lampada_Entreaberto",
+      "address": "Q0.2",
+      "comment": "Lampada ENTREABERTO"
+    },
+    {
+      "name": "Lampada_Aberto",
+      "address": "Q0.3",
+      "comment": "Lampada ABERTO"
+    },
+    {
+      "name": "Lampada_Fechado",
+      "address": "Q0.4",
+      "comment": "Lampada FECHADO"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Abrir (selo); a fotocelula forca a abertura",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Abrir"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Sobe"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Fotocelula"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Parar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fim_Curso_Aberto"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Desce"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Sobe"
+        }
+      ]
+    },
+    {
+      "comment": "Fechar (selo) com intertravamento e fotocelula",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Fechar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Desce"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Parar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fim_Curso_Fechado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Sobe"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fotocelula"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "Sinalizacao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fim_Curso_Aberto"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fim_Curso_Fechado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Entreaberto"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fim_Curso_Aberto"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Aberto"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fim_Curso_Fechado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Fechado"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-17T12:05:37",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 5
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0x9011bcce",
+    "size": 188,
+    "instructions": 38,
+    "date": "2026-10-17T12:05:37"
+  },
+  "environment": "portao"
+}

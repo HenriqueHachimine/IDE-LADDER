@@ -126,6 +126,7 @@ class Project:
     rungs: list[Rung] = field(default_factory=lambda: [Rung()])
     history: list[dict] = field(default_factory=list)
     build: dict = field(default_factory=dict)
+    environment: str = ""          # ambiente de simulacao associado (ladderide.envs), opcional
     created: str = field(default_factory=lambda: _now())
     modified: str = field(default_factory=lambda: _now())
 
@@ -179,6 +180,7 @@ class Project:
             "rungs": [_rung_to_dict(r) for r in self.rungs],
             "history": list(self.history),
             "build": dict(self.build),
+            "environment": self.environment,
         }
 
     @classmethod
@@ -194,6 +196,7 @@ class Project:
             rungs=[_rung_from_dict(r) for r in data.get("rungs", [])],
             history=list(data.get("history", [])),
             build=dict(data.get("build", {})),
+            environment=str(data.get("environment", "")),
             created=data.get("created", _now()),
             modified=data.get("modified", _now()),
         )

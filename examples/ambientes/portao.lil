@@ -1,0 +1,44 @@
+; Portao de garagem - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.safe_outputs 0x0000
+.build_id 0x9011bcce
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC Q0.0
+NXB
+XIC I0.5
+BND
+XIC I0.2
+XIO I0.3
+XIO Q0.1
+OTE Q0.0
+EOR
+SOR ; rede 1
+BST
+XIC I0.1
+NXB
+XIC Q0.1
+BND
+XIC I0.2
+XIO I0.4
+XIO Q0.0
+XIO I0.5
+OTE Q0.1
+EOR
+SOR ; rede 2
+XIO I0.3
+XIO I0.4
+OTE Q0.2
+EOR
+SOR ; rede 3
+XIC I0.3
+OTE Q0.3
+EOR
+SOR ; rede 4
+XIC I0.4
+OTE Q0.4
+EOR

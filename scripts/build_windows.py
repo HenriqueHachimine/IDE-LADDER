@@ -22,6 +22,7 @@ def main() -> int:
     from ladderide.comm.virtual import host_tool
 
     device = host_tool("virtual_device", rebuild=True)
+    runner = host_tool("lv_host_runner", rebuild=True)      # VM C usada em "Verificar para ESP32"
     launcher = ROOT / "build" / "launcher.py"
     launcher.parent.mkdir(exist_ok=True)
     launcher.write_text("import sys\nfrom ladderide.__main__ import main\nsys.exit(main())\n", encoding="utf-8")
@@ -35,6 +36,9 @@ def main() -> int:
         "--add-data", f"{ROOT / 'shared' / 'specifications'}{sep}shared/specifications",
         "--add-data", f"{ROOT / 'examples'}{sep}examples",
         "--add-binary", f"{device}{sep}build/host",
+        "--add-binary", f"{runner}{sep}build/host",
+        "--add-data", f"{ROOT / 'firmware' / 'src' / 'board_config.h'}{sep}firmware/src",
+        "--collect-submodules", "ladderide.envs.builtin",     # ambientes carregados dinamicamente
         "--exclude-module", "PySide6.QtWebEngineCore", "--exclude-module", "PySide6.QtWebEngineWidgets",
         "--exclude-module", "PySide6.QtQuick", "--exclude-module", "PySide6.QtQml",
         str(launcher),

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Gera os projetos de exemplo em examples/ a partir do modelo (reprodutivel).
 
-Uso: python scripts/make_examples.py
+Uso: python scripts/make_examples.py [prefixo]
+     (ex.: "ambientes/" gera somente os exemplos dos ambientes de simulacao)
 """
 from __future__ import annotations
 
@@ -120,11 +121,102 @@ def input_mirror() -> Project:
     return p
 
 
+def env_project(env_id: str, name: str, description: str) -> Project:
+    """Projeto ligado a um ambiente, com os simbolos dos pontos de E/S dele."""
+    from ladderide.envs import get
+    env = get(env_id)
+    p = Project(name=name, description=description, environment=env_id)
+    p.symbols = [Symbol(pt.label, pt.address, pt.description) for pt in env.inputs + env.outputs]
+    return p
+
+
+def silo() -> Project:
+    p = env_project("silo", "Silo de envase", (
+        "Esteira para com a caixa sob a valvula, enche ate o sensor de nivel e segue. "
+        "Stop e NF: o programa usa contato NA (XIC) porque a entrada le 1 com o botao solto."))
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Start")], [Contact("XIC", "Lampada_Run")]]), Contact("XIC", "Stop")],
+             [Coil("OTE", "Lampada_Run")], "Liga/desliga o processo (selo)"),
+        Rung([Contact("XIC", "Lampada_Run"),
+              Parallel([[Contact("XIO", "Sensor_Presenca")], [Contact("XIC", "Sensor_Nivel")]])],
+             [Coil("OTE", "Motor_Esteira")], "Esteira anda sem caixa posicionada ou com caixa cheia"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Sensor_Presenca"), Contact("XIO", "Sensor_Nivel")],
+             [Coil("OTE", "Valvula"), Coil("OTE", "Lampada_Fill")], "Enche a caixa posicionada"),
+        Rung([Contact("XIC", "Lampada_Run"), Contact("XIC", "Sensor_Nivel")], [Coil("OTE", "Lampada_Full")],
+             "Sinaliza caixa cheia"),
+    ]
+    return p
+
+
+def traffic_light() -> Project:
+    p = env_project("semaforo", "Semaforo de cruzamento", (
+        "Ciclo por tempo: NS verde 6 s, amarelo 2 s, vermelho geral 1 s; LO verde 6 s, amarelo 2 s, "
+        "vermelho geral 1 s. Pedestres atravessam a via que esta no vermelho, se pediram."))
+    p.symbols += [Symbol("Fase_NS_Verde", "T0", "6 s"), Symbol("Fase_NS_Amarelo", "T1", "2 s"),
+                  Symbol("Fase_Todos_Vermelho1", "T2", "1 s"), Symbol("Fase_LO_Verde", "T3", "6 s"),
+                  Symbol("Fase_LO_Amarelo", "T4", "2 s"), Symbol("Fase_Todos_Vermelho2", "T5", "1 s"),
+                  Symbol("Pedido_NS", "M0.0", "pedestre pediu travessia da via NS"),
+                  Symbol("Pedido_LO", "M0.1", "pedestre pediu travessia da via LO")]
+    p.rungs = [
+        Rung([Contact("XIO", "Fase_Todos_Vermelho2.DN")], [TimerBox("TON", "Fase_NS_Verde", 6000)],
+             "Sequenciador: cada fase comeca quando a anterior termina"),
+        Rung([Contact("XIC", "Fase_NS_Verde.DN")], [TimerBox("TON", "Fase_NS_Amarelo", 2000)]),
+        Rung([Contact("XIC", "Fase_NS_Amarelo.DN")], [TimerBox("TON", "Fase_Todos_Vermelho1", 1000)]),
+        Rung([Contact("XIC", "Fase_Todos_Vermelho1.DN")], [TimerBox("TON", "Fase_LO_Verde", 6000)]),
+        Rung([Contact("XIC", "Fase_LO_Verde.DN")], [TimerBox("TON", "Fase_LO_Amarelo", 2000)]),
+        Rung([Contact("XIC", "Fase_LO_Amarelo.DN")], [TimerBox("TON", "Fase_Todos_Vermelho2", 1000)],
+             "Fim do ciclo: reinicia a fase 1"),
+        Rung([Contact("XIO", "Fase_NS_Verde.DN")], [Coil("OTE", "Verde_NS")], "Via Norte-Sul"),
+        Rung([Contact("XIC", "Fase_NS_Verde.DN"), Contact("XIO", "Fase_NS_Amarelo.DN")], [Coil("OTE", "Amarelo_NS")]),
+        Rung([Contact("XIC", "Fase_NS_Amarelo.DN")], [Coil("OTE", "Vermelho_NS")]),
+        Rung([Contact("XIC", "Fase_Todos_Vermelho1.DN"), Contact("XIO", "Fase_LO_Verde.DN")],
+             [Coil("OTE", "Verde_LO")], "Via Leste-Oeste"),
+        Rung([Contact("XIC", "Fase_LO_Verde.DN"), Contact("XIO", "Fase_LO_Amarelo.DN")], [Coil("OTE", "Amarelo_LO")]),
+        Rung([Parallel([[Contact("XIO", "Fase_Todos_Vermelho1.DN")], [Contact("XIC", "Fase_LO_Amarelo.DN")]])],
+             [Coil("OTE", "Vermelho_LO")]),
+        Rung([Contact("XIC", "Botao_Pedestre_NS")], [Coil("OTL", "Pedido_NS")], "Pedestres: memoriza o pedido"),
+        Rung([Contact("XIC", "Botao_Pedestre_LO")], [Coil("OTL", "Pedido_LO")]),
+        Rung([Contact("XIC", "Pedido_NS"), Contact("XIC", "Fase_Todos_Vermelho1.DN"),
+              Contact("XIO", "Fase_LO_Verde.DN")], [Coil("OTE", "Pedestre_NS")],
+             "Atravessa a via NS enquanto ela esta no vermelho e LO no verde"),
+        Rung([Contact("XIC", "Fase_LO_Verde.DN")], [Coil("OTU", "Pedido_NS")]),
+        Rung([Contact("XIC", "Pedido_LO"), Contact("XIO", "Fase_NS_Verde.DN")], [Coil("OTE", "Pedestre_LO")],
+             "Atravessa a via LO enquanto NS esta no verde"),
+        Rung([Contact("XIC", "Fase_NS_Verde.DN")], [Coil("OTU", "Pedido_LO")]),
+    ]
+    return p
+
+
+def garage_door() -> Project:
+    p = env_project("portao", "Portao de garagem", (
+        "Abre/fecha com selo, para nos fins de curso, intertravamento sobe/desce e reabre se a "
+        "fotocelula detectar um veiculo durante o fechamento."))
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Abrir")], [Contact("XIC", "Motor_Sobe")], [Contact("XIC", "Fotocelula")]]),
+              Contact("XIC", "Parar"), Contact("XIO", "Fim_Curso_Aberto"), Contact("XIO", "Motor_Desce")],
+             [Coil("OTE", "Motor_Sobe")], "Abrir (selo); a fotocelula forca a abertura"),
+        Rung([Parallel([[Contact("XIC", "Fechar")], [Contact("XIC", "Motor_Desce")]]), Contact("XIC", "Parar"),
+              Contact("XIO", "Fim_Curso_Fechado"), Contact("XIO", "Motor_Sobe"), Contact("XIO", "Fotocelula")],
+             [Coil("OTE", "Motor_Desce")], "Fechar (selo) com intertravamento e fotocelula"),
+        Rung([Contact("XIO", "Fim_Curso_Aberto"), Contact("XIO", "Fim_Curso_Fechado")],
+             [Coil("OTE", "Lampada_Entreaberto")], "Sinalizacao"),
+        Rung([Contact("XIC", "Fim_Curso_Aberto")], [Coil("OTE", "Lampada_Aberto")]),
+        Rung([Contact("XIC", "Fim_Curso_Fechado")], [Coil("OTE", "Lampada_Fechado")]),
+    ]
+    return p
+
+
 def main() -> int:
-    targets = {"demo/demonstracao.ladproj": demo(), "combinational/portas_logicas.ladproj": combinational(),
-               "timers/temporizadores.ladproj": timers(), "counters/contadores.ladproj": counters(),
-               "hardware/teste_reles.ladproj": relay_chase(), "hardware/espelho_entradas.ladproj": input_mirror()}
-    for rel, project in targets.items():
+    prefix = sys.argv[1] if len(sys.argv) > 1 else ""
+    targets = {"demo/demonstracao.ladproj": demo, "combinational/portas_logicas.ladproj": combinational,
+               "timers/temporizadores.ladproj": timers, "counters/contadores.ladproj": counters,
+               "hardware/teste_reles.ladproj": relay_chase, "hardware/espelho_entradas.ladproj": input_mirror,
+               "ambientes/silo.ladproj": silo, "ambientes/semaforo.ladproj": traffic_light,
+               "ambientes/portao.ladproj": garage_door}
+    for rel, make in targets.items():
+        if not rel.startswith(prefix):
+            continue
+        project = make()
         result = compile_project(project)
         if not result.ok:
             print(f"{rel}: ERROS", *result.errors, sep="\n  ")

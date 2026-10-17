@@ -68,6 +68,7 @@ class IOPanel(QWidget):
         self.element_rows: list[tuple[str, int]] = []
         self.var_rows: list[tuple[int, int]] = []
         self.editable = True
+        self.owned = 0
 
     @staticmethod
     def _clear(grid: QGridLayout) -> None:
@@ -94,6 +95,7 @@ class IOPanel(QWidget):
             b.toggled.connect(lambda v, k=k: self._toggled(k, v))
             self.inputs_grid.addWidget(b, k // 4, k % 4)
             self.input_buttons.append(b)
+        self._apply_owned()
         if self.show_commanded:
             self.outputs_grid.addWidget(QLabel("Logico"), 0, 1)
             self.outputs_grid.addWidget(QLabel("Comandado"), 0, 2)
@@ -150,8 +152,18 @@ class IOPanel(QWidget):
     def set_inputs_editable(self, editable: bool) -> None:
         self.editable = editable
         self.momentary.setVisible(editable)
-        for b in self.input_buttons:
-            b.setEnabled(editable)
+        self._apply_owned()
+
+    def set_owned(self, mask: int) -> None:
+        """Entradas controladas por um ambiente de simulacao (ficam somente leitura)."""
+        self.owned = mask
+        self._apply_owned()
+
+    def _apply_owned(self) -> None:
+        for k, b in enumerate(self.input_buttons):
+            owned = bool(self.owned >> k & 1)
+            b.setEnabled(self.editable and not owned)
+            b.setToolTip("Controlada pelo ambiente de simulacao" if owned else "")
 
     def _pressed(self, k: int) -> None:
         if self.momentary.isChecked() and self.editable:
@@ -170,7 +182,7 @@ class IOPanel(QWidget):
                       timer: Callable[[int], dict | None], counter: Callable[[int], dict | None],
                       read: Callable[[int, int], bool | None]) -> None:
         for k, b in enumerate(self.input_buttons):
-            if not self.editable and inputs is not None:
+            if (not self.editable or self.owned >> k & 1) and inputs is not None:
                 b.blockSignals(True)
                 b.setChecked(bool(inputs >> k & 1))
                 b.blockSignals(False)

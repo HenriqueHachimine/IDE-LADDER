@@ -102,6 +102,31 @@ def _draw(name: str, p: QPainter) -> None:
         p.drawLine(QPointF(3, 3), QPointF(3, 19)); p.drawLine(QPointF(19, 3), QPointF(19, 19))
         p.setPen(QPen(BLUE, 2, Qt.SolidLine, Qt.RoundCap))
         p.drawLine(QPointF(3, 11), QPointF(19, 11))
+    elif name == "verify":
+        p.setPen(QPen(INK, 1.4)); p.setBrush(QColor("#1e293b"))
+        p.drawRoundedRect(QRectF(4, 4, 14, 14), 2, 2)
+        p.setPen(QPen(INK, 1.4))
+        for k in range(3):
+            y = 7 + k * 4
+            p.drawLine(QPointF(1.5, y), QPointF(4, y)); p.drawLine(QPointF(18, y), QPointF(20.5, y))
+        p.setPen(QPen(QColor("#4ade80"), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.drawPolyline(QPolygonF([QPointF(7.5, 11), QPointF(10, 13.5), QPointF(14.5, 8.5)]))
+    elif name == "il":
+        p.setPen(QPen(INK, 1.4)); p.setBrush(QColor("white"))
+        p.drawRoundedRect(QRectF(3, 3, 16, 16), 2, 2)
+        p.setPen(QPen(BLUE, 1.8, Qt.SolidLine, Qt.RoundCap))
+        for k, w in enumerate((8, 6, 9)):
+            y = 7.5 + k * 3.5
+            p.drawLine(QPointF(6, y), QPointF(6 + w, y))
+    elif name == "env":
+        p.setPen(QPen(INK, 1.3)); p.setBrush(QColor("#e0f2fe"))
+        p.drawRoundedRect(QRectF(2.5, 3.5, 17, 15), 2, 2)
+        p.setBrush(QColor("#f97316")); p.setPen(Qt.NoPen)
+        p.drawRect(QRectF(4, 14, 14, 3))
+        p.setBrush(QColor("#fde68a")); p.setPen(QPen(QColor("#92400e"), 1))
+        p.drawRect(QRectF(6, 9.5, 5, 4.5))
+        p.setBrush(GREEN); p.setPen(Qt.NoPen)
+        p.drawEllipse(QPointF(16, 7.5), 2, 2)
     elif name == "delete":
         p.setPen(QPen(RED, 2, Qt.SolidLine, Qt.RoundCap))
         p.drawLine(QPointF(6, 6), QPointF(16, 16)); p.drawLine(QPointF(16, 6), QPointF(6, 16))

@@ -1,0 +1,215 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Silo de envase",
+  "description": "Esteira para com a caixa sob a valvula, enche ate o sensor de nivel e segue. Stop e NF: o programa usa contato NA (XIC) porque a entrada le 1 com o botao solto.",
+  "version": "0.1.0",
+  "created": "2026-10-17T12:05:37",
+  "modified": "2026-10-17T12:05:37",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Start",
+      "address": "I0.0",
+      "comment": "Botao de partida (NA)"
+    },
+    {
+      "name": "Stop",
+      "address": "I0.1",
+      "comment": "Botao de parada (NF: le 1 quando solto)"
+    },
+    {
+      "name": "Sensor_Presenca",
+      "address": "I0.2",
+      "comment": "Caixa posicionada sob a valvula"
+    },
+    {
+      "name": "Sensor_Nivel",
+      "address": "I0.3",
+      "comment": "Caixa sob a valvula esta cheia"
+    },
+    {
+      "name": "Motor_Esteira",
+      "address": "Q0.0",
+      "comment": "Motor da esteira"
+    },
+    {
+      "name": "Valvula",
+      "address": "Q0.1",
+      "comment": "Valvula solenoide do silo"
+    },
+    {
+      "name": "Lampada_Run",
+      "address": "Q0.2",
+      "comment": "Lampada RUN (processo ligado)"
+    },
+    {
+      "name": "Lampada_Fill",
+      "address": "Q0.3",
+      "comment": "Lampada FILL (enchendo)"
+    },
+    {
+      "name": "Lampada_Full",
+      "address": "Q0.4",
+      "comment": "Lampada FULL (caixa cheia)"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Liga/desliga o processo (selo)",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Start"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Lampada_Run"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Stop"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Run"
+        }
+      ]
+    },
+    {
+      "comment": "Esteira anda sem caixa posicionada ou com caixa cheia",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Sensor_Presenca"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Sensor_Nivel"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Esteira"
+        }
+      ]
+    },
+    {
+      "comment": "Enche a caixa posicionada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Presenca"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Nivel"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Fill"
+        }
+      ]
+    },
+    {
+      "comment": "Sinaliza caixa cheia",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Run"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Nivel"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Full"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-17T12:05:37",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 4
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0xcf596eef",
+    "size": 168,
+    "instructions": 33,
+    "date": "2026-10-17T12:05:37"
+  },
+  "environment": "silo"
+}

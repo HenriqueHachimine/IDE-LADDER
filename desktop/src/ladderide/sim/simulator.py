@@ -8,9 +8,23 @@ executaria com o mesmo periodo.
 from __future__ import annotations
 
 from enum import Enum
+from typing import Protocol
 
 from ..compiler.compiler import CompileResult
 from ..core.vm import LadderVM
+
+
+class Plant(Protocol):
+    """Processo fisico simulado ligado ao CLP (ver ladderide.envs).
+
+    owned_inputs: mascara das entradas que o processo controla (sensores e
+    botoes desenhados no ambiente); as demais continuam no painel de E/S.
+    """
+    @property
+    def owned_inputs(self) -> int: ...
+    def input_bits(self) -> int: ...
+    def advance(self, dt_ms: int, outputs: int) -> None: ...
+    def reset(self) -> None: ...
 
 
 class SimState(Enum):
@@ -34,6 +48,24 @@ class Simulator:
         self.virtual_ms = 0
         self._budget = 0.0
         self.last_error: str | None = None
+        self.plant: Plant | None = None
+
+    # ------------------------------------------------------------- processo
+    def attach_plant(self, plant: Plant | None) -> None:
+        self.plant = plant
+        if plant is not None:
+            plant.reset()
+
+    def effective_inputs(self) -> int:
+        """Entradas vistas pelo programa: painel + processo simulado."""
+        if self.plant is None:
+            return self.inputs
+        owned = self.plant.owned_inputs
+        return (self.inputs & ~owned) | (self.plant.input_bits() & owned)
+
+    def _after_scan(self) -> None:
+        if self.plant is not None:
+            self.plant.advance(self.period_ms, self.vm.outputs)
 
     # ------------------------------------------------------------- estados
     def start(self) -> None:
@@ -41,6 +73,8 @@ class Simulator:
             self.vm.reset()
             self.virtual_ms = 0
             self._budget = 0.0
+            if self.plant is not None:
+                self.plant.reset()
         self.state = SimState.RUNNING
 
     def pause(self) -> None:
@@ -56,6 +90,8 @@ class Simulator:
         self.vm.reset()
         self.virtual_ms = 0
         self._budget = 0.0
+        if self.plant is not None:
+            self.plant.reset()
         if self.state == SimState.RUNNING:
             return
         self.state = SimState.PAUSED
@@ -76,6 +112,8 @@ class Simulator:
             self.vm.reset()
             self.virtual_ms = 0
             self.state = SimState.PAUSED
+            if self.plant is not None:
+                self.plant.reset()
 
     def scan_once(self) -> None:
         """Executa uma varredura completa (ou termina a varredura em andamento)."""
@@ -86,21 +124,24 @@ class Simulator:
             self.vm.end_scan()
         else:
             self._time_step()
-            self.vm.scan(self.inputs, self.period_ms)
+            self.vm.scan(self.effective_inputs(), self.period_ms)
+        self._after_scan()
 
     def step_instruction(self) -> int | None:
         """Executa uma instrucao. Retorna o pc executado ou None se a varredura terminou."""
         self._ensure_active()
         if not self.vm.in_scan:
             self._time_step()
-            self.vm.begin_scan(self.inputs, self.period_ms)
+            self.vm.begin_scan(self.effective_inputs(), self.period_ms)
             if not self.program.code:
                 self.vm.end_scan()
+                self._after_scan()
                 return None
         pc = self.vm.pc
         more = self.vm.step()
         if not more:
             self.vm.end_scan()
+            self._after_scan()
         return pc
 
     def _time_step(self) -> None:

@@ -25,6 +25,13 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
 - **Firmware** com STOP/RUN/PROGRAM_LOADING/FAULT, varredura de 10 ms,
   watchdog, estado seguro configurável e Modbus RTU somente leitura
 - **Dispositivo virtual**: o firmware rodando no PC, para aulas e testes sem placa
+- **Ambientes de simulação** animados (silo de envase, semáforo, portão de garagem)
+  controlados pelo programa, com alarmes de erros de lógica; novos ambientes são
+  plugins independentes ([guia](docs/simulation-environments.md))
+- **Verificar para ESP32** (F9): executa o programa no código C do firmware,
+  compara com o simulador varredura a varredura e confere memória, E/S e limites da placa
+- **Blocos de instrução** (F12): o diagrama convertido em lista de instruções por
+  rede, ligada ao diagrama e animada na simulação
 - **Equivalência garantida por testes**: simulador e firmware executam o mesmo
   bytecode e são comparados varredura a varredura
 
@@ -84,6 +91,7 @@ Sem placa, escolha "Dispositivo virtual".
 | `examples/timers` | TON, TOF, RTO, oscilador |
 | `examples/counters` | CTU, CTD, RES |
 | `examples/hardware` | Teste de relés em sequência, espelho de entradas |
+| `examples/ambientes` | Soluções para os ambientes de simulação: silo, semáforo, portão |
 
 ## Testes
 

@@ -1,0 +1,500 @@
+{
+  "format": "ladderide-project",
+  "format_version": 1,
+  "name": "Semaforo de cruzamento",
+  "description": "Ciclo por tempo: NS verde 6 s, amarelo 2 s, vermelho geral 1 s; LO verde 6 s, amarelo 2 s, vermelho geral 1 s. Pedestres atravessam a via que esta no vermelho, se pediram.",
+  "version": "0.1.0",
+  "created": "2026-10-17T12:05:37",
+  "modified": "2026-10-17T12:05:37",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Botao_Pedestre_NS",
+      "address": "I0.0",
+      "comment": "Pedestre pede para atravessar a via NS"
+    },
+    {
+      "name": "Botao_Pedestre_LO",
+      "address": "I0.1",
+      "comment": "Pedestre pede para atravessar a via LO"
+    },
+    {
+      "name": "Sensor_Carro_NS",
+      "address": "I0.2",
+      "comment": "Carro aguardando na via NS"
+    },
+    {
+      "name": "Sensor_Carro_LO",
+      "address": "I0.3",
+      "comment": "Carro aguardando na via LO"
+    },
+    {
+      "name": "Vermelho_NS",
+      "address": "Q0.0",
+      "comment": "Vermelho da via Norte-Sul"
+    },
+    {
+      "name": "Amarelo_NS",
+      "address": "Q0.1",
+      "comment": "Amarelo da via Norte-Sul"
+    },
+    {
+      "name": "Verde_NS",
+      "address": "Q0.2",
+      "comment": "Verde da via Norte-Sul"
+    },
+    {
+      "name": "Pedestre_NS",
+      "address": "Q0.3",
+      "comment": "Travessia de pedestres sobre a via NS liberada"
+    },
+    {
+      "name": "Vermelho_LO",
+      "address": "Q0.4",
+      "comment": "Vermelho da via Leste-Oeste"
+    },
+    {
+      "name": "Amarelo_LO",
+      "address": "Q0.5",
+      "comment": "Amarelo da via Leste-Oeste"
+    },
+    {
+      "name": "Verde_LO",
+      "address": "Q0.6",
+      "comment": "Verde da via Leste-Oeste"
+    },
+    {
+      "name": "Pedestre_LO",
+      "address": "Q0.7",
+      "comment": "Travessia de pedestres sobre a via LO liberada"
+    },
+    {
+      "name": "Fase_NS_Verde",
+      "address": "T0",
+      "comment": "6 s"
+    },
+    {
+      "name": "Fase_NS_Amarelo",
+      "address": "T1",
+      "comment": "2 s"
+    },
+    {
+      "name": "Fase_Todos_Vermelho1",
+      "address": "T2",
+      "comment": "1 s"
+    },
+    {
+      "name": "Fase_LO_Verde",
+      "address": "T3",
+      "comment": "6 s"
+    },
+    {
+      "name": "Fase_LO_Amarelo",
+      "address": "T4",
+      "comment": "2 s"
+    },
+    {
+      "name": "Fase_Todos_Vermelho2",
+      "address": "T5",
+      "comment": "1 s"
+    },
+    {
+      "name": "Pedido_NS",
+      "address": "M0.0",
+      "comment": "pedestre pediu travessia da via NS"
+    },
+    {
+      "name": "Pedido_LO",
+      "address": "M0.1",
+      "comment": "pedestre pediu travessia da via LO"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Sequenciador: cada fase comeca quando a anterior termina",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_Todos_Vermelho2.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fase_NS_Verde",
+          "preset": 6000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_NS_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fase_NS_Amarelo",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_NS_Amarelo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fase_Todos_Vermelho1",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_Todos_Vermelho1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fase_LO_Verde",
+          "preset": 6000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_LO_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fase_LO_Amarelo",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "Fim do ciclo: reinicia a fase 1",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_LO_Amarelo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fase_Todos_Vermelho2",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "Via Norte-Sul",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_NS_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Verde_NS"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_NS_Verde.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_NS_Amarelo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Amarelo_NS"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_NS_Amarelo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Vermelho_NS"
+        }
+      ]
+    },
+    {
+      "comment": "Via Leste-Oeste",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_Todos_Vermelho1.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_LO_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Verde_LO"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_LO_Verde.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_LO_Amarelo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Amarelo_LO"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Fase_Todos_Vermelho1.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Fase_LO_Amarelo.DN"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Vermelho_LO"
+        }
+      ]
+    },
+    {
+      "comment": "Pedestres: memoriza o pedido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_Pedestre_NS"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pedido_NS"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_Pedestre_LO"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pedido_LO"
+        }
+      ]
+    },
+    {
+      "comment": "Atravessa a via NS enquanto ela esta no vermelho e LO no verde",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedido_NS"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_Todos_Vermelho1.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_LO_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pedestre_NS"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_LO_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedido_NS"
+        }
+      ]
+    },
+    {
+      "comment": "Atravessa a via LO enquanto NS esta no verde",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedido_LO"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fase_NS_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pedestre_LO"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fase_NS_Verde.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedido_LO"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-17T12:05:37",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 18
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 1.0",
+    "build_id": "0x692b6c8e",
+    "size": 412,
+    "instructions": 82,
+    "date": "2026-10-17T12:05:37"
+  },
+  "environment": "semaforo"
+}

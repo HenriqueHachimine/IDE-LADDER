@@ -22,7 +22,10 @@ from ..comm.monitor import MonitorSource
 from ..comm.protocol import DevState
 from .device_panel import DevicePanel, DeviceSession
 from .dialogs import ElementDialog, ProjectDialog
+from .env_panel import EnvironmentPanel
 from .icons import make_icon
+from .il_panel import ILPanel
+from .verify_dialog import VerifyDialog
 from .ladder_view import COND_TOOLS, OUTPUT_TOOLS, LadderView
 from .palette import Palette
 from .sim_panel import SimPanel
@@ -108,15 +111,25 @@ class MainWindow(QMainWindow):
         A("zoom_out", "Afastar", lambda: self.view.set_zoom(self.view.zoom / 1.2), QKeySequence.ZoomOut)
         A("zoom_reset", "Zoom 100%", lambda: self.view.set_zoom(1.0), "Ctrl+0")
         A("device_transfer", "Transferir programa ao dispositivo", lambda: self.device_transfer(), "F8")
+        A("verify", "Verificar para ESP32", self.verify_esp32, "F9",
+          "Valida o programa no codigo C do firmware, compara com o simulador e confere os limites da placa")
+        A("il_blocks", "Blocos de instrucao", self.show_il_blocks, "F12",
+          "Mostra o diagrama convertido em lista de instrucoes, bloco por rede")
+        A("environment", "Ambiente de simulacao", self.show_environment, "Ctrl+E",
+          "Processos animados (silo, semaforo, portao...) controlados pelo programa")
         A("about", "Sobre", self.about)
         A("help", "Referencia das instrucoes", self.instruction_help, "F1")
         for key, icon in (("new", "new"), ("open", "open"), ("save", "save"), ("undo", "undo"), ("redo", "redo"),
                           ("delete", "delete"), ("rung_add", "rung"), ("compile", "compile"), ("sim_run", "run"),
                           ("sim_pause", "pause"), ("sim_scan", "scan"), ("sim_step", "step"),
                           ("sim_reset", "reset"), ("sim_stop", "stop"), ("zoom_in", "zoom_in"),
-                          ("zoom_out", "zoom_out"), ("device_transfer", "transfer")):
+                          ("zoom_out", "zoom_out"), ("device_transfer", "transfer"), ("verify", "verify"),
+                          ("il_blocks", "il"), ("environment", "env")):
             self.actions_[key].setIcon(make_icon(icon))
         self.actions_["device_transfer"].setIconText("Transferir")
+        self.actions_["verify"].setIconText("Verificar ESP32")
+        self.actions_["il_blocks"].setIconText("Blocos IL")
+        self.actions_["environment"].setIconText("Ambiente")
         self.actions_["open"].setIconText("Abrir")
 
     def _create_menus(self) -> None:
@@ -137,9 +150,13 @@ class MainWindow(QMainWindow):
         m.addAction(a["project"])
         m = mb.addMenu("&Programa")
         m.addAction(a["compile"])
+        m.addAction(a["verify"])
+        m.addAction(a["il_blocks"])
         m = mb.addMenu("&Simulacao")
         for k in ("sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop"):
             m.addAction(a[k])
+        m.addSeparator()
+        m.addAction(a["environment"])
         self.device_menu = mb.addMenu("&Dispositivo")
         self.device_menu.addAction(a["device_transfer"])
         self.device_menu.addAction(self.device_dock.toggleViewAction())
@@ -147,7 +164,7 @@ class MainWindow(QMainWindow):
         for k in ("zoom_in", "zoom_out", "zoom_reset"):
             m.addAction(a[k])
         m.addSeparator()
-        for dock in (self.palette_dock, self.sim_dock, self.bottom_dock):
+        for dock in (self.palette_dock, self.sim_dock, self.env_dock, self.il_dock, self.bottom_dock):
             m.addAction(dock.toggleViewAction())
         m = mb.addMenu("Aj&uda")
         m.addAction(a["help"])
@@ -158,11 +175,12 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         tb.setIconSize(QSize(20, 20))
         tb.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        for k in ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "compile", None,
-                  "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop", None,
-                  "device_transfer", None, "zoom_in", "zoom_out"):
+        for k in ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "compile", "verify",
+                  "il_blocks", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
+                  "environment", None, "device_transfer", None, "zoom_in", "zoom_out"):
             tb.addSeparator() if k is None else tb.addAction(a[k])
-        for k in ("new", "undo", "redo", "zoom_in", "zoom_out", "sim_reset"):
+        for k in ("new", "undo", "redo", "zoom_in", "zoom_out", "sim_reset", "sim_pause", "sim_scan", "sim_step",
+                  "rung_add"):
             tb.widgetForAction(a[k]).setToolButtonStyle(Qt.ToolButtonIconOnly)
         self.toolbar = tb
 
@@ -205,6 +223,20 @@ class MainWindow(QMainWindow):
         self.device_panel = DevicePanel(self.session)
         self.device_dock = self._dock("Dispositivo", self.device_panel, Qt.RightDockWidgetArea)
         self.tabifyDockWidget(self.sim_dock, self.device_dock)
+
+        self.env_panel = EnvironmentPanel()
+        self.env_panel.environmentChanged.connect(self.on_environment_changed)
+        self.env_panel.symbolsRequested.connect(self.add_environment_symbols)
+        self.env_panel.exampleRequested.connect(self.open_example)
+        self.env_dock = self._dock("Ambiente", self.env_panel, Qt.RightDockWidgetArea)
+        self.tabifyDockWidget(self.device_dock, self.env_dock)
+
+        self.il_panel = ILPanel()
+        self.il_panel.elementActivated.connect(self.view.select)
+        self.il_dock = self._dock("Blocos de instrucao", self.il_panel, Qt.RightDockWidgetArea)
+        self.tabifyDockWidget(self.env_dock, self.il_dock)
+        self.il_dock.visibilityChanged.connect(lambda visible: visible and self._refresh_il())
+        self.view.selectionChangedTo.connect(self.il_panel.highlight)
         self.sim_dock.raise_()
         self.device_panel.transferRequested.connect(self.device_transfer)
         self.device_panel.monitorToggled.connect(self.on_monitor_toggled)
@@ -216,7 +248,7 @@ class MainWindow(QMainWindow):
         self.monitoring = False
         self.last_snapshot = None
         self.progress_dialog = None
-        self.resizeDocks([self.palette_dock, self.sim_dock], [190, 400], Qt.Horizontal)
+        self.resizeDocks([self.palette_dock, self.sim_dock], [190, 470], Qt.Horizontal)
         self.resizeDocks([self.bottom_dock], [120], Qt.Vertical)
 
     def _dock(self, title: str, widget, area) -> QDockWidget:
@@ -240,6 +272,7 @@ class MainWindow(QMainWindow):
         self._update_live()
         self._update_title()
         self._update_actions()
+        self._refresh_il()
 
     def _update_title(self) -> None:
         name = Path(self.path).name if self.path else "sem arquivo"
@@ -290,6 +323,11 @@ class MainWindow(QMainWindow):
         else:
             self.view.update_live(None)
         self.sim_panel.refresh(self.sim)
+        sim_on = self.sim is not None and self.sim.active
+        self.env_panel.refresh(self.sim.physical_outputs if sim_on else 0)
+        if self.il_dock.isVisible():
+            vm = self.sim.vm if sim_on else None
+            self.il_panel.update_live(vm.power if vm else None, vm.pc if vm and vm.in_scan else None)
 
     def modified(self) -> None:
         self.dirty = True
@@ -553,7 +591,9 @@ class MainWindow(QMainWindow):
                                                    "Veja a aba Mensagens.")
             return None
         self.sim = Simulator(self.result, self.project.io.scan_period_ms)
+        self.sim.attach_plant(self.env_panel.plant)
         self.sim_panel.io.configure(self.project, self.result)
+        self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
         return self.sim
 
     def _after_sim_command(self) -> None:
@@ -596,6 +636,77 @@ class MainWindow(QMainWindow):
         if self.sim:
             self.sim.stop()
             self._after_sim_command()
+
+    # ============================================== verificacao e blocos IL
+    def verify_esp32(self) -> None:
+        from ..verify import verify_for_esp32
+        if self.result is None or not self.result.ok:
+            self.compile()
+        panel = self.device_panel
+        info = getattr(panel, "device_info", None) if panel.connected else None
+        status = panel.last_status if panel.connected else None
+        self.setCursor(Qt.WaitCursor)
+        try:
+            report = verify_for_esp32(self.project, self.result, device_info=info, device_status=status)
+        finally:
+            self.unsetCursor()
+        self.last_report = report
+        self.statusBar().showMessage(report.summary(), 8000)
+        VerifyDialog(report, self).exec()
+
+    def show_il_blocks(self) -> None:
+        self.il_dock.show()
+        self.il_dock.raise_()
+        self._refresh_il()
+
+    def _refresh_il(self) -> None:
+        if not hasattr(self, "il_dock") or not self.il_dock.isVisible():
+            return
+        result = self.result if self.result is not None else compile_project(self.project)
+        key = (id(self.project), result.build_id, result.ok, len(result.diagnostics))
+        if getattr(self, "_il_key", None) != key or self.il_panel.tree.topLevelItemCount() == 0:
+            self._il_key = key
+            self.il_panel.set_program(self.project, result)
+            self.il_panel.highlight(self.view.selection)
+
+    # ================================================== ambientes de simulacao
+    def show_environment(self) -> None:
+        self.env_dock.show()
+        self.env_dock.raise_()
+
+    def on_environment_changed(self, env_id: str) -> None:
+        if self.project.environment != env_id:
+            self.project.environment = env_id
+            self.dirty = True
+            self._update_title()
+        if self.sim is not None:
+            self.sim.attach_plant(self.env_panel.plant)
+        self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
+        self._update_live()
+
+    def add_environment_symbols(self) -> None:
+        env = self.env_panel.env
+        if env is None or not self._can_edit():
+            return
+        names = {s.name.upper() for s in self.project.symbols}
+        addrs = {s.address.strip().upper() for s in self.project.symbols}
+        new = [Symbol(p.label, p.address, p.description) for p in env.inputs + env.outputs
+               if p.label.upper() not in names and p.address.upper() not in addrs]
+        if not new:
+            self.statusBar().showMessage("Os simbolos do ambiente ja existem no projeto.", 4000)
+            return
+        self.push_undo()
+        self.project.symbols.extend(new)
+        self.modified()
+        self.statusBar().showMessage(f"{len(new)} simbolo(s) do ambiente '{env.name}' adicionados.", 5000)
+
+    def open_example(self, rel: str) -> None:
+        from ..core.isa import ISA_PATH
+        path = ISA_PATH.parents[2] / "examples" / rel
+        if not path.exists():
+            QMessageBox.warning(self, "Exemplo", f"Exemplo nao encontrado: {path}")
+            return
+        self.file_open(str(path))
 
     def on_input(self, index: int, value: bool) -> None:
         if self.sim is not None:
@@ -715,6 +826,10 @@ class MainWindow(QMainWindow):
         self.messages.clear()
         self.view.selection = None
         self.device_panel.load_target(project.target)
+        self.env_panel.select(project.environment)
+        self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
+        if project.environment and self.env_panel.env is not None:
+            self.env_dock.raise_()
         self.refresh()
 
     def file_new(self) -> None:
