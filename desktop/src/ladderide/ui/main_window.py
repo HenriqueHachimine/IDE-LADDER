@@ -1249,6 +1249,7 @@ class MainWindow(QMainWindow):
             if self.persist_layout:
                 self._save_layout()
             self.session.close()
+            self.esp32_panel.shutdown()          # encerra o exemplo Arduino, se estiver rodando
             event.accept()
         else:
             event.ignore()

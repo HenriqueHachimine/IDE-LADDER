@@ -228,6 +228,14 @@ faz pela USB. Depois é o mesmo fluxo da placa: **Transferir programa**, **RUN**
 - **Firmware:** versão, programa gravado (build_id, CRC), número de
   varreduras, tempo de execução e há quanto tempo a placa está ligada.
 
+**Exemplos Arduino:** a lista no topo do painel também roda os exemplos de
+`firmware/examples/` (por exemplo `teste_placa`, o teste da placa pelo monitor
+serial). A IDE compila o exemplo para o PC junto com o `io_board.cpp` do
+firmware e uma camada que imita o Arduino; os 74HC595/74HC165 são simulados no
+nível dos sinais (clock, latch, /OE), então a placa desenhada mostra os níveis
+gerados pelo próprio código. O monitor serial mostra o que o sketch imprime e
+envia o que você digitar. Detalhes e limites: `firmware/examples/README.md`.
+
 Conectado a uma placa real (aba Dispositivo), o mesmo painel mostra o que o
 firmware comanda e lê; nesse caso as entradas vêm dos bornes, não de cliques.
 O simulador não reproduz a eletrônica (tempos dos relés, ruído, alimentação):

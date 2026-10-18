@@ -9,16 +9,20 @@ usados. Conectado a uma placa real, o mesmo painel mostra o estado lido dela.
 """
 from __future__ import annotations
 
+import threading
 import time
 from datetime import datetime
 
-from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QObject, QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QLinearGradient, QPainter, QPen
-from PySide6.QtWidgets import (QCheckBox, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QPlainTextEdit,
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
+                               QPlainTextEdit,
                                QPushButton, QSplitter, QTabWidget, QTreeWidget, QTreeWidgetItem, QVBoxLayout,
                                QWidget)
 
 from ..comm.board import BoardConfig, load_board_config
+from ..comm.sketch import SketchProcess, build_sketch, list_sketches
+from ..comm.virtual import BuildError
 from ..comm.protocol import FAULT_TEXT, DevState
 from .fonts import mono_font, ui_font
 from .theme import themed
@@ -29,7 +33,7 @@ IN_X0, IN_SLOT = 300.0, 72.5            # 8 entradas optoacopladas na borda de b
 PERIODIC = {"STATUS", "READ_VARS", "READ_IO"}
 VERIFY_BG = themed("#fef3c7", "#4a3a12")
 STATE_COLORS = {"RUN": "#16a34a", "STOP": "#f59e0b", "FAULT": "#dc2626", "PROGRAM_LOADING": "#2563eb",
-                "DESLIGADA": "#64748b"}
+                "DESLIGADA": "#64748b", "SKETCH": "#7c3aed", "COMPILANDO": "#2563eb"}
 SILK = QColor("#e0f2fe")                 # serigrafia branca sobre a placa azul
 MUTED_SILK = QColor("#93c5fd")
 TERMINAL = QColor("#22a06b")
@@ -55,6 +59,10 @@ class BoardView(QWidget):
         self.names: dict[str, str] = {}
         self.rx_until = 0.0              # LEDs RX/TX do conversor USB-serial piscam com o trafego
         self.tx_until = 0.0
+        self.raw595: int | None = None   # niveis vindos do 74HC595/165 simulados (modo sketch)
+        self.raw165: int | None = None
+        self.oe_disabled = False
+        self.badge = ""                  # texto do selo (padrao: estado do firmware)
         self.setMinimumSize(QSize(450, 215))
         self.setMouseTracking(True)
         self._hover: int | None = None
@@ -121,11 +129,14 @@ class BoardView(QWidget):
         p.setPen(Qt.NoPen)
         p.setBrush(color)
         p.drawRoundedRect(badge, 7, 7)
-        self._text(p, badge, f"FIRMWARE: {self.state}", 8, True, QColor("white"), Qt.AlignCenter)
+        self._text(p, badge, self.badge or f"FIRMWARE: {self.state}", 8, True, QColor("white"), Qt.AlignCenter)
+        if on and self.oe_disabled:
+            self._text(p, QRectF(300, 160, 300, 14), "/OE = 1: saidas do 74HC595 desabilitadas (reles soltos)",
+                       7, True, QColor("#fde68a"))
         if not on:
             p.setBrush(QColor(15, 23, 42, 150))
             p.drawRoundedRect(QRectF(4, 4, W - 8, H - 8), 10, 10)
-            self._text(p, QRectF(0, 0, W, H), "Placa desligada\nClique em 'Ligar ESP32 virtual'", 16, True,
+            self._text(p, QRectF(0, 0, W, H), "Placa desligada\nClique em 'Ligar'", 16, True,
                        QColor("white"), Qt.AlignCenter)
         p.end()
 
@@ -257,9 +268,10 @@ class BoardView(QWidget):
         cfg = self.config
         width = (W - 14 - 300) / 2 - 6
         for title, x, levels, labels, sub in (
-                ("74HC595  -> reles", 300.0, cfg.shift_out_levels(self.outputs),
+                ("74HC595  -> reles", 300.0, self._raw_levels(self.raw595) or cfg.shift_out_levels(self.outputs),
                  [f"Q0.{c}" for c in cfg.out_map], "nivel no pino"),
-                ("74HC165  <- entradas", 300.0 + width + 12, cfg.shift_in_levels(self.inputs),
+                ("74HC165  <- entradas", 300.0 + width + 12,
+                 self._raw_levels(self.raw165) or cfg.shift_in_levels(self.inputs),
                  [f"I0.{c}" for c in cfg.in_map], "nivel lido")):
             chip = QRectF(x, 176, width, 70)
             p.setPen(QPen(QColor("#0f172a"), 1))
@@ -284,6 +296,11 @@ class BoardView(QWidget):
                            QColor("#cbd5e1"), Qt.AlignCenter)
             self._text(p, QRectF(chip.left() + 6, chip.bottom() - 13, chip.width(), 12),
                        f"posicao 0..7: {sub} (0/1)", 6.5, False, QColor("#94a3b8"))
+
+    @staticmethod
+    def _raw_levels(raw: int | None) -> list[int] | None:
+        """Byte do registrador simulado -> nivel por posicao (posicao 0 = bit 7, o primeiro deslocado)."""
+        return None if raw is None else [(raw >> (7 - i)) & 1 for i in range(8)]
 
     def _usb(self, p) -> None:
         now = time.monotonic()
@@ -325,8 +342,20 @@ class BoardView(QWidget):
         self._text(p, QRectF(222, 396, 70, 22), "POWER 9-24V\n+   -", 6, True, SILK, Qt.AlignCenter)
 
 
+class _SketchBridge(QObject):
+    """Leva os eventos do processo do sketch (thread de leitura) para a interface."""
+    serial = Signal(bytes)
+    board = Signal(object)
+    exited = Signal(int)
+    built = Signal(object, str)          # executavel (ou None) e mensagem de erro
+
+
 class Esp32Panel(QWidget):
-    """Painel com a placa, a configuracao do firmware e o monitor serial."""
+    """Painel com a placa, a configuracao do firmware e o monitor serial.
+
+    Dois modos: o firmware do CLP (dispositivo virtual, recebe o programa LADDER
+    pela IDE) ou um exemplo Arduino de firmware/examples compilado para o PC.
+    """
 
     def __init__(self, session, device_panel, transfer, parent=None):
         super().__init__(parent)
@@ -337,6 +366,13 @@ class Esp32Panel(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         row = QHBoxLayout()
+        self.mode = QComboBox()
+        self.mode.addItem("Firmware do CLP (programa LADDER)", None)
+        for name in list_sketches():
+            self.mode.addItem(f"Exemplo Arduino: {name}", name)
+        self.mode.setToolTip("O que roda na placa simulada: o firmware do CLP ou um exemplo de firmware/examples")
+        self.mode.currentIndexChanged.connect(self._mode_changed)
+        row.addWidget(self.mode)
         self.power_btn = QPushButton("Ligar ESP32 virtual")
         self.power_btn.setObjectName("primary")
         self.transfer_btn = QPushButton("Transferir programa")
@@ -352,11 +388,12 @@ class Esp32Panel(QWidget):
         self.reset_btn.clicked.connect(self.reset_board)
         for b in (self.power_btn, self.transfer_btn, self.run_btn, self.stop_btn, self.reset_btn):
             row.addWidget(b)
-        self.hint = QLabel()
+        row.addStretch(1)
+        layout.addLayout(row)
+        self.hint = QLabel()                             # linha propria: nao estica a barra de botoes
         self.hint.setObjectName("muted")
         self.hint.setWordWrap(True)
-        row.addWidget(self.hint, 1)
-        layout.addLayout(row)
+        layout.addWidget(self.hint)
 
         split = QSplitter(Qt.Horizontal)
         self.board = BoardView(self.config)
@@ -378,7 +415,20 @@ class Esp32Panel(QWidget):
         session.status.connect(self.on_status)
         session.traffic.connect(self.on_traffic)
         self._reset_pending = False
+        self.sketch: SketchProcess | None = None
+        self.sketch_name = ""
+        self.sketch_inputs = 0
+        self._building = False
+        self._bridge = _SketchBridge()
+        self._bridge.serial.connect(self._sketch_serial)
+        self._bridge.board.connect(self._sketch_board)
+        self._bridge.exited.connect(self._sketch_exited)
+        self._bridge.built.connect(self._sketch_built)
         self._update_buttons()
+
+    @property
+    def sketch_mode(self) -> bool:
+        return self.mode.currentData() is not None
 
     # ----------------------------------------------------------- abas
     def _config_tab(self) -> QWidget:
@@ -454,10 +504,10 @@ class Esp32Panel(QWidget):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(4, 4, 4, 4)
-        note = QLabel("Quadros do protocolo LDP trocados com a placa (o mesmo que trafega pela USB-serial).")
-        note.setWordWrap(True)
-        note.setObjectName("muted")
-        v.addWidget(note)
+        self.serial_note = QLabel()
+        self.serial_note.setWordWrap(True)
+        self.serial_note.setObjectName("muted")
+        v.addWidget(self.serial_note)
         self.log = QPlainTextEdit()
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(600)
@@ -471,6 +521,18 @@ class Esp32Panel(QWidget):
         row.addWidget(self.show_periodic, 1)
         row.addWidget(clear)
         v.addLayout(row)
+        send_row = QHBoxLayout()
+        self.send_edit = QLineEdit()
+        self.send_edit.setPlaceholderText("Texto para a Serial do sketch (ex.: 1, c, m, h) e Enter")
+        self.send_edit.returnPressed.connect(self.send_text)
+        self.send_newline = QCheckBox("+ \\n")
+        self.send_newline.setToolTip("Acrescenta fim de linha ao enviar")
+        self.send_btn = QPushButton("Enviar")
+        self.send_btn.clicked.connect(self.send_text)
+        send_row.addWidget(self.send_edit, 1)
+        send_row.addWidget(self.send_newline)
+        send_row.addWidget(self.send_btn)
+        v.addLayout(send_row)
         return w
 
     def _firmware_tab(self) -> QWidget:
@@ -507,6 +569,13 @@ class Esp32Panel(QWidget):
 
     # -------------------------------------------------------- comandos
     def toggle_power(self) -> None:
+        if self.sketch_mode:
+            if self.sketch is not None or self._building:
+                self.stop_sketch()
+            else:
+                self.start_sketch()
+            self._update_buttons()
+            return
         dp = self.device_panel
         if dp.connected or self.session.auto_reconnect:
             dp.toggle_connection()
@@ -517,6 +586,12 @@ class Esp32Panel(QWidget):
         self._update_buttons()
 
     def reset_board(self) -> None:
+        if self.sketch_mode:
+            if self.sketch is not None:
+                self._log("--", "RESET: o sketch reinicia (setup() de novo)")
+                self.stop_sketch()
+                self.start_sketch()
+            return
         if not (self.device_panel.connected and self.session.is_virtual):
             return
         self._log("--", "RESET: placa desligada e ligada de novo")
@@ -531,6 +606,13 @@ class Esp32Panel(QWidget):
             self.device_panel.toggle_connection()
 
     def toggle_input(self, k: int) -> None:
+        if self.sketch_mode:
+            if self.sketch is not None:
+                self.sketch_inputs ^= 1 << k                 # borne acionado: o 74HC165 simulado le na proxima carga
+                self.sketch.set_inputs(self.sketch_inputs)
+                self.board.inputs = self.sketch_inputs
+                self.board.update()
+            return
         buttons = self.device_panel.io.input_buttons
         if k < len(buttons) and buttons[k].isEnabled():
             buttons[k].click()                               # mesmo caminho do painel Dispositivo
@@ -546,6 +628,8 @@ class Esp32Panel(QWidget):
         self.board.update()
 
     def on_connected(self, info) -> None:
+        if self.sketch_mode:
+            return
         self.board.powered = True
         self.board.virtual = self.session.is_virtual
         self.fw_device.setText(f"{info.hardware}, firmware {info.firmware}\nprotocolo LDP {info.protocol}, "
@@ -558,6 +642,8 @@ class Esp32Panel(QWidget):
         self.board.update()
 
     def on_disconnected(self, reason: str) -> None:
+        if self.sketch_mode:
+            return
         self.board.powered = False
         self.board.state = "DESLIGADA"
         self._log("--", f"desconectada: {reason}")
@@ -565,6 +651,8 @@ class Esp32Panel(QWidget):
         self.board.update()
 
     def on_status(self, st) -> None:
+        if self.sketch_mode:
+            return
         name = st.state.name
         if self.board.state != name and self.board.powered:
             self._log("--", f"estado do firmware: {name}" +
@@ -579,11 +667,15 @@ class Esp32Panel(QWidget):
         self.board.update()
 
     def on_snapshot(self, snap) -> None:
+        if self.sketch_mode:
+            return
         self.board.outputs = snap.q_commanded
         self.board.inputs = snap.inputs
         self.board.update()
 
     def on_traffic(self, direction: str, cmd: str, seq: int, nbytes: int) -> None:
+        if self.sketch_mode:
+            return
         now = time.monotonic()
         if direction in ("TX", "RETRY"):
             self.board.rx_until = now + 0.08          # a placa recebe o que o PC transmite
@@ -601,7 +693,152 @@ class Esp32Panel(QWidget):
         stamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
         self.log.appendPlainText(f"{stamp}  {who:<22} {text}")
 
+    # ------------------------------------------------------ modo sketch
+    def _mode_changed(self) -> None:
+        if self.sketch is not None or self._building:
+            self.stop_sketch()
+        if self.sketch_mode and (self.device_panel.connected or self.session.auto_reconnect):
+            self.device_panel.toggle_connection()           # a placa simulada roda uma coisa por vez
+        self._reset_board_view()
+        self._update_buttons()
+
+    def _reset_board_view(self) -> None:
+        b = self.board
+        b.powered = False
+        b.state = "DESLIGADA"
+        b.badge = ""
+        b.raw595 = b.raw165 = None
+        b.oe_disabled = False
+        b.outputs = b.inputs = 0
+        b.virtual = False
+        b.update()
+
+    def start_sketch(self) -> None:
+        name = self.mode.currentData()
+        if self.device_panel.connected or self.session.auto_reconnect:
+            self.device_panel.toggle_connection()
+        self._building = True
+        self.sketch_name = name
+        self.board.badge = "COMPILANDO..."
+        self.board.state = "COMPILANDO"
+        self.board.update()
+        self.log.clear()
+        self._log("--", f"compilando firmware/examples/{name} para o PC (g++ + io_board.cpp + simulador Arduino)...")
+        bridge = self._bridge
+
+        def work():
+            try:
+                bridge.built.emit(build_sketch(name), "")
+            except (BuildError, OSError) as exc:
+                bridge.built.emit(None, str(exc))
+        threading.Thread(target=work, daemon=True).start()
+        self._update_buttons()
+
+    def _sketch_built(self, exe, error: str) -> None:
+        self._building = False
+        if not self.sketch_mode or self.mode.currentData() != self.sketch_name:
+            self._update_buttons()
+            return
+        if exe is None:
+            self._log("--", "ERRO de compilacao:")
+            self.log.appendPlainText(error)
+            self._reset_board_view()
+            self.board.badge = "ERRO DE COMPILACAO"
+            self.board.update()
+            self._update_buttons()
+            return
+        bridge = self._bridge
+        try:
+            self.sketch = SketchProcess(exe, bridge.serial.emit, bridge.board.emit, bridge.exited.emit)
+        except OSError as exc:
+            self._log("--", f"nao foi possivel iniciar o sketch: {exc}")
+            self._update_buttons()
+            return
+        self.sketch_inputs = 0
+        self.sketch.set_inputs(0)
+        b = self.board
+        b.powered = True
+        b.virtual = True
+        b.state = "SKETCH"
+        b.badge = f"SKETCH: {self.sketch_name}"
+        b.inputs = 0
+        self.fw_device.setText(f"Exemplo Arduino '{self.sketch_name}' compilado para o PC")
+        self.fw_program.setText(f"firmware/examples/{self.sketch_name} + src/io_board.cpp + simulador Arduino "
+                                "(74HC595/74HC165 no nivel dos sinais)")
+        self.fw_scan.setText("-")
+        self.fw_uptime.setText("-")
+        self._log("--", "sketch iniciado: saida da Serial abaixo")
+        self._update_buttons()
+        b.update()
+
+    def stop_sketch(self) -> None:
+        self._building = False
+        if self.sketch is not None:
+            proc, self.sketch = self.sketch, None
+            proc.close()
+            self._log("--", "sketch encerrado")
+        self._reset_board_view()
+
+    def _sketch_serial(self, data: bytes) -> None:
+        self.board.tx_until = time.monotonic() + 0.08
+        QTimer.singleShot(100, self.board.update)
+        cursor = self.log.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        cursor.insertText(data.decode("utf-8", "replace").replace("\r\n", "\n"))
+        self.log.setTextCursor(cursor)
+        self.log.ensureCursorVisible()
+
+    def _sketch_board(self, st) -> None:
+        if self.sketch is None:
+            return
+        b = self.board
+        b.outputs = st.relays
+        b.raw595 = st.q595
+        b.raw165 = st.load165
+        b.oe_disabled = bool(st.oe)
+        b.update()
+
+    def _sketch_exited(self, code: int) -> None:
+        if self.sketch is not None:
+            self.sketch = None
+            self._log("--", f"o sketch terminou (codigo {code})")
+            self._reset_board_view()
+            self._update_buttons()
+
+    def send_text(self) -> None:
+        if self.sketch is None:
+            return
+        text = self.send_edit.text()
+        data = text.encode("utf-8") + (b"\n" if self.send_newline.isChecked() else b"")
+        if data:
+            self.sketch.send_serial(data)
+            self.board.rx_until = time.monotonic() + 0.08
+            QTimer.singleShot(100, self.board.update)
+            self.board.update()
+        self.send_edit.clear()
+
+    def shutdown(self) -> None:
+        if self.sketch is not None:
+            self.sketch.close()
+            self.sketch = None
+
     def _update_buttons(self) -> None:
+        sketch = self.sketch_mode
+        for w in (self.send_edit, self.send_btn, self.send_newline):
+            w.setEnabled(sketch and self.sketch is not None)
+        self.show_periodic.setVisible(not sketch)
+        self.serial_note.setText(
+            "Saida da Serial do sketch (USB a 115200 bit/s). Digite abaixo para enviar comandos." if sketch else
+            "Quadros do protocolo LDP trocados com a placa (o mesmo que trafega pela USB-serial).")
+        if sketch:
+            running = self.sketch is not None or self._building
+            self.power_btn.setText("Desligar placa" if running else "Ligar (compilar e rodar)")
+            for b in (self.transfer_btn, self.run_btn, self.stop_btn):
+                b.setEnabled(False)
+            self.reset_btn.setEnabled(self.sketch is not None)
+            self.hint.setText("O exemplo roda no PC com o io_board.cpp do firmware; os registradores mostram os "
+                              "niveis gerados pelo proprio codigo. Clique nas entradas IN1..IN8.")
+            return
         dp = self.device_panel
         on = dp.connected
         st = dp.last_status.state if (on and dp.last_status) else None

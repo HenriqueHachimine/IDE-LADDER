@@ -161,3 +161,29 @@ def test_board_config_parser_reads_defines_arrays_and_comments():
     assert [i.verify for i in cfg.items[:2]] == [True, True]
     assert cfg.shift_out_levels(0b1) == [1, 0, 0, 0, 0, 0, 0, 0]   # ativo em 1
     assert cfg.shift_in_levels(0b1)[cfg.in_map.index(0)] == 0      # ativo em 0
+
+
+def test_esp32_board_runs_arduino_example_sketch(window):
+    """Modo sketch: o exemplo teste_placa roda no PC com o io_board.cpp do firmware."""
+    from ladderide.comm.sketch import list_sketches
+    app, w = window
+    if "teste_placa" not in list_sketches():
+        pytest.skip("exemplo teste_placa ausente")
+    panel = w.esp32_panel
+    w.show_esp32()
+    panel.mode.setCurrentIndex(panel.mode.findData("teste_placa"))
+    panel.power_btn.click()                                      # compila e roda o sketch
+    assert wait_for(app, lambda: panel.sketch is not None and "=== Teste da placa" in panel.log.toPlainText(), 60)
+    assert panel.board.badge == "SKETCH: teste_placa" and not panel.transfer_btn.isEnabled()
+    panel.send_edit.setText("1")                                 # comando da Serial: liga OUT1
+    panel.send_text()
+    assert wait_for(app, lambda: panel.board.outputs == 1 and panel.board.raw595 is not None)
+    cfg = panel.config
+    assert panel.board._raw_levels(panel.board.raw595)[cfg.out_map.index(0)] == 0   # ativo em 0, vindo do codigo
+    panel.toggle_input(2)                                        # borne IN3
+    panel.send_edit.setText("m")                                 # espelho: IN3 -> OUT3
+    panel.send_text()
+    assert wait_for(app, lambda: panel.board.outputs == 0b100)
+    assert "modo espelho" in panel.log.toPlainText()
+    panel.mode.setCurrentIndex(0)                                # volta ao firmware: encerra o sketch
+    assert panel.sketch is None and not panel.board.powered

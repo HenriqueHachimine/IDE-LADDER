@@ -16,6 +16,9 @@ ensaios na placa real.
   varredura medido no dispositivo.
 - Blocos de instrução (F12 e `ladderide.cli il`): lista de instruções por rede,
   sincronizada com o diagrama e animada na simulação.
+- Placa ESP32 roda os exemplos Arduino no PC (modo sketch): `firmware/test/host/arduino_sim`
+  imita pinos, tempo e Serial, com 74HC595/74HC165 simulados no nível dos sinais; o sketch
+  usa o `io_board.cpp` do firmware, o monitor serial mostra a saída e envia comandos.
 - Exemplos para o ESP32 em `firmware/examples/` (ambientes PlatformIO
   `exemplo_teste_placa` e `exemplo_ladder_portao`): teste da placa pelo monitor serial e o
   programa do portão convertido em C++ rodando direto na placa. Compilam com `pio run`;
