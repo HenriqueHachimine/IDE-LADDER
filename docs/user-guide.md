@@ -211,7 +211,9 @@ faz pela USB. Depois é o mesmo fluxo da placa: **Transferir programa**, **RUN**
 **STOP** e **Reiniciar placa** (o firmware inicia de novo, carrega o programa da
 "flash" e, com `AUTORUN_ON_BOOT = 0`, fica em STOP).
 
-- **Placa:** relés K1–K8 com o contato NA/NF e o LED, entradas optoacopladas
+- **Placa:** desenhada como a placa de referência (foto e etiqueta do repositório
+  `multigcs/esp32_relay_x8_modbus_303e32dc812`): relés OUT1–OUT8 com bornes NC/COM/NO,
+  contato móvel e LED, LEDs PWR/RX/TX (RX/TX piscam com o tráfego LDP), entradas optoacopladas
   (clique nelas para ligar/desligar), GPIOs usados pelo ESP32 e os
   registradores 74HC595 (relés) e 74HC165 (entradas). Os registradores mostram
   o **nível elétrico** de cada posição já com a polaridade (ativo em 0) e a

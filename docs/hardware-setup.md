@@ -12,6 +12,13 @@ Placa com módulo ESP32-WROOM (32E presumido), 8 relés SRD-05VDC-SL-C
 optoacopladas, transceptor RS-485, USB-C (conversor USB-serial) e entrada de
 alimentação marcada 9–24 V ⚠.
 
+Etiqueta da placa no repositório de referência (`label-1535x709.png`, não
+medido): OUT1–OUT8 com bornes **NC COM NO** (10 A); IN1–IN8 de **5–24 V**
+(bornes + −); MODBUS A B; POWER **9–24 V** (+ −); USB para programação do
+ESP32. A foto (`esp-8k-relais-opto.png`) mostra USB-C, botões BOOT e RST,
+LEDs PWR/RX/TX, dois optoacopladores por entrada e os relés SRD-05VDC-SL-C
+na borda superior. O simulador da placa na IDE segue esse layout.
+
 ## 2. Mapeamento (código de referência)
 
 | Função | GPIO | Observação |
@@ -51,8 +58,8 @@ GPIOs de *strapping* (0, 2, 5, 12, 15) não são usados pelos sinais acima.
    (CH340/CP2102) — define driver no Windows e circuito de auto-reset.
 2. Polaridade real dos relés e das entradas (teste: ligar um relé por vez;
    aplicar tensão em cada entrada).
-3. Faixa de tensão das entradas optoacopladas (5 V? 12 V? 24 V?) e se são
-   NPN/PNP.
+3. Faixa de tensão das entradas: a etiqueta indica 5–24 V (confirmar com
+   fonte de bancada); se são NPN/PNP continua desconhecido.
 4. Se o latch compartilhado 595/165 lê as entradas corretamente na mesma
    sequência de deslocamento.
 5. Comportamento dos relés durante boot/reset (osciloscópio ou LED de teste).

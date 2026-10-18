@@ -9,6 +9,7 @@ usados. Conectado a uma placa real, o mesmo painel mostra o estado lido dela.
 """
 from __future__ import annotations
 
+import time
 from datetime import datetime
 
 from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, QUrl, Signal
@@ -23,15 +24,24 @@ from .fonts import mono_font, ui_font
 from .theme import themed
 
 W, H = 900.0, 430.0
-RELAY_X0, SLOT = 300.0, 72.0
+RELAY_X0, RELAY_SLOT = 150.0, 91.0      # 8 reles ao longo da borda de cima (como na placa)
+IN_X0, IN_SLOT = 300.0, 72.5            # 8 entradas optoacopladas na borda de baixo
 PERIODIC = {"STATUS", "READ_VARS", "READ_IO"}
 VERIFY_BG = themed("#fef3c7", "#4a3a12")
 STATE_COLORS = {"RUN": "#16a34a", "STOP": "#f59e0b", "FAULT": "#dc2626", "PROGRAM_LOADING": "#2563eb",
                 "DESLIGADA": "#64748b"}
+SILK = QColor("#e0f2fe")                 # serigrafia branca sobre a placa azul
+MUTED_SILK = QColor("#93c5fd")
+TERMINAL = QColor("#22a06b")
 
 
 class BoardView(QWidget):
-    """Desenho da placa. Coordenadas logicas W x H, escaladas para o widget."""
+    """Desenho da placa ESP32 Relay X8 (layout da foto do repositorio de referencia).
+
+    Coordenadas logicas W x H, escaladas para o widget. Os estados vem do
+    firmware (saidas comandadas e entradas lidas); os niveis eletricos dos
+    registradores sao calculados a partir de board_config.h.
+    """
     inputClicked = Signal(int)
 
     def __init__(self, config: BoardConfig, parent=None):
@@ -43,6 +53,8 @@ class BoardView(QWidget):
         self.outputs = 0
         self.inputs = 0
         self.names: dict[str, str] = {}
+        self.rx_until = 0.0              # LEDs RX/TX do conversor USB-serial piscam com o trafego
+        self.tx_until = 0.0
         self.setMinimumSize(QSize(450, 215))
         self.setMouseTracking(True)
         self._hover: int | None = None
@@ -56,7 +68,7 @@ class BoardView(QWidget):
         return s, (self.width() - W * s) / 2, (self.height() - H * s) / 2
 
     def input_rect(self, k: int) -> QRectF:
-        return QRectF(RELAY_X0 + k * SLOT, 290, SLOT - 4, 124)
+        return QRectF(IN_X0 + k * IN_SLOT, 282, IN_SLOT - 4, 142)
 
     def _logical(self, pos) -> QPointF:
         s, ox, oy = self._transform()
@@ -87,54 +99,42 @@ class BoardView(QWidget):
         p.translate(ox, oy)
         p.scale(s, s)
         on = self.powered
-        cfg = self.config
-        # placa de circuito impresso
-        grad = QLinearGradient(0, 0, 0, H)
-        grad.setColorAt(0, QColor("#1f6f43") if on else QColor("#3f4f45"))
-        grad.setColorAt(1, QColor("#14532d") if on else QColor("#2f3a33"))
-        p.setPen(QPen(QColor("#0b2e1a"), 2))
+        grad = QLinearGradient(0, 0, 0, H)                         # placa azul
+        grad.setColorAt(0, QColor("#1d4ed8") if on else QColor("#3b4a6b"))
+        grad.setColorAt(1, QColor("#1e3a8a") if on else QColor("#2b3550"))
+        p.setPen(QPen(QColor("#172554"), 2))
         p.setBrush(grad)
-        p.drawRoundedRect(QRectF(4, 4, W - 8, H - 8), 14, 14)
+        p.drawRoundedRect(QRectF(4, 4, W - 8, H - 8), 10, 10)
         p.setBrush(QColor("#d6d3d1"))
         p.setPen(Qt.NoPen)
-        for x, y in ((22, 22), (W - 22, 22), (22, H - 22), (W - 22, H - 22)):
-            p.drawEllipse(QPointF(x, y), 7, 7)
-        self._usb_and_power(p)
-        self._esp32(p)
-        self._registers(p)
+        for x, y in ((18, 56), (W - 18, 56), (18, H - 18), (W - 18, H - 18)):
+            p.drawEllipse(QPointF(x, y), 6, 6)
         for k in range(8):
             self._relay(p, k)
             self._input(p, k)
-        self._rs485(p)
-        # estado do firmware (informado pelo dispositivo, nao e um LED da placa)
-        color = QColor(STATE_COLORS.get(self.state, "#64748b"))
-        badge = QRectF(44, 18, 196, 30)
+        self._esp32(p)
+        self._registers(p)
+        self._usb(p)
+        self._power_and_modbus(p)
+        color = QColor(STATE_COLORS.get(self.state, "#64748b"))   # estado informado pelo firmware
+        badge = QRectF(14, 14, 128, 28)
         p.setPen(Qt.NoPen)
         p.setBrush(color)
-        p.drawRoundedRect(badge, 8, 8)
-        self._text(p, badge, f"FIRMWARE: {self.state}", 10, True, QColor("white"), Qt.AlignCenter)
+        p.drawRoundedRect(badge, 7, 7)
+        self._text(p, badge, f"FIRMWARE: {self.state}", 8, True, QColor("white"), Qt.AlignCenter)
         if not on:
             p.setBrush(QColor(15, 23, 42, 150))
-            p.drawRoundedRect(QRectF(4, 4, W - 8, H - 8), 14, 14)
+            p.drawRoundedRect(QRectF(4, 4, W - 8, H - 8), 10, 10)
             self._text(p, QRectF(0, 0, W, H), "Placa desligada\nClique em 'Ligar ESP32 virtual'", 16, True,
                        QColor("white"), Qt.AlignCenter)
         p.end()
 
     @staticmethod
-    def _text(p, rect, text, size, bold=False, color=QColor("white"), align=Qt.AlignLeft | Qt.AlignVCenter,
+    def _text(p, rect, text, size, bold=False, color=SILK, align=Qt.AlignLeft | Qt.AlignVCenter,
               mono=False) -> None:
         p.setFont(mono_font(size, bold) if mono else ui_font(size, bold))
         p.setPen(color)
         p.drawText(rect, align, text)
-
-    def _usb_and_power(self, p) -> None:
-        p.setPen(QPen(QColor("#475569"), 1))
-        p.setBrush(QColor("#cbd5e1"))
-        p.drawRoundedRect(QRectF(4, 70, 34, 40), 5, 5)
-        self._text(p, QRectF(4, 112, 60, 14), "USB-C", 7, True)
-        self._text(p, QRectF(4, 126, 120, 14), f"LDP {self.config.value('LDP_BAUD', 115200)} bit/s", 7)
-        self._led(p, QPointF(56, 80), self.powered, QColor("#ef4444"))
-        self._text(p, QRectF(64, 73, 40, 14), "PWR", 7, True)
 
     def _led(self, p, c: QPointF, lit: bool, color: QColor, r: float = 5) -> None:
         if lit:
@@ -147,64 +147,131 @@ class BoardView(QWidget):
         p.setBrush(color if lit else QColor(color).darker(350))
         p.drawEllipse(c, r, r)
 
+    def _terminal(self, p, rect: QRectF, screws: int) -> list[QPointF]:
+        p.setPen(QPen(QColor("#065f46"), 1))
+        p.setBrush(TERMINAL)
+        p.drawRect(rect)
+        centers = []
+        for j in range(screws):
+            c = QPointF(rect.left() + rect.width() * (j + 0.5) / screws, rect.center().y())
+            p.setBrush(QColor("#9ca3af"))
+            p.drawEllipse(c, 5.5, 5.5)
+            p.setPen(QPen(QColor("#4b5563"), 1.2))
+            p.drawLine(QPointF(c.x() - 3, c.y()), QPointF(c.x() + 3, c.y()))
+            p.setPen(QPen(QColor("#065f46"), 1))
+            centers.append(c)
+        return centers
+
+    def _relay(self, p, k: int) -> None:
+        x0 = RELAY_X0 + k * RELAY_SLOT
+        on = self.powered and bool(self.outputs >> k & 1)
+        screws = self._terminal(p, QRectF(x0 + 10, 8, RELAY_SLOT - 24, 24), 3)
+        for c, label in zip(screws, ("NC", "COM", "NO")):           # ordem da etiqueta da placa
+            self._text(p, QRectF(c.x() - 14, 33, 28, 10), label, 5.5, True, SILK, Qt.AlignCenter)
+        body = QRectF(x0 + 8, 46, RELAY_SLOT - 20, 66)
+        p.setPen(QPen(QColor("#1e3a8a"), 1))
+        p.setBrush(QColor("#2563eb"))
+        p.drawRoundedRect(body, 3, 3)
+        self._text(p, QRectF(body.left(), body.top() + 2, body.width(), 11), "SRD-05VDC", 5.5, True,
+                   QColor("#bfdbfe"), Qt.AlignCenter)
+        nc = QPointF(body.left() + 14, body.top() + 24)
+        no = QPointF(body.right() - 14, body.top() + 24)
+        com = QPointF(body.center().x(), body.bottom() - 10)
+        p.setPen(QPen(QColor("#e0e7ff"), 1.5))
+        for pt in (nc, no):
+            p.drawLine(QPointF(pt.x(), pt.y() - 7), pt)
+        p.setPen(QPen(QColor("#fde047") if on else QColor("#e0e7ff"), 2.4, Qt.SolidLine, Qt.RoundCap))
+        p.drawLine(com, no if on else nc)                           # contato movel: COM-NO quando energizado
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor("#e0e7ff"))
+        p.drawEllipse(com, 2.5, 2.5)
+        self._led(p, QPointF(x0 + 18, 124), on, QColor("#ef4444"), 4)
+        self._text(p, QRectF(x0 + 26, 117, RELAY_SLOT - 30, 14), f"OUT{k + 1}", 7.5, True,
+                   QColor("#fde68a") if on else SILK)
+        self._text(p, QRectF(x0, 132, RELAY_SLOT - 6, 12), f"Q0.{k}  {self.names.get(f'Q0.{k}', '')}"[:18], 6.5,
+                   False, SILK, Qt.AlignCenter)
+        pos = self.config.out_map.index(k) if k in self.config.out_map else k
+        self._text(p, QRectF(x0, 144, RELAY_SLOT - 6, 11), f"595 pos {pos}", 6, False, MUTED_SILK, Qt.AlignCenter)
+
+    def _input(self, p, k: int) -> None:
+        r = self.input_rect(k)
+        active = self.powered and bool(self.inputs >> k & 1)
+        if self._hover == k and self.powered and self.virtual:
+            p.setPen(QPen(QColor("#fde68a"), 1.5, Qt.DashLine))
+            p.setBrush(Qt.NoBrush)
+            p.drawRoundedRect(r, 6, 6)
+        pos = self.config.in_map.index(k) if k in self.config.in_map else k
+        self._text(p, QRectF(r.left(), r.top() + 2, r.width(), 11), f"165 pos {pos}", 6, False, MUTED_SILK,
+                   Qt.AlignCenter)
+        for j in range(2):                                          # dois optoacopladores por entrada
+            opto = QRectF(r.center().x() - 13, r.top() + 16 + j * 22, 26, 16)
+            p.setPen(QPen(QColor("#0f172a"), 1))
+            p.setBrush(QColor("#111827"))
+            p.drawRect(opto)
+        self._led(p, QPointF(r.center().x(), r.top() + 66), active, QColor("#22c55e"), 4)
+        self._text(p, QRectF(r.left(), r.top() + 74, r.width(), 13), f"IN{k + 1}", 7.5, True,
+                   QColor("#bbf7d0") if active else SILK, Qt.AlignCenter)
+        self._text(p, QRectF(r.left() - 2, r.top() + 87, r.width() + 4, 11),
+                   f"I0.{k} {self.names.get(f'I0.{k}', '')}"[:14], 6, False, SILK, Qt.AlignCenter)
+        self._text(p, QRectF(r.left(), r.top() + 98, r.width(), 10), "5-24V  +  -", 5.5, False, MUTED_SILK,
+                   Qt.AlignCenter)
+        self._terminal(p, QRectF(r.left() + 8, r.bottom() - 30, r.width() - 16, 26), 2)
+
     def _esp32(self, p) -> None:
-        mod = QRectF(70, 150, 150, 190)
+        mod = QRectF(14, 160, 110, 110)                              # modulo com a antena para a esquerda
         p.setPen(QPen(QColor("#0f172a"), 1))
         p.setBrush(QColor("#1e293b"))
         p.drawRect(mod)
-        p.setPen(QPen(QColor("#fbbf24"), 2))                      # antena impressa
-        x, y = mod.left() + 12, mod.top() + 10
+        p.setPen(QPen(QColor("#fbbf24"), 1.6))
         pts = []
-        for k in range(9):
-            pts += [QPointF(x + k * 14, y), QPointF(x + k * 14, y + 24), QPointF(x + k * 14 + 7, y + 24),
-                    QPointF(x + k * 14 + 7, y)]
+        for k in range(6):
+            y = mod.top() + 8 + k * 16
+            pts += [QPointF(mod.left() + 6, y), QPointF(mod.left() + 26, y), QPointF(mod.left() + 26, y + 8),
+                    QPointF(mod.left() + 6, y + 8)]
         p.drawPolyline(pts)
-        can = QRectF(mod.left() + 10, mod.top() + 44, mod.width() - 20, mod.height() - 54)
+        can = QRectF(mod.left() + 32, mod.top() + 6, mod.width() - 38, mod.height() - 12)
         grad = QLinearGradient(can.topLeft(), can.bottomRight())
         grad.setColorAt(0, QColor("#e5e7eb"))
         grad.setColorAt(1, QColor("#9ca3af"))
         p.setPen(QPen(QColor("#6b7280"), 1))
         p.setBrush(grad)
         p.drawRect(can)
-        self._text(p, can.adjusted(6, 6, -6, -6), "ESP32-WROOM-32\n\nfirmware CLP\n" +
-                   f"v{self.config.value('FW_VERSION', '?')}", 9, True, QColor("#1f2937"),
-                   Qt.AlignHCenter | Qt.AlignTop)
-        # GPIOs usados (serigrafia)
+        self._text(p, can.adjusted(3, 3, -3, -3), f"ESP32\nWROOM\n\nCLP\nv{self.config.value('FW_VERSION', '?')}",
+                   8, True, QColor("#1f2937"), Qt.AlignCenter)
         cfg = self.config
-        pins = [("PIN_595_SER", "SER  -> 595"), ("PIN_SR_CLK", "CLK  -> 595/165"),
-                ("PIN_SR_LATCH", "LATCH-> 595/165"), ("PIN_595_OE", "/OE  -> 595"),
-                ("PIN_165_QH", "QH   <- 165"), ("PIN_RS485_RX", "RX   <- RS-485"),
-                ("PIN_RS485_TX", "TX   -> RS-485"), ("PIN_RS485_DE", "DE   -> RS-485")]
-        y = 152.0
+        pins = [("PIN_595_SER", "SER  > 595"), ("PIN_SR_CLK", "CLK  > 595/165"),
+                ("PIN_SR_LATCH", "LATCH> 595/165"), ("PIN_595_OE", "/OE  > 595"), ("PIN_165_QH", "QH   < 165"),
+                ("PIN_RS485_RX", "RX   < RS-485"), ("PIN_RS485_TX", "TX   > RS-485"),
+                ("PIN_RS485_DE", "DE   > RS-485")]
+        y = 162.0
         for name, text in pins:
             gpio = cfg.value(name)
             if gpio is None:
                 continue
             item = next(i for i in cfg.items if i.name == name)
-            color = QColor("#fde68a") if item.verify else QColor("#e2e8f0")
-            p.setPen(QPen(QColor("#a7f3d0"), 1))
-            p.drawLine(QPointF(mod.right(), y + 6), QPointF(mod.right() + 6, y + 6))
-            self._text(p, QRectF(mod.right() + 8, y, 160, 14), f"GPIO{gpio:<2} {text}", 7, False, color,
-                       mono=True)
-            y += 16
+            color = QColor("#fde68a") if item.verify else SILK
+            self._text(p, QRectF(mod.right() + 6, y, 160, 13), f"GPIO{gpio:<2} {text}", 6.5, False, color, mono=True)
+            y += 13.5
 
     def _registers(self, p) -> None:
         cfg = self.config
+        width = (W - 14 - 300) / 2 - 6
         for title, x, levels, labels, sub in (
-                ("74HC595  saidas", RELAY_X0, cfg.shift_out_levels(self.outputs),
-                 [f"Q0.{c}" for c in cfg.out_map], "nivel no pino (0/1)"),
-                ("74HC165  entradas", RELAY_X0 + 4 * SLOT + 2, cfg.shift_in_levels(self.inputs),
-                 [f"I0.{c}" for c in cfg.in_map], "nivel lido (0/1)")):
-            chip = QRectF(x, 196, 4 * SLOT - 6, 70)
+                ("74HC595  -> reles", 300.0, cfg.shift_out_levels(self.outputs),
+                 [f"Q0.{c}" for c in cfg.out_map], "nivel no pino"),
+                ("74HC165  <- entradas", 300.0 + width + 12, cfg.shift_in_levels(self.inputs),
+                 [f"I0.{c}" for c in cfg.in_map], "nivel lido")):
+            chip = QRectF(x, 176, width, 70)
             p.setPen(QPen(QColor("#0f172a"), 1))
             p.setBrush(QColor("#111827"))
             p.drawRoundedRect(chip, 4, 4)
-            p.setBrush(QColor("#6b7280"))
-            for k in range(8):                                     # perninhas
+            p.setBrush(QColor("#9ca3af"))
+            for k in range(8):
                 px = chip.left() + 10 + k * (chip.width() - 20) / 7
-                p.drawRect(QRectF(px - 2, chip.top() - 5, 4, 5))
-                p.drawRect(QRectF(px - 2, chip.bottom(), 4, 5))
-            self._text(p, QRectF(chip.left() + 6, chip.top() + 2, chip.width(), 14), title, 7.5, True)
+                p.drawRect(QRectF(px - 2, chip.top() - 4, 4, 4))
+                p.drawRect(QRectF(px - 2, chip.bottom(), 4, 4))
+            self._text(p, QRectF(chip.left() + 6, chip.top() + 2, chip.width(), 14), title, 7.5, True,
+                       QColor("white"))
             cell_w = (chip.width() - 12) / 8
             for k, level in enumerate(levels):
                 r = QRectF(chip.left() + 6 + k * cell_w, chip.top() + 18, cell_w - 3, 22)
@@ -216,91 +283,46 @@ class BoardView(QWidget):
                 self._text(p, QRectF(r.left() - 4, r.bottom() + 1, r.width() + 8, 12), labels[k], 6.5, False,
                            QColor("#cbd5e1"), Qt.AlignCenter)
             self._text(p, QRectF(chip.left() + 6, chip.bottom() - 13, chip.width(), 12),
-                       f"posicao 0..7 -> {sub}", 6.5, False, QColor("#94a3b8"))
+                       f"posicao 0..7: {sub} (0/1)", 6.5, False, QColor("#94a3b8"))
 
-    def _relay(self, p, k: int) -> None:
-        x0 = RELAY_X0 + k * SLOT
-        on = self.powered and bool(self.outputs >> k & 1)
-        # borne NO / COM / NC
-        term = QRectF(x0 + 4, 14, SLOT - 12, 22)
-        p.setPen(QPen(QColor("#065f46"), 1))
-        p.setBrush(QColor("#10b981"))
-        p.drawRect(term)
-        for j, label in enumerate(("NO", "C", "NC")):
-            c = QPointF(term.left() + 10 + j * (term.width() - 20) / 2, term.center().y())
-            p.setBrush(QColor("#9ca3af"))
-            p.drawEllipse(c, 6, 6)
-            self._text(p, QRectF(c.x() - 12, term.bottom() + 1, 24, 10), label, 6, True, QColor("#d1fae5"),
-                       Qt.AlignCenter)
-        # rele
-        body = QRectF(x0 + 6, 50, SLOT - 16, 64)
-        p.setPen(QPen(QColor("#1e3a8a"), 1))
-        p.setBrush(QColor("#2563eb"))
-        p.drawRoundedRect(body, 3, 3)
-        self._text(p, QRectF(body.left(), body.top() + 2, body.width(), 12), f"K{k + 1}", 8, True,
-                   QColor("white"), Qt.AlignCenter)
-        com = QPointF(body.center().x(), body.bottom() - 10)
-        no = QPointF(body.left() + 10, body.top() + 22)
-        nc = QPointF(body.right() - 10, body.top() + 22)
-        p.setPen(QPen(QColor("#e0e7ff"), 1.5))
-        for pt in (no, nc):
-            p.drawLine(QPointF(pt.x(), pt.y() - 6), pt)
-        p.setPen(QPen(QColor("#fde047") if on else QColor("#e0e7ff"), 2.4, Qt.SolidLine, Qt.RoundCap))
-        p.drawLine(com, no if on else nc)                        # contato movel
-        p.setPen(Qt.NoPen)
-        p.setBrush(QColor("#e0e7ff"))
-        p.drawEllipse(com, 2.5, 2.5)
-        self._led(p, QPointF(x0 + SLOT / 2 - 2, 128), on, QColor("#ef4444"), 4.5)
-        name = self.names.get(f"Q0.{k}", "")
-        self._text(p, QRectF(x0, 138, SLOT - 4, 14), f"Q0.{k}", 8, True, QColor("#fde68a") if on else
-                   QColor("white"), Qt.AlignCenter)
-        self._text(p, QRectF(x0 - 2, 152, SLOT, 12), name[:12], 6.5, False, QColor("#d1fae5"), Qt.AlignCenter)
-        pos = self.config.out_map.index(k) if k in self.config.out_map else k
-        self._text(p, QRectF(x0, 164, SLOT - 4, 12), f"595 pos {pos}", 6.5, False, QColor("#94a3b8"),
-                   Qt.AlignCenter)
+    def _usb(self, p) -> None:
+        now = time.monotonic()
+        usb = QRectF(40, 386, 40, 30)
+        p.setPen(QPen(QColor("#475569"), 1))
+        p.setBrush(QColor("#cbd5e1"))
+        p.drawRoundedRect(usb, 6, 6)
+        self._text(p, QRectF(30, 368, 70, 14), "USB-C", 7, True, SILK, Qt.AlignCenter)
+        for j, (label, lit, color) in enumerate((("PWR", self.powered, QColor("#ef4444")),
+                                                 ("RX", self.powered and now < self.rx_until, QColor("#22c55e")),
+                                                 ("TX", self.powered and now < self.tx_until, QColor("#f59e0b")))):
+            self._led(p, QPointF(18 + j * 22, 330), lit, color, 3.5)
+            self._text(p, QRectF(8 + j * 22, 338, 22, 10), label, 5.5, True, SILK, Qt.AlignCenter)
+        for j, label in enumerate(("BOOT", "RST")):
+            b = QRectF(90 + j * 30, 392, 18, 18)
+            p.setPen(QPen(QColor("#0f172a"), 1))
+            p.setBrush(QColor("#d1d5db"))
+            p.drawRect(b)
+            p.setBrush(QColor("#111827"))
+            p.drawEllipse(b.center(), 5, 5)
+            self._text(p, QRectF(b.left() - 8, b.top() - 13, 34, 11), label, 5.5, True, SILK, Qt.AlignCenter)
+        self._text(p, QRectF(8, 352, 140, 12), f"LDP {self.config.value('LDP_BAUD', 115200)} bit/s", 6, False,
+                   MUTED_SILK)
 
-    def _input(self, p, k: int) -> None:
-        r = self.input_rect(k)
-        active = self.powered and bool(self.inputs >> k & 1)
-        if self._hover == k and self.powered and self.virtual:
-            p.setPen(QPen(QColor("#fde68a"), 1.5, Qt.DashLine))
-            p.setBrush(Qt.NoBrush)
-            p.drawRoundedRect(r, 6, 6)
-        pos = self.config.in_map.index(k) if k in self.config.in_map else k
-        self._text(p, QRectF(r.left(), r.top() + 2, r.width(), 12), f"165 pos {pos}", 6.5, False,
-                   QColor("#94a3b8"), Qt.AlignCenter)
-        opto = QRectF(r.center().x() - 16, r.top() + 22, 32, 20)
-        p.setPen(QPen(QColor("#0f172a"), 1))
-        p.setBrush(QColor("#f8fafc"))
-        p.drawRect(opto)
-        self._text(p, opto, "PC817", 6, True, QColor("#111827"), Qt.AlignCenter)
-        self._led(p, QPointF(r.center().x(), r.top() + 54), active, QColor("#22c55e"), 4.5)
-        self._text(p, QRectF(r.left(), r.top() + 62, r.width(), 14), f"I0.{k}", 8, True,
-                   QColor("#bbf7d0") if active else QColor("white"), Qt.AlignCenter)
-        self._text(p, QRectF(r.left() - 2, r.top() + 76, r.width() + 4, 12), self.names.get(f"I0.{k}", "")[:12],
-                   6.5, False, QColor("#d1fae5"), Qt.AlignCenter)
-        term = QRectF(r.left() + 12, r.bottom() - 26, r.width() - 24, 22)
-        p.setPen(QPen(QColor("#065f46"), 1))
-        p.setBrush(QColor("#10b981"))
-        p.drawRect(term)
-        for j in range(2):
-            p.setBrush(QColor("#9ca3af"))
-            p.drawEllipse(QPointF(term.left() + 10 + j * (term.width() - 20), term.center().y()), 6, 6)
-
-    def _rs485(self, p) -> None:
-        box = QRectF(70, 358, 190, 52)
-        chip = QRectF(box.left(), box.top() + 6, 54, 30)
+    def _power_and_modbus(self, p) -> None:
+        cfg = self.config
+        chip = QRectF(160, 300, 44, 24)
         p.setPen(QPen(QColor("#0f172a"), 1))
         p.setBrush(QColor("#111827"))
         p.drawRect(chip)
-        self._text(p, chip, "RS-485", 7, True, QColor("white"), Qt.AlignCenter)
-        cfg = self.config
+        self._text(p, chip, "RS-485", 6.5, True, QColor("white"), Qt.AlignCenter)
         enabled = cfg.value("MODBUS_ENABLED", 0)
-        txt = (f"Modbus RTU end. {cfg.value('MODBUS_ADDRESS', '?')}\n{cfg.value('MODBUS_BAUD', '?')} bit/s"
+        txt = (f"Modbus end. {cfg.value('MODBUS_ADDRESS', '?')}\n{cfg.value('MODBUS_BAUD', '?')} bit/s"
                if enabled else "Modbus desabilitado")
-        self._text(p, QRectF(chip.right() + 6, box.top() + 2, 140, 36), txt, 7, False, QColor("#e2e8f0"))
-        term = QRectF(box.left(), box.bottom() - 10, 70, 14)
-        self._text(p, term, "A  B  GND", 6.5, True, QColor("#d1fae5"))
+        self._text(p, QRectF(208, 298, 90, 28), txt, 6, False, SILK)
+        self._terminal(p, QRectF(160, 368, 50, 26), 2)
+        self._text(p, QRectF(150, 396, 70, 22), "MODBUS\nA   B", 6, True, SILK, Qt.AlignCenter)
+        self._terminal(p, QRectF(232, 368, 50, 26), 2)
+        self._text(p, QRectF(222, 396, 70, 22), "POWER 9-24V\n+   -", 6, True, SILK, Qt.AlignCenter)
 
 
 class Esp32Panel(QWidget):
@@ -562,6 +584,13 @@ class Esp32Panel(QWidget):
         self.board.update()
 
     def on_traffic(self, direction: str, cmd: str, seq: int, nbytes: int) -> None:
+        now = time.monotonic()
+        if direction in ("TX", "RETRY"):
+            self.board.rx_until = now + 0.08          # a placa recebe o que o PC transmite
+        else:
+            self.board.tx_until = now + 0.08
+        self.board.update()
+        QTimer.singleShot(100, self.board.update)
         if cmd in PERIODIC and not self.show_periodic.isChecked():
             return
         arrow = {"TX": "PC  -> ESP32", "RX": "PC <-  ESP32", "ERR": "PC <-  ESP32 ERRO",
