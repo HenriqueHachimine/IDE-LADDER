@@ -201,6 +201,36 @@ do gcc (MinGW). No executável da IDE, essa VM já vem incluída.
 Em caso de perda de comunicação, a IDE mostra o aviso e tenta reconectar a
 cada 2 s. O CLP continua executando sem a IDE.
 
+### Simulador da placa ESP32 (Ctrl+Shift+E)
+
+O painel **Placa ESP32** (embaixo do diagrama) desenha a placa de 8 relés e
+mostra como o firmware está configurado. **Ligar ESP32 virtual** inicia o
+dispositivo virtual: o mesmo código C do firmware (`plc_core` + `ladder_vm`)
+compilado para o PC, conversando com a IDE pelo protocolo LDP como a placa real
+faz pela USB. Depois é o mesmo fluxo da placa: **Transferir programa**, **RUN**,
+**STOP** e **Reiniciar placa** (o firmware inicia de novo, carrega o programa da
+"flash" e, com `AUTORUN_ON_BOOT = 0`, fica em STOP).
+
+- **Placa:** relés K1–K8 com o contato NA/NF e o LED, entradas optoacopladas
+  (clique nelas para ligar/desligar), GPIOs usados pelo ESP32 e os
+  registradores 74HC595 (relés) e 74HC165 (entradas). Os registradores mostram
+  o **nível elétrico** de cada posição já com a polaridade (ativo em 0) e a
+  permutação `OUT_MAP`/`IN_MAP`, e cada relé/entrada indica a posição
+  correspondente.
+- **Configuração:** todas as definições de `firmware/src/board_config.h`
+  agrupadas (pinos, polaridade, mapeamento, RS-485/Modbus, varredura, partida),
+  com a explicação de cada uma; os valores marcados `VERIFICAR` aparecem em
+  amarelo. Para outra placa, altere esse arquivo (botão **Abrir board_config.h**).
+- **Monitor serial:** os quadros LDP trocados com a placa (comando, sequência e
+  tamanho); as leituras periódicas ficam ocultas até marcar a opção.
+- **Firmware:** versão, programa gravado (build_id, CRC), número de
+  varreduras, tempo de execução e há quanto tempo a placa está ligada.
+
+Conectado a uma placa real (aba Dispositivo), o mesmo painel mostra o que o
+firmware comanda e lê; nesse caso as entradas vêm dos bornes, não de cliques.
+O simulador não reproduz a eletrônica (tempos dos relés, ruído, alimentação):
+os níveis mostrados são os calculados a partir de `board_config.h`.
+
 ## 8. Linha de comando
 
 ```powershell

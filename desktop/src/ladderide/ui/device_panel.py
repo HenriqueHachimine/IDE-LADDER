@@ -39,6 +39,7 @@ class DeviceSession(QObject):
     progress = Signal(int, int)
     jobDone = Signal(str, object)
     jobFailed = Signal(str, str)
+    traffic = Signal(str, str, int, int)  # direcao, comando, seq, bytes (monitor serial)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -96,6 +97,7 @@ class DeviceSession(QObject):
             self.client = None
         transport = self.factory()
         client = DeviceClient(transport, timeout=0.4 if not isinstance(transport, ProcessTransport) else 0.6)
+        client.on_traffic = self.traffic.emit
         try:
             info = client.info()
         except Exception:

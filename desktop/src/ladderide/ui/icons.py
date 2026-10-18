@@ -122,6 +122,14 @@ def _draw(name: str, p: QPainter) -> None:
         for k, w in enumerate((8, 6, 9)):
             y = 7.5 + k * 3.5
             p.drawLine(QPointF(6, y), QPointF(6 + w, y))
+    elif name == "board":                       # placa com chip e reles
+        p.setPen(QPen(QColor("#065f46"), 1.2)); p.setBrush(QColor("#10b981"))
+        p.drawRoundedRect(QRectF(2, 4, 18, 14), 2, 2)
+        p.setPen(Qt.NoPen); p.setBrush(QColor("#1e293b"))
+        p.drawRect(QRectF(4, 7, 7, 8))
+        p.setBrush(BLUE)
+        for k in range(2):
+            p.drawRect(QRectF(13, 6 + k * 6, 5, 4.5))
     elif name == "cpp":                         # codigo-fonte: </>
         p.setPen(QPen(BLUE, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         p.drawPolyline(QPolygonF([QPointF(7, 6), QPointF(2.5, 11), QPointF(7, 16)]))

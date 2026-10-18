@@ -26,6 +26,7 @@ from .dialogs import ElementDialog, ProjectDialog
 from .env_panel import EnvironmentPanel
 from .icons import make_icon
 from .cpp_panel import CppPanel
+from .esp32_panel import Esp32Panel
 from .il_panel import ILPanel
 from .verify_dialog import VerifyDialog
 from . import theme
@@ -38,7 +39,7 @@ QWIDGETSIZE_MAX = (1 << 24) - 1     # limite de tamanho de widget do Qt (nao exp
 
 
 class MainWindow(QMainWindow):
-    LAYOUT_VERSION = 3          # mude ao reorganizar os paineis: invalida layouts salvos antigos
+    LAYOUT_VERSION = 4          # mude ao reorganizar os paineis: invalida layouts salvos antigos
 
     def __init__(self, project: Project | None = None, path: str | None = None, persist_layout: bool = False):
         super().__init__()
@@ -148,6 +149,8 @@ class MainWindow(QMainWindow):
           "Mostra o diagrama traduzido para C++; atualiza a cada edicao, antes de compilar")
         A("il_blocks", "Blocos de instrucao", self.show_il_blocks, "F12",
           "Mostra o diagrama convertido em lista de instrucoes, bloco por rede")
+        A("esp32_sim", "Simulador da placa ESP32", self.show_esp32, "Ctrl+Shift+E",
+          "Placa de 8 reles com o firmware rodando no PC: pinos, registradores e configuracao")
         A("environment", "Ambiente de simulacao", self.show_environment, "Ctrl+E",
           "Processos animados (silo, semaforo, portao...) controlados pelo programa")
         A("theme_toggle", "Alternar tema claro/escuro", self.toggle_theme, "Ctrl+Shift+T")
@@ -170,19 +173,20 @@ class MainWindow(QMainWindow):
                           ("sim_pause", "pause"), ("sim_scan", "scan"), ("sim_step", "step"),
                           ("sim_reset", "reset"), ("sim_stop", "stop"), ("zoom_in", "zoom_in"),
                           ("zoom_out", "zoom_out"), ("device_transfer", "transfer"), ("verify", "verify"),
-                          ("il_blocks", "il"), ("cpp_code", "cpp"), ("environment", "env"),
+                          ("il_blocks", "il"), ("cpp_code", "cpp"), ("esp32_sim", "board"), ("environment", "env"),
                           ("theme_toggle", "theme")):
             self.actions_[key].setIcon(make_icon(icon))
         self._icon_names = {"new": "new", "open": "open", "save": "save", "undo": "undo", "redo": "redo",
                             "delete": "delete", "rung_add": "rung", "compile": "compile", "sim_run": "run",
                             "sim_pause": "pause", "sim_scan": "scan", "sim_step": "step", "sim_reset": "reset",
                             "sim_stop": "stop", "zoom_in": "zoom_in", "zoom_out": "zoom_out",
-                            "device_transfer": "transfer", "verify": "verify", "il_blocks": "il", "cpp_code": "cpp",
+                            "device_transfer": "transfer", "verify": "verify", "il_blocks": "il", "cpp_code": "cpp", "esp32_sim": "board",
                             "environment": "env", "theme_toggle": "theme"}
         self.actions_["device_transfer"].setIconText("Transferir")
         self.actions_["verify"].setIconText("Verificar ESP32")
         self.actions_["il_blocks"].setIconText("Blocos IL")
         self.actions_["cpp_code"].setIconText("C++")
+        self.actions_["esp32_sim"].setIconText("Placa ESP32")
         self.actions_["environment"].setIconText("Ambiente")
         self.actions_["open"].setIconText("Abrir")
 
@@ -212,7 +216,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction(a["environment"])
         self.device_menu = mb.addMenu("&Dispositivo")
-        for k in ("verify", "device_transfer", None, "dev_run", "dev_stop", "dev_monitor"):
+        for k in ("esp32_sim", None, "verify", "device_transfer", None, "dev_run", "dev_stop", "dev_monitor"):
             self.device_menu.addSeparator() if k is None else self.device_menu.addAction(a[k])
         self.device_menu.addSeparator()
         self.device_menu.addAction(self.device_dock.toggleViewAction())
@@ -235,7 +239,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         panels = m.addMenu("Paineis")
         for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.cpp_dock,
-                     self.env_dock, self.msgs_dock, self.symbols_dock):
+                     self.env_dock, self.esp32_dock, self.msgs_dock, self.symbols_dock):
             panels.addAction(dock.toggleViewAction())
         m.addAction(a["layout_lock"])
         m.addAction(a["layout_reset"])
@@ -249,7 +253,7 @@ class MainWindow(QMainWindow):
             "Edicao": ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "zoom_in", "zoom_out"),
             "Simulacao": ("cpp_code", "compile", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
                           None, "environment"),
-            "Dispositivo": ("verify", "device_transfer", None, "il_blocks"),
+            "Dispositivo": ("esp32_sim", "verify", "device_transfer", None, "il_blocks"),
         }
         with_text = {"cpp_code", "compile", "sim_run", "sim_stop", "environment", "device_transfer"}
         self.toolbars = []
@@ -328,6 +332,10 @@ class MainWindow(QMainWindow):
         self.env_panel.exampleRequested.connect(self.open_example)
         self.env_dock = self._dock("Ambiente", self.env_panel, Qt.BottomDockWidgetArea, "dock_env")
         self.tabifyDockWidget(self.symbols_dock, self.env_dock)
+        # placa ESP32 (firmware no PC): larga, fica sob o diagrama ao lado do ambiente
+        self.esp32_panel = Esp32Panel(self.session, self.device_panel, lambda: self.device_transfer())
+        self.esp32_dock = self._dock("Placa ESP32", self.esp32_panel, Qt.BottomDockWidgetArea, "dock_esp32")
+        self.tabifyDockWidget(self.env_dock, self.esp32_dock)
         self.msgs_dock.raise_()
         self.il_dock.visibilityChanged.connect(lambda visible: visible and self._refresh_il())
         self.view.selectionChangedTo.connect(self.il_panel.highlight)
@@ -404,7 +412,7 @@ class MainWindow(QMainWindow):
 
     def _docks(self) -> tuple[QDockWidget, ...]:
         return (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.cpp_dock,
-                self.env_dock, self.msgs_dock, self.symbols_dock)
+                self.env_dock, self.esp32_dock, self.msgs_dock, self.symbols_dock)
 
     def set_layout_locked(self, locked: bool, save: bool = True) -> None:
         """Layout travado: paineis e barras nao podem ser movidos, desacoplados, fechados
@@ -481,6 +489,7 @@ class MainWindow(QMainWindow):
         self._update_actions()
         self._refresh_il()
         self._refresh_cpp()
+        self.esp32_panel.set_project(self.project)
 
     def _update_title(self) -> None:
         name = Path(self.path).name if self.path else "sem arquivo"
@@ -912,6 +921,14 @@ class MainWindow(QMainWindow):
         self.il_dock.raise_()
         self._refresh_il()
 
+    def show_esp32(self) -> None:
+        self.esp32_dock.show()
+        self.esp32_dock.raise_()
+        if not self.layout_locked and not self.esp32_dock.isFloating():
+            target = int(0.5 * self.height())           # a placa precisa de altura para ser legivel
+            if self.esp32_dock.height() < target:
+                self.resizeDocks([self.esp32_dock], [target], Qt.Vertical)
+
     def show_cpp(self) -> None:
         self.cpp_dock.show()
         self.cpp_dock.raise_()
@@ -964,6 +981,7 @@ class MainWindow(QMainWindow):
         self._il_key = None
         self._refresh_il()
         self.cpp_panel.theme_changed()
+        self.esp32_panel.theme_changed()
         self._update_live()
 
     # ================================================== ambientes de simulacao
@@ -1033,7 +1051,8 @@ class MainWindow(QMainWindow):
         self.device_ticks += 1
         self._sync_device_status()
         if self.device_panel.connected:
-            if self.monitoring or self.device_ticks % 5 == 0:
+            board_visible = not self.esp32_dock.visibleRegion().isEmpty()
+            if self.monitoring or board_visible or self.device_ticks % 5 == 0:
                 self.session.poll()
         elif self.session.auto_reconnect and self.device_ticks % 10 == 0:
             self.session.poll()
@@ -1051,6 +1070,7 @@ class MainWindow(QMainWindow):
         src = MonitorSource(snap, self.result or CompileResult())
         self.device_panel.io.update_values(snap.inputs, snap.q_logical, snap.q_commanded, src.timer_state,
                                            src.counter_state, src.read_bit)
+        self.esp32_panel.on_snapshot(snap)
         if self.monitoring:
             self._update_live()
 

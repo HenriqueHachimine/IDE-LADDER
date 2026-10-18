@@ -122,3 +122,42 @@ def test_lost_device_reports_disconnection(window):
     assert "perdida" in panel.link.text() or "reconectar" in panel.link.text()
     # reconexao automatica (o dispositivo virtual e reiniciado pela fabrica)
     assert wait_for(app, lambda: panel.connected, timeout=10)
+
+
+def test_esp32_board_simulator_runs_firmware_and_shows_pins(window):
+    app, w = window
+    w.file_open(str(ROOT / "examples" / "ambientes" / "portao.ladproj"))
+    w.show_esp32()
+    board_panel = w.esp32_panel
+    cfg = board_panel.config
+    assert cfg.value("PIN_595_SER") == 33 and cfg.out_map == [7, 6, 5, 4, 3, 2, 1, 0]
+    assert any(i.verify for i in cfg.items)                     # valores a confirmar na placa real
+    board_panel.power_btn.click()                               # liga a placa virtual
+    assert wait_for(app, lambda: board_panel.board.powered and w.device_panel.last_status is not None)
+    assert board_panel.board.virtual and board_panel.board.state == "STOP"
+    assert "BOOT" in board_panel.log.toPlainText()
+    board_panel.transfer_btn.click()
+    assert wait_for(app, lambda: w.device_panel.last_status.has_program
+                    and w.device_panel.last_status.build_id == w.result.build_id)
+    assert "LOAD_COMMIT" in board_panel.log.toPlainText()       # monitor serial mostra o protocolo
+    board_panel.run_btn.click()
+    assert wait_for(app, lambda: board_panel.board.state == "RUN")
+    board_panel.toggle_input(2)                                 # Parar (NF): fechado
+    board_panel.toggle_input(0)                                 # Abrir
+    assert wait_for(app, lambda: board_panel.board.outputs & 1)  # rele K1 (Motor_Sobe) energizado
+    levels = cfg.shift_out_levels(board_panel.board.outputs)
+    assert levels[cfg.out_map.index(0)] == 0                    # ativo em 0 no 74HC595
+    assert board_panel.board.names["Q0.0"] == "Motor_Sobe"
+    board_panel.reset_btn.click()                               # reinicia: firmware volta em STOP
+    assert wait_for(app, lambda: board_panel.board.powered and board_panel.board.state == "STOP", 10)
+
+
+def test_board_config_parser_reads_defines_arrays_and_comments():
+    from ladderide.comm.board import parse_board_config
+    cfg = parse_board_config(
+        "/* Polaridade (VERIFICAR) */\n#define RELAY_ACTIVE_LOW 0\n#define INPUT_ACTIVE_LOW 1\n\n"
+        "#define PIN_595_SER 4 /* dados */\nstatic const uint8_t OUT_MAP[8] = {0, 1, 2, 3, 4, 5, 6, 7};\n")
+    assert cfg.value("PIN_595_SER") == 4 and cfg.out_map == list(range(8))
+    assert [i.verify for i in cfg.items[:2]] == [True, True]
+    assert cfg.shift_out_levels(0b1) == [1, 0, 0, 0, 0, 0, 0, 0]   # ativo em 1
+    assert cfg.shift_in_levels(0b1)[cfg.in_map.index(0)] == 0      # ativo em 0

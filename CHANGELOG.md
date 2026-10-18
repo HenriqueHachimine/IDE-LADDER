@@ -16,6 +16,10 @@ ensaios na placa real.
   varredura medido no dispositivo.
 - Blocos de instrução (F12 e `ladderide.cli il`): lista de instruções por rede,
   sincronizada com o diagrama e animada na simulação.
+- Simulador da placa ESP32 (painel Placa ESP32, Ctrl+Shift+E): liga o dispositivo virtual
+  (firmware C no PC), desenha relés, entradas, GPIOs e os níveis elétricos nos registradores
+  conforme `board_config.h`, lista toda a configuração com os itens a verificar e mostra o
+  tráfego LDP (monitor serial) e o estado do firmware; reinício da placa virtual.
 - Novos ambientes: elevador de 4 andares, linha de garrafas (enchimento, inspeção, rejeitor e
   encaixotamento), central de ar comprimido (dois compressores, pressostatos, térmicos e dreno) e
   misturador de batelada (fluxômetros, termostato, agitação e descarga), com programas de exemplo

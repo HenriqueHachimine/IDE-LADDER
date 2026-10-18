@@ -55,6 +55,14 @@ class DeviceClient:
         # dispositivo com o de uma sessao anterior.
         self.seq = random.randrange(256)
         self.retry_count = 0
+        # Observador do trafego (monitor serial do simulador da placa):
+        # on_traffic(direcao "TX"/"RX"/"ERR"/"RETRY", comando, seq, bytes do quadro)
+        self.on_traffic: Callable[[str, str, int, int], None] | None = None
+
+    def _trace(self, direction: str, cmd: int, nbytes: int) -> None:
+        if self.on_traffic is not None:
+            name = Cmd(cmd).name if cmd in Cmd._value2member_map_ else str(cmd)
+            self.on_traffic(direction, name, self.seq, nbytes)
 
     def close(self) -> None:
         self.transport.close()
@@ -67,15 +75,19 @@ class DeviceClient:
         for attempt in range(self.retries + 1):
             if attempt:
                 self.retry_count += 1
+                self._trace("RETRY", cmd, len(frame))
             try:
                 self.transport.write(frame)
+                self._trace("TX", cmd, len(frame))
                 deadline = time.monotonic() + wait
                 while (left := deadline - time.monotonic()) > 0:
                     for f in self.parser.feed(self.transport.read(left)):
                         if f.seq != self.seq or f.type != (cmd | RESPONSE_FLAG):
                             continue  # resposta atrasada de outro pedido
                         if f.flags & ERROR_FLAG:
+                            self._trace("ERR", cmd, len(f.payload))
                             raise DeviceError(cmd, f.payload[0] if f.payload else 0, f.payload[1:])
+                        self._trace("RX", cmd, len(f.payload))
                         return f.payload
             except TransportError as exc:
                 raise CommError(str(exc)) from exc
