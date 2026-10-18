@@ -184,6 +184,10 @@ def test_esp32_board_runs_arduino_example_sketch(window):
     panel.send_edit.setText("m")                                 # espelho: IN3 -> OUT3
     panel.send_text()
     assert wait_for(app, lambda: panel.board.outputs == 0b100)
-    assert "modo espelho" in panel.log.toPlainText()
+    log = panel.log.toPlainText()                                # o monitor narra cada passo
+    assert "comando '1': OUT1 -> ligar" in log and "rele    OUT1 LIGOU" in log
+    assert wait_for(app, lambda: "rele    OUT3 LIGOU" in panel.log.toPlainText())
+    log = panel.log.toPlainText()
+    assert "entrada IN3 LIGOU" in log and "modo manual -> espelho" in log and "rele    OUT1 desligou" in log
     panel.mode.setCurrentIndex(0)                                # volta ao firmware: encerra o sketch
     assert panel.sketch is None and not panel.board.powered

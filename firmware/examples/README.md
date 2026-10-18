@@ -20,8 +20,8 @@ No Linux, a porta é `/dev/ttyUSB0` ou `/dev/ttyACM0`.
 
 | Exemplo | Ambiente PlatformIO | O que faz |
 |---|---|---|
-| `teste_placa/` | `exemplo_teste_placa` | Teste da placa pelo monitor serial: `1`–`8` liga/desliga OUT1–OUT8, `a` desliga todos, `c` aciona um relé por vez (0,5 s cada), `m` espelha cada entrada INk no relé OUTk, `s` mostra o estado e `h` mostra a ajuda. Imprime as entradas e saídas sempre que mudam. |
-| `ladder_portao/` | `exemplo_ladder_portao` | O programa LADDER do portão de garagem (`examples/ambientes/portao.ladproj`) convertido em C++ pela IDE (painel Código C++ ou `ladderide.cli cpp`), rodando direto no ESP32 a cada 10 ms. Entradas I0.0 Abrir, I0.1 Fechar, I0.2 Parar (NF), I0.3/I0.4 fins de curso, I0.5 fotocélula; saídas Q0.0 sobe, Q0.1 desce, Q0.2–Q0.4 lâmpadas. |
+| `teste_placa/` | `exemplo_teste_placa` | Teste da placa pelo monitor serial: `1`–`8` liga/desliga OUT1–OUT8, `a` desliga todos, `c` aciona um relé por vez (0,5 s cada), `m` espelha cada entrada INk no relé OUTk, `s` mostra o estado e `h` mostra a ajuda. Confirma cada comando e mostra cada entrada e relé que muda, com o tempo em ms. |
+| `ladder_portao/` | `exemplo_ladder_portao` | O programa LADDER do portão de garagem (`examples/ambientes/portao.ladproj`) convertido em C++ pela IDE (painel Código C++ ou `ladderide.cli cpp`), rodando direto no ESP32 a cada 10 ms. Entradas I0.0 Abrir, I0.1 Fechar, I0.2 Parar (NF), I0.3/I0.4 fins de curso, I0.5 fotocélula; saídas Q0.0 sobe, Q0.1 desce, Q0.2–Q0.4 lâmpadas. No monitor serial: lista de E/S com os comentários dos símbolos e cada mudança de entrada, temporizador e saída; `s` = estado completo, `h` = ajuda. |
 
 ## Rodar os exemplos no simulador da IDE (sem a placa)
 

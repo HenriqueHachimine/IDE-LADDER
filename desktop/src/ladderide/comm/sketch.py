@@ -8,7 +8,9 @@ O processo conversa com a IDE por linhas de texto (ver arduino_sim.cpp).
 """
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -37,20 +39,39 @@ def _cxx() -> str:
     raise BuildError("compilador C++ nao encontrado (instale o MinGW/g++)")
 
 
+def _builds(name: str) -> list[Path]:
+    """Executaveis ja compilados do exemplo (sketch_<name>.exe antigo ou sketch_<name>_<hash>.exe)."""
+    pattern = re.compile(rf"sketch_{re.escape(name)}(_[0-9a-f]{{10}})?{re.escape(EXE_SUFFIX)}")
+    return [p for p in BUILD.glob("sketch_*") if pattern.fullmatch(p.name)] if BUILD.is_dir() else []
+
+
 def build_sketch(name: str, rebuild: bool = False) -> Path:
-    """Compila firmware/examples/<name> para o PC. Recompila so se algo mudou."""
+    """Compila firmware/examples/<name> para o PC. Recompila so se algo mudou.
+
+    O executavel leva no nome um hash das fontes: no Windows um sketch em uso
+    (outra janela da IDE com a placa ligada) nao pode ser sobrescrito, entao
+    cada versao do codigo vira um arquivo novo e as antigas sao apagadas quando
+    estiverem livres.
+    """
     folder = EXAMPLES / name
-    exe = BUILD / f"sketch_{name}{EXE_SUFFIX}"
     if getattr(sys, "frozen", False) or not folder.is_dir():
-        if exe.exists():
-            return exe
+        found = sorted(_builds(name), key=lambda p: p.stat().st_mtime)
+        if found:
+            return found[-1]
         raise BuildError(f"exemplo '{name}' nao encontrado")
     sources = sorted(folder.glob("*.cpp")) + [FIRMWARE / "src" / "io_board.cpp", SIM_DIR / "arduino_sim.cpp"]
-    deps = sources + list(folder.glob("*.h")) + [SIM_DIR / "Arduino.h", FIRMWARE / "src" / "board_config.h",
-                                                 FIRMWARE / "src" / "io_board.h"]
-    if exe.exists() and not rebuild and exe.stat().st_mtime >= max(p.stat().st_mtime for p in deps):
+    deps = sources + sorted(folder.glob("*.h")) + [SIM_DIR / "Arduino.h", FIRMWARE / "src" / "board_config.h",
+                                                   FIRMWARE / "src" / "io_board.h"]
+    digest = hashlib.sha1(b"".join(p.read_bytes() for p in deps)).hexdigest()[:10]
+    exe = BUILD / f"sketch_{name}_{digest}{EXE_SUFFIX}"
+    if exe.exists() and not rebuild:
         return exe
     BUILD.mkdir(parents=True, exist_ok=True)
+    for old in _builds(name):
+        try:
+            old.unlink()
+        except OSError:
+            pass                                    # em uso: fica para a proxima vez
     cmd = [_cxx(), "-std=gnu++11", "-O1", "-Wall", "-DARDUINO=10819", "-DARDUINO_SIM=1",
            f"-I{SIM_DIR}", f"-I{FIRMWARE / 'src'}", f"-I{folder}", *map(str, sources), "-o", str(exe)]
     proc = subprocess.run(cmd, capture_output=True, text=True)

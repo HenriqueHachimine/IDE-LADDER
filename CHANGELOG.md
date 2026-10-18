@@ -16,6 +16,11 @@ ensaios na placa real.
   varredura medido no dispositivo.
 - Blocos de instrução (F12 e `ladderide.cli il`): lista de instruções por rede,
   sincronizada com o diagrama e animada na simulação.
+- Exemplos do ESP32 narram no monitor serial o que acontece: o `teste_placa` confirma cada
+  comando e mostra cada entrada e relé que muda; o sketch gerado do LADDER (`ladder_portao`
+  e qualquer projeto exportado em C++) lista entradas/saídas com os comentários dos símbolos e
+  mostra cada mudança de entrada, temporizador, contador e saída (`s` = estado, `h` = ajuda).
+  O modo sketch recompila mesmo com o exemplo ainda aberto em outra janela da IDE.
 - Placa ESP32 roda os exemplos Arduino no PC (modo sketch): `firmware/test/host/arduino_sim`
   imita pinos, tempo e Serial, com 74HC595/74HC165 simulados no nível dos sinais; o sketch
   usa o `io_board.cpp` do firmware, o monitor serial mostra a saída e envia comandos.

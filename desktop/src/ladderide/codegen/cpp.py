@@ -14,6 +14,7 @@ com o simulador.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 from ..compiler.compiler import COMPILER_VERSION, _Compiler
@@ -32,7 +33,8 @@ _RUNTIME_NAMES = {"I", "Q", "M", "T", "C", "Timer", "Counter", "TON", "TOF", "RT
                   "FIRST_SCAN", "CLOCK_1S", "clock_phase", "sat_add", "counter_reset", "plc_start",
                   "plc_scan", "setup", "loop", "dt", "dt_ms", "inputs", "outputs", "k", "main", "NULL",
                   "HIGH", "LOW", "INPUT", "OUTPUT", "millis", "delay", "uint8_t", "uint16_t", "uint32_t",
-                  "int32_t", "INT32_MAX", "INT32_MIN", "SCAN_PERIOD_MS"}
+                  "int32_t", "INT32_MAX", "INT32_MIN", "SCAN_PERIOD_MS", "IN_LABEL", "OUT_LABEL",
+                  "TIMER_LABEL", "COUNTER_LABEL", "print_help", "print_state", "report_changes", "stamp"}
 # macros e nomes globais do Arduino/ESP32 (o arquivo tambem compila como sketch)
 _ARDUINO_NAMES = {"bit", "min", "max", "abs", "round", "constrain", "sq", "PI", "HEX", "DEC", "BIN",
                   "OCT", "LED_BUILTIN", "word", "byte", "boolean", "Serial", "Serial1", "Serial2",
@@ -456,32 +458,179 @@ class _Gen:
         if namespace:
             out += ["", f"}}  // namespace {namespace}"]
         if arduino:
-            out += ["",
-                    "#ifdef ARDUINO",
-                    "// Uso como sketch para a placa (compile junto com firmware/src/io_board.cpp, que",
-                    "// faz a leitura das entradas e o acionamento dos reles). Exemplo nao validado",
-                    "// na placa: o caminho oficial e transferir o programa pela IDE.",
-                    '#include "io_board.h"',
-                    "",
-                    f"static const uint32_t SCAN_PERIOD_MS = {io.scan_period_ms};",
-                    "",
-                    "void setup() {",
-                    "    io_board_begin();",
-                    "    plc_start();",
-                    "}",
-                    "",
-                    "void loop() {",
-                    "    static uint32_t last = millis();",
-                    "    static uint16_t outputs = 0;",
-                    "    uint32_t now = millis();",
-                    "    if (now - last < SCAN_PERIOD_MS) return;",
-                    "    uint32_t dt = now - last;",
-                    "    last = now;",
-                    "    uint16_t inputs = io_board_transfer(outputs);  // aplica saidas e le entradas",
-                    "    outputs = plc_scan(inputs, dt);",
-                    "}",
-                    "#endif"]
+            out += [""] + self.sketch(namespace)
         return CppCode("\n".join(out) + "\n", rung_lines, first_el, len(errors), len(warnings))
+
+    def sketch(self, namespace: str | None) -> list[str]:
+        """Secao #ifdef ARDUINO: roda o programa na placa e narra no monitor serial o que muda."""
+        p, io, c = self.p, self.p.io, self.c
+        ns = f"{namespace}::" if namespace else ""
+        n_t = max(c.timers) + 1 if c.timers else 0
+        n_c = max(c.counters) + 1 if c.counters else 0
+        by_addr = {s.address.strip().upper(): s for s in p.symbols if s.name.strip()}
+
+        def label(addr: str) -> str:
+            sym = by_addr.get(addr)
+            return _ascii(f"{addr} {sym.name.strip()}" if sym else addr)
+
+        ins = [label(format_operand(Area.I, k)) for k in range(io.n_inputs)]
+        outs = [label(format_operand(Area.Q, k)) for k in range(io.n_outputs)]
+        timers = [label(f"T{k}") for k in range(n_t)]
+        counters = [label(f"C{k}") for k in range(n_c)]
+        w = max(len(x) for x in ins + outs + timers + counters)
+
+        def table(name: str, items: list[str]) -> str:
+            return f"static const char *const {name}[{len(items)}] = {{{', '.join(_c_str(x) for x in items)}}};"
+
+        help_lines = [f"=== {_ascii(p.name)}: programa LADDER rodando no ESP32 ===",
+                      f"{len(p.rungs)} rede(s), varredura a cada {io.scan_period_ms} ms. Entradas, saidas e temporizadores:"]
+        used = sorted({(a, i) for a, i in self.bit_names if a != Area.M})
+        for area, index in used:
+            addr = format_operand(area, index)
+            sym = by_addr.get(addr)
+            help_lines.append(f"  {label(addr):<{w}}" + (f"  {_ascii(sym.comment)}" if sym and sym.comment else ""))
+        for index in sorted(c.timers):
+            kind, pre = TimerType(c.timers[index][0]).name, c.timers[index][1]
+            help_lines.append(f"  {timers[index]:<{w}}  {kind} {pre} ms")
+        for index in sorted(c.counters):
+            kind = "CTU" if c.counters[index][0] == CounterType.UP else "CTD"
+            help_lines.append(f"  {counters[index]:<{w}}  {kind} preset {c.counters[index][1]}")
+        help_lines.append("Cada mudanca aparece aqui. Comandos: s = estado completo | h = ajuda")
+
+        s: list[str] = [
+            "#ifdef ARDUINO",
+            "// Uso como sketch para a placa (compile junto com firmware/src/io_board.cpp, que",
+            "// faz a leitura das entradas e o acionamento dos reles). Exemplo nao validado",
+            "// na placa: o caminho oficial e transferir o programa pela IDE.",
+            "// Monitor serial a 115200 bit/s: mostra cada entrada, saida, temporizador e",
+            "// contador que muda. Comandos: s = estado completo, h = ajuda.",
+            '#include "io_board.h"',
+            "",
+            f"static const uint32_t SCAN_PERIOD_MS = {io.scan_period_ms};",
+            "",
+            "// Nomes mostrados no monitor serial (endereco e simbolo)",
+            table("IN_LABEL", ins),
+            table("OUT_LABEL", outs)]
+        if n_t:
+            s.append(table("TIMER_LABEL", timers))
+        if n_c:
+            s.append(table("COUNTER_LABEL", counters))
+        s += ["",
+              "static void stamp() { Serial.printf(\"[%8lu ms] \", (unsigned long)millis()); }",
+              "",
+              "static void print_help() {",
+              "    Serial.println();"]
+        s += [f"    Serial.println({_c_str(line)});" for line in help_lines]
+        s += ["}",
+              "",
+              "static void print_state(uint16_t inputs, uint16_t outputs) {",
+              "    stamp();",
+              "    Serial.println(\"estado atual:\");",
+              f"    for (int k = 0; k < {io.n_inputs}; k++)",
+              f"        Serial.printf(\"  %-{w}s  %s\\n\", IN_LABEL[k], (inputs >> k) & 1u ? \"1\" : \"0\");",
+              f"    for (int k = 0; k < {io.n_outputs}; k++)",
+              f"        Serial.printf(\"  %-{w}s  %s\\n\", OUT_LABEL[k], (outputs >> k) & 1u ? \"1 (rele ligado)\" : \"0\");"]
+        for index in sorted(c.timers):
+            s.append(f"    Serial.printf(\"  %-{w}s  %lu/%lu ms%s\\n\", TIMER_LABEL[{index}], "
+                     f"(unsigned long){ns}T[{index}].acc, (unsigned long){ns}T[{index}].pre, "
+                     f"{ns}T[{index}].dn ? \" DN\" : \"\");")
+        for index in sorted(c.counters):
+            s.append(f"    Serial.printf(\"  %-{w}s  %ld/%ld%s\\n\", COUNTER_LABEL[{index}], "
+                     f"(long){ns}C[{index}].acc, (long){ns}C[{index}].pre, {ns}C[{index}].dn ? \" DN\" : \"\");")
+        s += ["}",
+              "",
+              "// Compara com a varredura anterior e escreve o que mudou: entradas (causa),",
+              "// temporizadores e contadores, e por fim as saidas (efeito).",
+              "static void report_changes(uint16_t inputs, uint16_t outputs, bool quiet) {",
+              "    static uint16_t last_in = 0, last_out = 0;"]
+        if n_t:
+            s.append(f"    static bool last_tt[{n_t}], last_dn[{n_t}];")
+        if n_c:
+            s.append(f"    static int32_t last_acc[{n_c}];")
+            s.append(f"    static bool last_cdn[{n_c}];")
+        s += [f"    for (int k = 0; k < {io.n_inputs}; k++) {{",
+              "        bool on = (inputs >> k) & 1u;",
+              "        if (!quiet && on != (bool)((last_in >> k) & 1u)) {",
+              "            stamp();",
+              "            Serial.printf(\"entrada %s %s\\n\", IN_LABEL[k], on ? \"LIGOU\" : \"desligou\");",
+              "        }",
+              "    }"]
+        for index in sorted(c.timers):
+            t = f"{ns}T[{index}]"
+            s += [f"    if (!quiet && {t}.tt && !last_tt[{index}]) {{",
+                  "        stamp();",
+                  f"        Serial.printf(\"temporizador %s comecou a contar (%lu ms)\\n\", TIMER_LABEL[{index}], "
+                  f"(unsigned long){t}.pre);",
+                  "    }",
+                  f"    if (!quiet && {t}.dn != last_dn[{index}]) {{",
+                  "        stamp();",
+                  f"        Serial.printf(\"temporizador %s: DN %s\\n\", TIMER_LABEL[{index}], {t}.dn ? \"LIGOU\" : \"desligou\");",
+                  "    }",
+                  f"    last_tt[{index}] = {t}.tt;",
+                  f"    last_dn[{index}] = {t}.dn;"]
+        for index in sorted(c.counters):
+            k = f"{ns}C[{index}]"
+            s += [f"    if (!quiet && {k}.acc != last_acc[{index}]) {{",
+                  "        stamp();",
+                  f"        Serial.printf(\"contador %s = %ld (preset %ld)\\n\", COUNTER_LABEL[{index}], (long){k}.acc, "
+                  f"(long){k}.pre);",
+                  "    }",
+                  f"    if (!quiet && {k}.dn != last_cdn[{index}]) {{",
+                  "        stamp();",
+                  f"        Serial.printf(\"contador %s: DN %s\\n\", COUNTER_LABEL[{index}], {k}.dn ? \"LIGOU\" : \"desligou\");",
+                  "    }",
+                  f"    last_acc[{index}] = {k}.acc;",
+                  f"    last_cdn[{index}] = {k}.dn;"]
+        s += [f"    for (int k = 0; k < {io.n_outputs}; k++) {{",
+              "        bool on = (outputs >> k) & 1u;",
+              "        if (!quiet && on != (bool)((last_out >> k) & 1u)) {",
+              "            stamp();",
+              "            Serial.printf(\"saida   %s %s\\n\", OUT_LABEL[k], on ? \"LIGOU (rele energizado)\" : \"desligou\");",
+              "        }",
+              "    }",
+              "    last_in = inputs;",
+              "    last_out = outputs;",
+              "}",
+              "",
+              "void setup() {",
+              "    io_board_begin();",
+              "    Serial.begin(115200);",
+              "    delay(300);",
+              f"    {ns}plc_start();",
+              "    print_help();",
+              "}",
+              "",
+              "void loop() {",
+              "    static uint32_t last = millis();",
+              "    static uint16_t inputs = 0, outputs = 0;",
+              "    static bool started = false;",
+              "    while (Serial.available() > 0) {",
+              "        int ch = Serial.read();",
+              "        if (ch == 's') print_state(inputs, outputs);",
+              "        else if (ch == 'h' || ch == '?') print_help();",
+              "    }",
+              "    uint32_t now = millis();",
+              "    if (now - last < SCAN_PERIOD_MS) return;",
+              "    uint32_t dt = now - last;",
+              "    last = now;",
+              "    inputs = io_board_transfer(outputs);  // aplica saidas e le entradas",
+              f"    outputs = {ns}plc_scan(inputs, dt);",
+              "    report_changes(inputs, outputs, !started);",
+              "    if (!started) print_state(inputs, outputs);  // estado depois da primeira varredura",
+              "    started = true;",
+              "}",
+              "#endif"]
+        return s
+
+
+def _ascii(text: str) -> str:
+    """Texto para o monitor serial: sem acentos e sem quebras de linha."""
+    flat = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    return " ".join(flat.split())
+
+
+def _c_str(text: str) -> str:
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"').replace("??", "?\\?") + '"'
 
 
 def generate_cpp(project: Project, *, namespace: str | None = None, arduino: bool = True) -> CppCode:

@@ -7,6 +7,7 @@ execucao sao pulados.
 from __future__ import annotations
 
 import random
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -278,3 +279,82 @@ def test_firmware_example_is_in_sync_with_the_generator():
     assert example.read_text(encoding="utf-8") == generate_cpp(project).text, (
         "regenere com: python -m ladderide.cli cpp examples/ambientes/portao.ladproj "
         "-o firmware/examples/ladder_portao/portao.cpp")
+
+
+class _SerialLog:
+    """Junta o que o sketch escreve na Serial; wait() espera um trecho aparecer."""
+
+    def __init__(self):
+        import threading
+        self.text, self.cond = "", threading.Condition()
+
+    def __call__(self, data: bytes) -> None:
+        with self.cond:
+            self.text += data.decode("utf-8", "replace")
+            self.cond.notify_all()
+
+    def wait(self, part: str, timeout: float = 5.0, since: int = 0) -> bool:
+        with self.cond:
+            return self.cond.wait_for(lambda: part in self.text[since:], timeout)
+
+
+def _run_sketch(exe, log):
+    from ladderide.comm.sketch import SketchProcess
+    return SketchProcess(exe, log, lambda state: None, lambda code: None)
+
+
+@pytest.mark.skipif(CXX is None, reason="g++ nao encontrado")
+def test_generated_sketch_reports_every_change_on_serial():
+    """O sketch gerado narra no monitor serial cada entrada, temporizador e saida que muda."""
+    from ladderide.comm.sketch import build_sketch
+    log = _SerialLog()
+    proc = _run_sketch(build_sketch("ladder_portao"), log)
+    try:
+        assert log.wait("=== Portao de garagem: programa LADDER rodando no ESP32 ===")
+        assert log.wait("estado atual:")                                  # depois da primeira varredura
+        assert "I0.2 Parar" in log.text and "Botao PARAR (NF: le 1 quando solto)" in log.text
+        proc.set_inputs(0b10100)                                          # Parar solto + fim de curso fechado
+        assert log.wait("entrada I0.2 Parar LIGOU") and log.wait("saida   Q0.4 Lampada_Fechado LIGOU")
+        proc.set_inputs(0b10101)                                          # + botao Abrir
+        assert log.wait("entrada I0.0 Abrir LIGOU") and log.wait("saida   Q0.0 Motor_Sobe LIGOU")
+        proc.set_inputs(0b00100)                                          # saiu do fim de curso
+        assert log.wait("saida   Q0.2 Lampada_Entreaberto LIGOU")
+        proc.send_serial(b"s")
+        assert log.wait("T0 Espera_Reversao")
+        assert log.text.index("entrada I0.0 Abrir LIGOU") < log.text.index("saida   Q0.0 Motor_Sobe LIGOU")
+    finally:
+        proc.close()
+
+
+@pytest.mark.skipif(CXX is None, reason="g++ nao encontrado")
+def test_generated_sketch_with_timers_and_counters_compiles_and_runs(tmp_path):
+    """A secao Arduino de projetos com temporizadores e contadores compila sem avisos e roda no simulador."""
+    from ladderide.comm import sketch
+    rng = random.Random(7)
+    gen = ProjectGenerator(rng)
+    project = gen.project()
+    while not (gen.timers and gen.counters):
+        project = gen.project()
+    (tmp_path / "prog.cpp").write_text(generate_cpp(project).text, encoding="utf-8")
+    exe = tmp_path / "prog.exe"
+    cmd = [CXX, "-std=gnu++11", "-O1", "-Wall", "-Werror", "-DARDUINO=10819", "-DARDUINO_SIM=1",
+           f"-I{sketch.SIM_DIR}", f"-I{sketch.FIRMWARE / 'src'}", str(tmp_path / "prog.cpp"),
+           str(sketch.FIRMWARE / "src" / "io_board.cpp"), str(sketch.SIM_DIR / "arduino_sim.cpp"), "-o", str(exe)]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    log = _SerialLog()
+    proc = _run_sketch(exe, log)
+    try:
+        assert log.wait("estado atual:")
+        proc.set_inputs(0xFF)
+        assert log.wait("entrada I0.7")
+        start = len(log.text)
+        proc.send_serial(b"s")
+        assert log.wait("estado atual:", since=start)
+        tables = [ln for ln in generate_cpp(project).text.splitlines()
+                  if ln.startswith(("static const char *const TIMER_LABEL", "static const char *const COUNTER_LABEL"))]
+        assert len(tables) == 2
+        for label in re.findall(r'"([^"]+)"', "".join(tables)):            # temporizadores e contadores no estado
+            assert log.wait(f"  {label} ", since=start), label
+    finally:
+        proc.close()

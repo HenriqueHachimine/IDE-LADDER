@@ -169,23 +169,106 @@ uint16_t plc_scan(uint16_t inputs, uint32_t dt_ms) {
 // Uso como sketch para a placa (compile junto com firmware/src/io_board.cpp, que
 // faz a leitura das entradas e o acionamento dos reles). Exemplo nao validado
 // na placa: o caminho oficial e transferir o programa pela IDE.
+// Monitor serial a 115200 bit/s: mostra cada entrada, saida, temporizador e
+// contador que muda. Comandos: s = estado completo, h = ajuda.
 #include "io_board.h"
 
 static const uint32_t SCAN_PERIOD_MS = 10;
 
+// Nomes mostrados no monitor serial (endereco e simbolo)
+static const char *const IN_LABEL[8] = {"I0.0 Abrir", "I0.1 Fechar", "I0.2 Parar", "I0.3 Fim_Curso_Aberto", "I0.4 Fim_Curso_Fechado", "I0.5 Fotocelula", "I0.6", "I0.7"};
+static const char *const OUT_LABEL[8] = {"Q0.0 Motor_Sobe", "Q0.1 Motor_Desce", "Q0.2 Lampada_Entreaberto", "Q0.3 Lampada_Aberto", "Q0.4 Lampada_Fechado", "Q0.5", "Q0.6", "Q0.7"};
+static const char *const TIMER_LABEL[1] = {"T0 Espera_Reversao"};
+
+static void stamp() { Serial.printf("[%8lu ms] ", (unsigned long)millis()); }
+
+static void print_help() {
+    Serial.println();
+    Serial.println("=== Portao de garagem: programa LADDER rodando no ESP32 ===");
+    Serial.println("6 rede(s), varredura a cada 10 ms. Entradas, saidas e temporizadores:");
+    Serial.println("  I0.0 Abrir                Botao ABRIR (NA)");
+    Serial.println("  I0.1 Fechar               Botao FECHAR (NA)");
+    Serial.println("  I0.2 Parar                Botao PARAR (NF: le 1 quando solto)");
+    Serial.println("  I0.3 Fim_Curso_Aberto     LS1: portao totalmente aberto");
+    Serial.println("  I0.4 Fim_Curso_Fechado    LS2: portao totalmente fechado");
+    Serial.println("  I0.5 Fotocelula           Veiculo/obstaculo sob o portao");
+    Serial.println("  Q0.0 Motor_Sobe           Motor no sentido de abrir");
+    Serial.println("  Q0.1 Motor_Desce          Motor no sentido de fechar");
+    Serial.println("  Q0.2 Lampada_Entreaberto  Lampada ENTREABERTO");
+    Serial.println("  Q0.3 Lampada_Aberto       Lampada ABERTO");
+    Serial.println("  Q0.4 Lampada_Fechado      Lampada FECHADO");
+    Serial.println("  T0 Espera_Reversao        TON 600 ms");
+    Serial.println("Cada mudanca aparece aqui. Comandos: s = estado completo | h = ajuda");
+}
+
+static void print_state(uint16_t inputs, uint16_t outputs) {
+    stamp();
+    Serial.println("estado atual:");
+    for (int k = 0; k < 8; k++)
+        Serial.printf("  %-24s  %s\n", IN_LABEL[k], (inputs >> k) & 1u ? "1" : "0");
+    for (int k = 0; k < 8; k++)
+        Serial.printf("  %-24s  %s\n", OUT_LABEL[k], (outputs >> k) & 1u ? "1 (rele ligado)" : "0");
+    Serial.printf("  %-24s  %lu/%lu ms%s\n", TIMER_LABEL[0], (unsigned long)T[0].acc, (unsigned long)T[0].pre, T[0].dn ? " DN" : "");
+}
+
+// Compara com a varredura anterior e escreve o que mudou: entradas (causa),
+// temporizadores e contadores, e por fim as saidas (efeito).
+static void report_changes(uint16_t inputs, uint16_t outputs, bool quiet) {
+    static uint16_t last_in = 0, last_out = 0;
+    static bool last_tt[1], last_dn[1];
+    for (int k = 0; k < 8; k++) {
+        bool on = (inputs >> k) & 1u;
+        if (!quiet && on != (bool)((last_in >> k) & 1u)) {
+            stamp();
+            Serial.printf("entrada %s %s\n", IN_LABEL[k], on ? "LIGOU" : "desligou");
+        }
+    }
+    if (!quiet && T[0].tt && !last_tt[0]) {
+        stamp();
+        Serial.printf("temporizador %s comecou a contar (%lu ms)\n", TIMER_LABEL[0], (unsigned long)T[0].pre);
+    }
+    if (!quiet && T[0].dn != last_dn[0]) {
+        stamp();
+        Serial.printf("temporizador %s: DN %s\n", TIMER_LABEL[0], T[0].dn ? "LIGOU" : "desligou");
+    }
+    last_tt[0] = T[0].tt;
+    last_dn[0] = T[0].dn;
+    for (int k = 0; k < 8; k++) {
+        bool on = (outputs >> k) & 1u;
+        if (!quiet && on != (bool)((last_out >> k) & 1u)) {
+            stamp();
+            Serial.printf("saida   %s %s\n", OUT_LABEL[k], on ? "LIGOU (rele energizado)" : "desligou");
+        }
+    }
+    last_in = inputs;
+    last_out = outputs;
+}
+
 void setup() {
     io_board_begin();
+    Serial.begin(115200);
+    delay(300);
     plc_start();
+    print_help();
 }
 
 void loop() {
     static uint32_t last = millis();
-    static uint16_t outputs = 0;
+    static uint16_t inputs = 0, outputs = 0;
+    static bool started = false;
+    while (Serial.available() > 0) {
+        int ch = Serial.read();
+        if (ch == 's') print_state(inputs, outputs);
+        else if (ch == 'h' || ch == '?') print_help();
+    }
     uint32_t now = millis();
     if (now - last < SCAN_PERIOD_MS) return;
     uint32_t dt = now - last;
     last = now;
-    uint16_t inputs = io_board_transfer(outputs);  // aplica saidas e le entradas
+    inputs = io_board_transfer(outputs);  // aplica saidas e le entradas
     outputs = plc_scan(inputs, dt);
+    report_changes(inputs, outputs, !started);
+    if (!started) print_state(inputs, outputs);  // estado depois da primeira varredura
+    started = true;
 }
 #endif

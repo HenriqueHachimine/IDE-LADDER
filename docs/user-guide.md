@@ -123,7 +123,11 @@ teste automático compila o C++ gerado com g++ e confere, varredura a varredura,
 que ele produz os mesmos estados do simulador (exemplos e projetos aleatórios).
 O trecho `#ifdef ARDUINO` no fim do arquivo é um ponto de partida para usar o
 código como sketch junto com `firmware/src/io_board.cpp`; ele não foi testado
-na placa.
+na placa. Esse sketch escreve no monitor serial (115200 bit/s) a lista de
+entradas, saídas e temporizadores com os comentários dos símbolos e, a cada
+varredura, o que mudou: entradas, temporizadores (começou a contar, DN),
+contadores e saídas, com o tempo desde a partida. `s` mostra o estado completo
+e `h` a ajuda.
 
 ### Compilar (F7)
 
@@ -234,7 +238,9 @@ serial). A IDE compila o exemplo para o PC junto com o `io_board.cpp` do
 firmware e uma camada que imita o Arduino; os 74HC595/74HC165 são simulados no
 nível dos sinais (clock, latch, /OE), então a placa desenhada mostra os níveis
 gerados pelo próprio código. O monitor serial mostra o que o sketch imprime e
-envia o que você digitar. Detalhes e limites: `firmware/examples/README.md`.
+envia o que você digitar. Os dois exemplos narram o que acontece: cada comando
+recebido, cada troca de modo, cada entrada que muda e cada relé que liga ou
+desliga, com o tempo em milissegundos. Detalhes e limites: `firmware/examples/README.md`.
 
 Conectado a uma placa real (aba Dispositivo), o mesmo painel mostra o que o
 firmware comanda e lê; nesse caso as entradas vêm dos bornes, não de cliques.
