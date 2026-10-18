@@ -16,6 +16,11 @@ ensaios na placa real.
   varredura medido no dispositivo.
 - Blocos de instrução (F12 e `ladderide.cli il`): lista de instruções por rede,
   sincronizada com o diagrama e animada na simulação.
+- Exemplos para o ESP32 em `firmware/examples/` (ambientes PlatformIO
+  `exemplo_teste_placa` e `exemplo_ladder_portao`): teste da placa pelo monitor serial e o
+  programa do portão convertido em C++ rodando direto na placa. Compilam com `pio run`;
+  não testados na placa. O C++ gerado passou a incluir `Arduino.h` e a evitar nomes de
+  macros do Arduino.
 - Simulador da placa ESP32 (painel Placa ESP32, Ctrl+Shift+E): liga o dispositivo virtual
   (firmware C no PC), desenha relés, entradas, GPIOs e os níveis elétricos nos registradores
   conforme `board_config.h`, lista toda a configuração com os itens a verificar e mostra o

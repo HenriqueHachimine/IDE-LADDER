@@ -16,6 +16,10 @@ pio run -t upload --upload-port COM5     # grava
 Memória (compilação de 2026-10-16): RAM 44 760 B (13,7%), flash 312 205 B (23,8%).
 Estrutura `lv_vm_t` 1 092 B; imagens de programa até 8 740 B (staging + ativa).
 
+Exemplos independentes (teste da placa e programa LADDER convertido em C++):
+[`examples/README.md`](examples/README.md) — `pio run -e exemplo_teste_placa` /
+`pio run -e exemplo_ladder_portao`.
+
 Os headers gerados são atualizados com `python scripts/gen_isa_header.py`.
 Para outra placa, altere `src/board_config.h`. Testes no hardware:
 `docs/hardware-test-procedure.md`.

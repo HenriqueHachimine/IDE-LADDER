@@ -261,3 +261,20 @@ def test_generated_cpp_matches_simulator(tmp_path):
         expected = python_trace(project, seq)
         for n, (a, b) in enumerate(zip(expected, got, strict=True), start=1):
             assert a == b, f"projeto {k} ({project.name}), varredura {n}\n  sim: {a}\n  c++: {b}"
+
+
+def test_cpp_sketch_section_includes_arduino_and_avoids_arduino_macros():
+    p = Project(symbols=[Symbol("bit", "I0.0"), Symbol("B1", "Q0.0")])
+    p.rungs = [Rung([Contact("XIC", "bit")], [Coil("OTE", "B1")])]
+    text = generate_cpp(p).text
+    assert text.index("#include <Arduino.h>") < text.index("#include <stdint.h>")
+    assert "B1_ = bit_;" in text
+
+
+def test_firmware_example_is_in_sync_with_the_generator():
+    """firmware/examples/ladder_portao/portao.cpp e exatamente o que a IDE gera do projeto do portao."""
+    example = ROOT / "firmware" / "examples" / "ladder_portao" / "portao.cpp"
+    project = Project.load(ROOT / "examples" / "ambientes" / "portao.ladproj")
+    assert example.read_text(encoding="utf-8") == generate_cpp(project).text, (
+        "regenere com: python -m ladderide.cli cpp examples/ambientes/portao.ladproj "
+        "-o firmware/examples/ladder_portao/portao.cpp")

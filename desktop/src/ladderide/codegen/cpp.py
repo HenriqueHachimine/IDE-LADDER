@@ -33,7 +33,14 @@ _RUNTIME_NAMES = {"I", "Q", "M", "T", "C", "Timer", "Counter", "TON", "TOF", "RT
                   "plc_scan", "setup", "loop", "dt", "dt_ms", "inputs", "outputs", "k", "main", "NULL",
                   "HIGH", "LOW", "INPUT", "OUTPUT", "millis", "delay", "uint8_t", "uint16_t", "uint32_t",
                   "int32_t", "INT32_MAX", "INT32_MIN", "SCAN_PERIOD_MS"}
-RESERVED = _CPP_KEYWORDS | _RUNTIME_NAMES
+# macros e nomes globais do Arduino/ESP32 (o arquivo tambem compila como sketch)
+_ARDUINO_NAMES = {"bit", "min", "max", "abs", "round", "constrain", "sq", "PI", "HEX", "DEC", "BIN",
+                  "OCT", "LED_BUILTIN", "word", "byte", "boolean", "Serial", "Serial1", "Serial2",
+                  "digitalRead", "digitalWrite", "pinMode", "micros", "radians", "degrees", "lowByte",
+                  "highByte", "bitRead", "bitSet", "bitClear", "bitWrite", "interrupts", "noInterrupts",
+                  "CHANGE", "FALLING", "RISING", "INPUT_PULLUP", "io_board_begin", "io_board_transfer"}
+RESERVED = _CPP_KEYWORDS | _RUNTIME_NAMES | _ARDUINO_NAMES
+_ARDUINO_BINARY = re.compile(r"^B[01]{1,8}$")      # constantes B0..B11111111 de binary.h
 
 RUNTIME = r"""// ---------------------------------------------------------------------------
 // Runtime minimo: mesma semantica do interpretador do ESP32
@@ -236,7 +243,7 @@ class _Gen:
     # ------------------------------------------------------------- nomes
     def _unique(self, base: str) -> str:
         name = base
-        while name in RESERVED or name in self.used_names:
+        while name in RESERVED or name in self.used_names or _ARDUINO_BINARY.match(name):
             name += "_"
         self.used_names.add(name)
         return name
@@ -358,6 +365,8 @@ class _Gen:
                 ""]
         for d in [d for d in c.r.diagnostics if d.rung is None]:
             out.append(f"// {d.severity.upper()}: {d.message}")
+        if arduino:
+            out += ["#ifdef ARDUINO", "#include <Arduino.h>", "#endif"]
         out += ["#include <stdint.h>", ""]
         if namespace:
             out += [f"namespace {namespace} {{", ""]
