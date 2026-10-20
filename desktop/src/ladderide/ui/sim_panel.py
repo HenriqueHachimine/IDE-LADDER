@@ -1,6 +1,8 @@
 """Painel do simulador offline."""
 from __future__ import annotations
 
+import math
+
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QLabel, QSizePolicy, QToolButton,
                                QVBoxLayout, QWidget)
@@ -9,7 +11,14 @@ from ..sim.simulator import SimState, Simulator
 from .io_panel import IOPanel
 
 SPEEDS = [("0,1x", 0.1), ("0,25x", 0.25), ("0,5x", 0.5), ("1x (tempo real)", 1.0), ("2x", 2.0),
-          ("5x", 5.0), ("10x", 10.0)]
+          ("5x", 5.0), ("10x", 10.0), ("20x", 20.0), ("50x", 50.0), ("100x", 100.0),
+          ("Maxima", math.inf)]
+REAL_TIME = 3
+
+
+def format_speed(value: float) -> str:
+    text = f"{value:.1f}" if value < 10 else f"{value:.0f}"
+    return text.replace(".", ",").removesuffix(",0") + "x"
 
 
 class SimPanel(QWidget):
@@ -32,16 +41,23 @@ class SimPanel(QWidget):
         self.speed = QComboBox()
         for text, value in SPEEDS:
             self.speed.addItem(text, value)
-        self.speed.setCurrentIndex(3)
+        self.speed.setCurrentIndex(REAL_TIME)
+        self.speed.setToolTip("Multiplica o tempo da simulacao (temporizadores e ambiente). "
+                              "Ctrl+. acelera, Ctrl+, desacelera")
         self.state = QLabel("PARADO")
         self.state.setObjectName("stateBadge")
         self.scans = QLabel("0")
         self.vtime = QLabel("0,000 s")
+        self.real_speed = QLabel("-")
+        self.real_speed.setToolTip("Quanto o tempo simulado esta andando por segundo de relogio. Se ficar "
+                                   "abaixo do pedido, o PC nao acompanha; o resultado continua o mesmo, "
+                                   "so mais devagar.")
         self.pc = QLabel("-")
         form.addRow("Velocidade:", self.speed)
         form.addRow("Estado:", self.state)
         form.addRow("Varreduras:", self.scans)
         form.addRow("Tempo simulado:", self.vtime)
+        form.addRow("Velocidade real:", self.real_speed)
         form.addRow("Proxima instrucao:", self.pc)
         layout.addLayout(form)
         self.io = IOPanel(show_commanded=False)
@@ -54,12 +70,31 @@ class SimPanel(QWidget):
     def speed_factor(self) -> float:
         return float(self.speed.currentData())
 
+    def change_speed(self, steps: int) -> None:
+        self.speed.setCurrentIndex(max(0, min(self.speed.count() - 1, self.speed.currentIndex() + steps)))
+
+    def set_speed(self, value: float) -> None:
+        index = self.speed.findData(value)
+        if index >= 0:
+            self.speed.setCurrentIndex(index)
+
+    def _show_real_speed(self, sim: Simulator) -> None:
+        if sim.state != SimState.RUNNING or sim.actual_speed <= 0:
+            self.real_speed.setText("-")
+            self.real_speed.setStyleSheet("")
+            return
+        text = format_speed(sim.actual_speed)
+        slow = sim.limited and sim.actual_speed < 0.9 * self.speed_factor
+        self.real_speed.setText(text + ("  (limite do PC)" if slow else ""))
+        self.real_speed.setStyleSheet("color:#b45309;" if slow else "")
+
     def refresh(self, sim: Simulator | None) -> None:
         if sim is None:
             self.state.setText("sem programa compilado")
             self._badge(None, None)
             self.scans.setText("0")
             self.vtime.setText("0,000 s")
+            self.real_speed.setText("-")
             self.pc.setText("-")
             self.io.update_values(None, None, None, lambda i: None, lambda i: None, lambda a, i: None)
             return
@@ -72,6 +107,7 @@ class SimPanel(QWidget):
                     .get(sim.state, (None, None)))
         self.scans.setText(str(vm.scan_count))
         self.vtime.setText(f"{sim.virtual_ms / 1000:.3f} s".replace(".", ","))
+        self._show_real_speed(sim)
         if vm.in_scan and vm.pc < len(sim.program.code):
             from ..core.asm import format_operand
             from ..core.isa import Area, Op

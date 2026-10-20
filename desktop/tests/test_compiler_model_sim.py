@@ -281,3 +281,33 @@ def test_not_element_compiles():
     sim = Simulator(r)
     sim.scan_once()
     assert sim.vm.q[0]
+
+
+def test_speed_changes_wall_clock_not_result():
+    """Acelerar so muda quantas varreduras rodam por segundo; o resultado e o mesmo."""
+    r = compile_project(seal_project())
+    lines = []
+    for speed in (1.0, 50.0):
+        sim = Simulator(r, period_ms=10)
+        sim.start()
+        sim.set_input(0, True)
+        sim.advance(10, 1.0)
+        sim.set_input(0, False)
+        while sim.virtual_ms < 3000:
+            sim.advance(30 / speed if speed > 1 else 30, speed)
+        lines.append((sim.virtual_ms, sim.vm.dump_line()))
+    assert lines[0] == lines[1]
+    sim = Simulator(r, period_ms=10)
+    sim.start()
+    assert sim.advance(30, 100.0) == 301 and sim.actual_speed == pytest.approx(100.3, abs=0.1)
+    assert not sim.limited
+
+
+def test_speed_limited_by_cpu_budget():
+    import math
+    sim = Simulator(compile_project(seal_project()), period_ms=10)
+    sim.start()
+    n = sim.advance(30, 1000.0, work_ms=0)     # sem tempo de CPU: roda a primeira e corta o resto
+    assert n < 3000 and sim.limited and sim._budget == 0.0
+    n = sim.advance(30, math.inf, work_ms=5)   # maxima: o quanto couber em 5 ms
+    assert 0 < n <= Simulator.MAX_SCANS_PER_ADVANCE and not sim.limited

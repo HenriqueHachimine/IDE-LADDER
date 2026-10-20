@@ -139,3 +139,28 @@ def test_compile_error_highlights_element(window):
     item = w.messages.item(0)
     w.on_message(item)
     assert w.view.selection == bad.id
+
+
+def test_speed_shortcuts_change_simulation_speed(window):
+    w = window
+    panel = w.sim_panel
+    assert panel.speed_factor == 1.0
+    w.actions_["sim_faster"].trigger()
+    w.actions_["sim_faster"].trigger()
+    assert panel.speed_factor == 5.0
+    for _ in range(20):
+        w.actions_["sim_faster"].trigger()
+    assert panel.speed_factor == float("inf")
+    w.actions_["sim_slower"].trigger()
+    assert panel.speed_factor == 100.0
+    w.actions_["sim_realtime"].trigger()
+    assert panel.speed_factor == 1.0
+    w.tool_clicked("XIC")
+    w.tool_clicked("OTE")
+    assert w.compile()
+    w.sim_run()
+    panel.set_speed(20.0)
+    w.sim.advance(100, panel.speed_factor)
+    panel.refresh(w.sim)
+    assert w.sim.virtual_ms >= 1990 and panel.real_speed.text().startswith("20")
+    w.sim_stop()

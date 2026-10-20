@@ -102,6 +102,12 @@ class MainWindow(QMainWindow):
         self._default_layout = self.saveState(self.LAYOUT_VERSION)
         if persist_layout:
             self._restore_layout()
+            self.sim_panel.speed.blockSignals(True)
+            try:
+                self.sim_panel.set_speed(float(self._settings().value("sim/speed", "1.0", type=str)))
+            except ValueError:
+                pass
+            self.sim_panel.speed.blockSignals(False)
         self.set_layout_locked(persist_layout and self._settings().value("ui/layout_locked", False, type=bool),
                                save=False)
         self.refresh()
@@ -141,6 +147,12 @@ class MainWindow(QMainWindow):
         A("sim_step", "Passo", self.sim_step, "F11", "Executa uma instrucao")
         A("sim_reset", "Reiniciar", self.sim_reset, "Ctrl+F5", "Partida a frio da simulacao")
         A("sim_stop", "Parar", self.sim_stop, "Shift+F5", "Encerra a simulacao e volta a edicao")
+        A("sim_faster", "Acelerar", lambda: self.sim_panel.change_speed(1), "Ctrl+.",
+          "Aumenta a velocidade do tempo simulado")
+        A("sim_slower", "Desacelerar", lambda: self.sim_panel.change_speed(-1), "Ctrl+,",
+          "Diminui a velocidade do tempo simulado")
+        A("sim_realtime", "Tempo real (1x)", lambda: self.sim_panel.set_speed(1.0), "Ctrl+;",
+          "Volta a simulacao para o tempo real")
         A("zoom_in", "Aproximar", lambda: self.view.set_zoom(self.view.zoom * 1.2), QKeySequence.ZoomIn)
         A("zoom_out", "Afastar", lambda: self.view.set_zoom(self.view.zoom / 1.2), QKeySequence.ZoomOut)
         A("zoom_reset", "Zoom 100%", lambda: self.view.set_zoom(1.0), "Ctrl+0")
@@ -218,6 +230,9 @@ class MainWindow(QMainWindow):
         for k in ("sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop"):
             m.addAction(a[k])
         m.addSeparator()
+        for k in ("sim_faster", "sim_slower", "sim_realtime"):
+            m.addAction(a[k])
+        m.addSeparator()
         m.addAction(a["environment"])
         self.device_menu = mb.addMenu("&Dispositivo")
         for k in ("esp32_sim", None, "verify", "device_transfer", None, "dev_run", "dev_stop", "dev_monitor", None,
@@ -287,6 +302,7 @@ class MainWindow(QMainWindow):
 
         self.sim_panel = SimPanel(self.actions_)
         self.sim_panel.io.inputChanged.connect(self.on_input)
+        self.sim_panel.speed.currentIndexChanged.connect(self.on_speed_changed)
         self.sim_dock = self._dock("Simulador", self.sim_panel, Qt.RightDockWidgetArea, "dock_sim", scroll=True)
 
         self.messages = QListWidget()
@@ -1048,10 +1064,18 @@ class MainWindow(QMainWindow):
             self.sim.set_input(index, value)
             self._update_live()
 
+    def on_speed_changed(self, _index: int = 0) -> None:
+        self.statusBar().showMessage(f"Velocidade da simulacao: {self.sim_panel.speed.currentText()}", 2500)
+        if self.sim is not None:
+            self.sim.actual_speed = 0.0         # recomeca a media da velocidade real
+        if self.persist_layout:
+            self._settings().setValue("sim/speed", str(self.sim_panel.speed_factor))   # "inf" = maxima
+
     def tick(self) -> None:
         if self.sim is not None and self.sim.state == SimState.RUNNING:
             ms = self.clock.restart()
-            self.sim.advance(ms, self.sim_panel.speed_factor)
+            # no maximo ~2/3 do intervalo do relogio em varreduras: sobra tempo para desenhar e responder
+            self.sim.advance(ms, self.sim_panel.speed_factor, work_ms=self.timer.interval() * 0.65)
             self._update_live()
 
     # ============================================================ dispositivo

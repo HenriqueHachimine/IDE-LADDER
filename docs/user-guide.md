@@ -180,17 +180,27 @@ operandos e o monitor de variáveis lista os registradores usados. Exemplo:
 
 | Tecla | Ação |
 |---|---|
-| F5 | Executar continuamente (velocidade 0,1× a 10×) |
+| F5 | Executar continuamente |
 | F6 | Pausar |
 | F10 | Uma varredura |
 | F11 | Uma instrução (destaque laranja na instrução atual) |
 | Ctrl+F5 | Reiniciar (partida a frio) |
 | Shift+F5 | Parar e voltar à edição |
+| Ctrl+. / Ctrl+, | Acelerar / desacelerar o tempo da simulação |
+| Ctrl+; | Voltar ao tempo real (1×) |
 
 Verde = energizado. Contatos com preenchimento verde estão "fechados" pelo
 valor do operando. Caixas mostram PRE, ACC e bits. Entradas: botões de
 retenção ou, marcando "Botões pulsadores", momentâneos. O tempo é virtual
 (cada varredura avança o período configurado em Propriedades do projeto).
+
+**Velocidade:** no painel Simulador (ou com Ctrl+. e Ctrl+,) escolha de 0,1×
+a 100×, ou **Máxima** (o mais rápido que o PC conseguir). Acelerar não muda o
+resultado: temporizadores e ambiente veem os mesmos passos de tempo, só que
+mais deles por segundo. A linha **Velocidade real** mostra quanto o tempo
+simulado está andando; se aparecer "limite do PC", o computador não acompanha
+a velocidade pedida e a simulação roda o mais rápido possível sem travar a
+janela. A escolha fica salva para a próxima vez.
 
 ### Ambientes de simulação (Ctrl+E)
 

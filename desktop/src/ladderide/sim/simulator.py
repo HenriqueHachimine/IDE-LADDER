@@ -2,11 +2,14 @@
 
 O tempo e virtual: cada varredura avanca exatamente `period_ms`, e `advance()`
 converte o tempo real decorrido (multiplicado pela velocidade) em varreduras.
-Assim a simulacao e reprodutivel e identica a sequencia que o firmware
+Acelerar nao muda o resultado: o programa e o processo veem os mesmos passos
+de `period_ms`, so que mais deles por segundo de relogio. Assim a simulacao e reprodutivel e identica a sequencia que o firmware
 executaria com o mesmo periodo.
 """
 from __future__ import annotations
 
+import math
+import time
 from enum import Enum
 from typing import Protocol
 
@@ -47,6 +50,8 @@ class Simulator:
         self.inputs = 0
         self.virtual_ms = 0
         self._budget = 0.0
+        self.actual_speed = 0.0          # media movel do tempo simulado / tempo real
+        self.limited = False             # True se o PC nao acompanhou a velocidade pedida
         self.last_error: str | None = None
         self.plant: Plant | None = None
 
@@ -76,6 +81,8 @@ class Simulator:
             if self.plant is not None:
                 self.plant.reset()
         self.state = SimState.RUNNING
+        self.actual_speed = 0.0
+        self.limited = False
 
     def pause(self) -> None:
         if self.state == SimState.RUNNING:
@@ -148,21 +155,39 @@ class Simulator:
         if not self.vm.first_scan:
             self.virtual_ms += self.period_ms
 
-    def advance(self, wall_ms: float, speed: float = 1.0) -> int:
-        """Converte tempo real em varreduras (modo continuo). Retorna quantas rodaram."""
+    def advance(self, wall_ms: float, speed: float = 1.0, work_ms: float | None = None) -> int:
+        """Converte tempo real em varreduras (modo continuo). Retorna quantas rodaram.
+
+        speed: multiplicador do tempo (math.inf = o mais rapido que o PC conseguir).
+        work_ms: limite de tempo de CPU desta chamada, para a interface nao travar;
+        o atraso que nao couber e descartado (a simulacao fica mais lenta, nunca errada).
+        """
         if self.state != SimState.RUNNING:
             return 0
-        self._budget += wall_ms * speed
+        deadline = None if work_ms is None else time.perf_counter() + work_ms / 1000
+        unlimited = math.isinf(speed)
+        if not unlimited:
+            self._budget += wall_ms * speed
         n = 0
         if self.vm.first_scan and not self.vm.in_scan:
             self.scan_once()
             n += 1
-        while self._budget >= self.period_ms and n < self.MAX_SCANS_PER_ADVANCE:
+        cut = False
+        while unlimited or self._budget >= self.period_ms:
+            if n >= self.MAX_SCANS_PER_ADVANCE or (deadline is not None and n % 8 == 0
+                                                   and time.perf_counter() >= deadline):
+                cut = True
+                break
             self.scan_once()
-            self._budget -= self.period_ms
+            if not unlimited:
+                self._budget -= self.period_ms
             n += 1
-        if n >= self.MAX_SCANS_PER_ADVANCE:
+        if cut:
             self._budget = 0.0
+        self.limited = cut and not unlimited
+        if wall_ms > 0:
+            inst = n * self.period_ms / wall_ms
+            self.actual_speed = inst if self.actual_speed == 0 else self.actual_speed * 0.8 + inst * 0.2
         return n
 
     # ------------------------------------------------------------ consulta
