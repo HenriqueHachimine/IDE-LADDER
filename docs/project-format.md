@@ -55,7 +55,7 @@ da instrução TON/TOF/RTO/CTU/CTD que os aciona (exatamente uma por elemento).
 
 ## Versões
 
-- **2**: `io.n_words` (registradores N) e os elementos `compare` e `math`. Arquivos da versão 1 abrem sem conversão (só faltam os campos novos, que recebem o padrão).
+- **2**: `target.device` passa a ser o controlador escolhido (`docs/controllers.md`); `io.n_words` (registradores N) e os elementos `compare` e `math`. Arquivos da versão 1 abrem sem conversão (só faltam os campos novos, que recebem o padrão).
 
 `format_version` é verificado ao abrir: versões futuras são recusadas com
 mensagem clara; versões antigas passam por `migrate()` (a 1 vira 2 sem alterar o conteúdo).

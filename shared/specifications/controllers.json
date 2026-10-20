@@ -1,0 +1,46 @@
+{
+  "$comment": "Controladores que o usuario escolhe ao criar o projeto. Cada um limita entradas, saidas e a quantidade de variaveis (memorias M, temporizadores, contadores, registradores N). Os limites nunca passam dos da ISA (isa.json). Para acrescentar um controlador sem mexer neste arquivo, crie ~/.ladderide/controladores.json com uma lista no mesmo formato de 'controllers'. Ver docs/controllers.md.",
+  "default": "esp32-relay-x8",
+  "controllers": [
+    {
+      "id": "esp32-relay-x8",
+      "name": "ESP32 Relay X8 (placa do projeto)",
+      "description": "Placa ESP32 com 8 reles (74HC595) e 8 entradas digitais (74HC165), firmware deste projeto. Transferencia, RUN/STOP e monitor pela USB.",
+      "inputs": 8,
+      "outputs": 8,
+      "markers": 256,
+      "timers": 32,
+      "counters": 32,
+      "words": 64,
+      "scan_period_ms": 10,
+      "hardware": true
+    },
+    {
+      "id": "simulacao-16",
+      "name": "Somente simulacao (16 E/S)",
+      "description": "Sem placa: 16 entradas e 16 saidas no simulador da IDE. A placa ESP32 Relay X8 recusa programas que usem mais de 8 entradas ou 8 saidas.",
+      "inputs": 16,
+      "outputs": 16,
+      "markers": 256,
+      "timers": 32,
+      "counters": 32,
+      "words": 64,
+      "scan_period_ms": 10,
+      "hardware": false
+    },
+    {
+      "id": "personalizado",
+      "name": "Personalizado",
+      "description": "Escolha as quantidades em Programa > Propriedades, dentro dos limites gerais da IDE. Util para exercicios com recursos limitados.",
+      "inputs": 16,
+      "outputs": 16,
+      "markers": 256,
+      "timers": 32,
+      "counters": 32,
+      "words": 64,
+      "scan_period_ms": 10,
+      "hardware": false,
+      "custom": true
+    }
+  ]
+}

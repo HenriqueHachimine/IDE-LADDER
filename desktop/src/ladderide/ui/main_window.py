@@ -24,7 +24,7 @@ from ..sim.simulator import SimState, Simulator
 from ..comm.monitor import MonitorSource
 from ..comm.protocol import DevState
 from .device_panel import DevicePanel, DeviceSession
-from .dialogs import ElementDialog, ProjectDialog
+from .dialogs import ElementDialog, NewProjectDialog, ProjectDialog
 from .env_panel import EnvironmentPanel
 from .icons import make_icon
 from .cpp_panel import CppPanel
@@ -1168,8 +1168,11 @@ class MainWindow(QMainWindow):
         self.refresh()
 
     def file_new(self) -> None:
-        if self.maybe_save():
-            self.set_project(Project(), None)
+        if not self.maybe_save():
+            return
+        dlg = NewProjectDialog(self)
+        if dlg.exec():
+            self.set_project(dlg.project(), None)
 
     def file_open(self, path: str | None = None) -> None:
         if not self.maybe_save():

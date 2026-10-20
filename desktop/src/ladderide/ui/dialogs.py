@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QVBoxLayout, QWidget)
 
 from ..core import isa
+from ..model.controllers import apply_controller, controller_by_id, default_controller, load_controllers
 from ..model.project import (COMPARE_KINDS, MATH_KINDS, Coil, CompareBox, Contact, CounterBox, MathBox,
                              Project, ResetBox, TimerBox, default_operands)
 
@@ -176,6 +177,66 @@ class ElementDialog(QDialog):
             self.node.preset = self.preset.value()
 
 
+def _controller_combo(selected: str) -> QComboBox:
+    combo = QComboBox()
+    for c in load_controllers():
+        combo.addItem(c.name, c.id)
+    index = combo.findData(selected)
+    if index < 0:                                     # projeto com controlador que nao existe nesta IDE
+        combo.addItem(f"{selected} (desconhecido)", selected)
+        index = combo.count() - 1
+    combo.setCurrentIndex(index)
+    return combo
+
+
+def _controller_text(ctrl) -> str:
+    if ctrl is None:
+        return "Controlador desconhecido nesta instalacao: valem os limites gerais da IDE."
+    kind = "Placa real com firmware do projeto." if ctrl.hardware else "Sem placa: somente simulacao."
+    return f"{ctrl.description}\n\nLimites: {ctrl.summary()}.\n{kind}"
+
+
+class NewProjectDialog(QDialog):
+    """Novo projeto: nome e controlador do CLP (define as quantidades de E/S e de variaveis)."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Novo projeto")
+        self.setMinimumWidth(480)
+        form = QFormLayout()
+        self.name = QLineEdit("Novo projeto")
+        self.controller = _controller_combo(default_controller().id)
+        form.addRow("Nome:", self.name)
+        form.addRow("Controlador:", self.controller)
+        self.details = QLabel()
+        self.details.setWordWrap(True)
+        self.details.setObjectName("muted")
+        self.controller.currentIndexChanged.connect(self._update)
+        self._update()
+        hint = QLabel("O controlador limita as entradas, as saidas e a quantidade de memorias, temporizadores, "
+                      "contadores e registradores. Pode ser trocado depois em Programa > Propriedades.")
+        hint.setWordWrap(True)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        box = QVBoxLayout(self)
+        box.addLayout(form)
+        box.addWidget(self.details)
+        box.addWidget(hint)
+        box.addWidget(buttons)
+        self.adjustSize()
+
+    def _update(self) -> None:
+        self.details.setText(_controller_text(controller_by_id(self.controller.currentData())))
+
+    def project(self) -> Project:
+        p = Project(name=self.name.text().strip() or "Novo projeto")
+        ctrl = controller_by_id(self.controller.currentData())
+        if ctrl is not None:
+            apply_controller(p, ctrl)
+        return p
+
+
 class ProjectDialog(QDialog):
     def __init__(self, project: Project, parent=None):
         super().__init__(parent)
@@ -190,6 +251,11 @@ class ProjectDialog(QDialog):
         form.addRow("Nome:", self.name)
         form.addRow("Versao:", self.version)
         form.addRow("Descricao:", self.description)
+        self.controller = _controller_combo(project.target.device)
+        self.controller_info = QLabel()
+        self.controller_info.setWordWrap(True)
+        self.controller_info.setObjectName("muted")
+        form.addRow("Controlador:", self.controller)
         self.n_inputs = self._spin(1, isa.MAX_INPUTS, io.n_inputs)
         self.n_outputs = self._spin(1, isa.MAX_OUTPUTS, io.n_outputs)
         self.n_markers = self._spin(0, isa.MAX_MARKERS, io.n_markers)
@@ -209,6 +275,8 @@ class ProjectDialog(QDialog):
             cb.setChecked(bool(io.safe_outputs >> k & 1))
             grid.addWidget(cb, k // 8, k % 8)
             self.safe.append(cb)
+        self.controller.currentIndexChanged.connect(self._controller_changed)
+        self._controller_changed()
         warn = QLabel("Atencao: desenergizar nem sempre e o estado seguro da carga. "
                       "Defina conforme a aplicacao.")
         warn.setWordWrap(True)
@@ -218,9 +286,27 @@ class ProjectDialog(QDialog):
         buttons.rejected.connect(self.reject)
         box = QVBoxLayout(self)
         box.addLayout(form)
+        box.addWidget(self.controller_info)
         box.addWidget(safe)
         box.addWidget(warn)
         box.addWidget(buttons)
+        self.setMinimumWidth(560)
+        self.adjustSize()
+
+    def _controller_changed(self) -> None:
+        """Os maximos dos campos passam a ser os do controlador; valores acima sao reduzidos."""
+        ctrl = controller_by_id(self.controller.currentData())
+        self.controller_info.setText(_controller_text(ctrl))
+        limits = ((self.n_inputs, ctrl.inputs if ctrl else isa.MAX_INPUTS),
+                  (self.n_outputs, ctrl.outputs if ctrl else isa.MAX_OUTPUTS),
+                  (self.n_markers, ctrl.markers if ctrl else isa.MAX_MARKERS),
+                  (self.n_words, ctrl.words if ctrl else isa.MAX_WORDS))
+        for spin, limit in limits:
+            spin.setMaximum(limit)
+            spin.setSuffix(f"  (max. {limit})")
+        n_out = self.n_outputs.maximum()
+        for k, cb in enumerate(self.safe if hasattr(self, "safe") else []):
+            cb.setVisible(k < n_out)              # so as saidas que o controlador tem
 
     @staticmethod
     def _spin(lo: int, hi: int, value: int) -> QSpinBox:
@@ -234,6 +320,7 @@ class ProjectDialog(QDialog):
         p.name = self.name.text().strip() or "Sem nome"
         p.version = self.version.text().strip()
         p.description = self.description.toPlainText()
+        p.target.device = self.controller.currentData()
         p.io.n_inputs = self.n_inputs.value()
         p.io.n_outputs = self.n_outputs.value()
         p.io.n_markers = self.n_markers.value()

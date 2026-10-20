@@ -12,6 +12,10 @@ ensaios na placa real.
   resultado divergia do CLP. Agora a condição é guardada antes, como no interpretador.
 
 ### Adicionado
+- Escolha do controlador ao criar o projeto (ESP32 Relay X8, Somente simulação com 16 E/S,
+  Personalizado), que limita entradas, saídas, memórias, temporizadores, contadores e
+  registradores; o compilador confere os limites. Controladores do usuário em
+  `~/.ladderide/controladores.json` (`docs/controllers.md`).
 - Blocos de comparação (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, MEQ) e de matemática (ADD, SUB, MUL,
   DIV, SQR, NEG, TOD, FRD), com registradores `N0`–`N63` (inteiros de 32 bits), constantes,
   `Tn.ACC/PRE`, `Cn.ACC/PRE`, `IW0`/`QW0` e os bits S0.4 (estouro), S0.5 (zero), S0.6 (negativo).

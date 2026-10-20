@@ -236,6 +236,13 @@ def verify_for_esp32(project: Project, result: CompileResult, *, device_info=Non
                 f"usa {len(_used_bits(result, Area.I))} de {b.inputs} entradas e {used_q} de {b.outputs} reles "
                 f"(perfil: {b.source})")
 
+    from ..model.controllers import controller_for
+    ctrl = controller_for(project)
+    if ctrl is not None and not ctrl.hardware:
+        rep.add(WARN, "Controlador do projeto",
+                f"o projeto usa o controlador '{ctrl.name}', que nao e a placa; troque em Programa > "
+                "Propriedades antes de transferir")
+
     limit = isa.MAX_IMAGE_SIZE
     pct = 100 * len(image) / limit
     rep.add(OK if pct <= 90 else WARN, "Memoria de programa",

@@ -306,6 +306,7 @@ class _Gen:
         self.io_ok = (1 <= io.n_inputs <= isa.MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
                       and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS)
         if self.io_ok:
+            c.check_controller()
             c.load_symbols()
             c.collect_drivers()
             c.compile_rungs()

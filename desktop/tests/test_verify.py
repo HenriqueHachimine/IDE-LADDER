@@ -35,9 +35,11 @@ def test_valid_program_passes_all_offline_checks(c_vm):  # c_vm: pula sem gcc
 
 def test_addresses_beyond_the_board_are_errors():
     p = Project(rungs=[Rung([Contact("XIC", "I1.0")], [Coil("OTE", "Q1.1")])])
+    p.target.device = "simulacao-16"                      # projeto feito para o simulador
     p.io.n_inputs = p.io.n_outputs = 16
     rep = verify_for_esp32(p, compile_project(p))
     assert statuses(rep)["Entradas e saidas da placa"] == ERROR
+    assert statuses(rep)["Controlador do projeto"] == WARN
     assert "I1.0" in rep.as_text() and "Q1.1" in rep.as_text()
     assert not rep.ok
 

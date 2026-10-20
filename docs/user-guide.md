@@ -77,6 +77,14 @@ para as próximas aberturas.
 
 ## 3. Editando
 
+**Novo projeto (Ctrl+N):** escolha o nome e o **controlador**. O controlador
+define as entradas, as saídas e quantas memórias, temporizadores, contadores e
+registradores o projeto pode usar. ESP32 Relay X8 é a placa do projeto (8
+entradas, 8 relés); "Somente simulação" oferece 16 E/S sem placa; "Personalizado"
+deixa escolher as quantidades. Para trocar depois: Programa → Propriedades.
+Detalhes e como acrescentar controladores: `docs/controllers.md`.
+
+
 | Ação | Como |
 |---|---|
 | Inserir | Arrastar da paleta até a área destacada em azul (entre contatos, num ramo, na coluna de saídas ou abaixo da última rede para criar outra) |

@@ -84,6 +84,8 @@ class _Compiler:
         self.constants: list[int] = []
         self.qw_writers: list[tuple[int, MathBox]] = []
         self.rung = 0
+        self.controller = None
+        self.max_timers, self.max_counters = isa.MAX_TIMERS, isa.MAX_COUNTERS
 
     # ---------------------------------------------------------- diagnostico
     def error(self, msg: str, element=None, rung: int | None = -1) -> None:
@@ -93,6 +95,24 @@ class _Compiler:
     def warn(self, msg: str, element=None, rung: int | None = -1) -> None:
         self.r.diagnostics.append(Diagnostic("aviso", msg, self.rung if rung == -1 else rung,
                                              element.id if element is not None else None))
+
+    # ----------------------------------------------------------- controlador
+    def check_controller(self) -> None:
+        """Quantidades do projeto dentro dos limites do controlador escolhido."""
+        from ..model.controllers import controller_for
+        ctrl = self.controller = controller_for(self.p)
+        if ctrl is None:
+            self.warn(f"controlador desconhecido ({self.p.target.device!r}): usando os limites gerais da IDE",
+                      rung=None)
+            return
+        self.max_timers, self.max_counters = ctrl.timers, ctrl.counters
+        io = self.p.io
+        for what, used, limit in (("entradas", io.n_inputs, ctrl.inputs), ("saidas", io.n_outputs, ctrl.outputs),
+                                  ("memorias M", io.n_markers, ctrl.markers),
+                                  ("registradores N", io.n_words, ctrl.words)):
+            if used > limit:
+                self.error(f"o controlador {ctrl.name} tem {limit} {what}; o projeto esta configurado com "
+                           f"{used} (ajuste em Programa > Propriedades)", rung=None)
 
     # -------------------------------------------------------------- simbolos
     def load_symbols(self) -> None:
@@ -200,7 +220,8 @@ class _Compiler:
         limit = {Area.I: io.n_inputs, Area.Q: io.n_outputs, Area.M: io.n_markers,
                  Area.S: isa.NUM_SYSTEM_BITS}.get(area)
         if limit is None:
-            limit = isa.MAX_TIMERS if area in (Area.TIMER, Area.T_EN, Area.T_TT, Area.T_DN) else isa.MAX_COUNTERS
+            timer = area in (Area.TIMER, Area.T_EN, Area.T_TT, Area.T_DN, Area.T_ACC, Area.T_PRE)
+            limit = self.max_timers if timer else self.max_counters
         if index >= limit:
             self.error(f"{text}: endereco fora da faixa configurada (limite {limit})", element)
             return False
@@ -434,6 +455,7 @@ def compile_project(project: Project) -> CompileResult:
             and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS):
         c.error("configuracao de E/S fora dos limites", rung=None)
         return c.r
+    c.check_controller()
     c.load_symbols()
     c.collect_drivers()
     c.compile_rungs()
