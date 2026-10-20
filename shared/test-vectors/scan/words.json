@@ -1,0 +1,111 @@
+[
+  {
+    "name": "add_sub_mul_saturacao",
+    "description": "Soma, subtracao e multiplicacao em 32 bits com saturacao; S0.4 (estouro), S0.5 (zero) e S0.6 (negativo) refletem a ultima instrucao matematica executada.",
+    "program": [".inputs 8", ".outputs 8", ".words 4",
+                "SOR", "XIC I0.0", "ADD 2147483000 1000 N0", "EOR",
+                "SOR", "XIC I0.1", "SUB -2147483000 1000 N1", "EOR",
+                "SOR", "XIC I0.2", "MUL -300 7 N2", "EOR",
+                "SOR", "XIC I0.3", "ADD 5 -5 N3", "EOR"],
+    "steps": [
+      {"expect": {"N0": 0, "N1": 0, "S0.4": 0, "S0.5": 0, "S0.6": 0}},
+      {"inputs": {"I0.0": 1}, "expect": {"N0": 2147483647, "S0.4": 1, "S0.5": 0, "S0.6": 0}},
+      {"inputs": {"I0.0": 0, "I0.1": 1}, "expect": {"N0": 2147483647, "N1": -2147483648, "S0.4": 1, "S0.6": 1}},
+      {"inputs": {"I0.1": 0, "I0.2": 1}, "expect": {"N2": -2100, "S0.4": 0, "S0.5": 0, "S0.6": 1}},
+      {"inputs": {"I0.2": 0, "I0.3": 1}, "expect": {"N3": 0, "S0.4": 0, "S0.5": 1, "S0.6": 0}},
+      {"inputs": {"I0.3": 0}, "expect": {"N3": 0, "S0.5": 1}}
+    ]
+  },
+  {
+    "name": "divisao_e_raiz",
+    "description": "DIV trunca em direcao a zero; divisao por zero e MIN/-1 saturam e ligam S0.4. SQR arredonda para o inteiro mais proximo; origem negativa usa o modulo e liga S0.4.",
+    "program": [".inputs 8", ".outputs 8", ".words 8",
+                "SOR", "XIC I0.0", "DIV -7 2 N0", "EOR",
+                "SOR", "XIC I0.0", "DIV 7 0 N1", "EOR",
+                "SOR", "XIC I0.0", "DIV -7 0 N2", "EOR",
+                "SOR", "XIC I0.0", "DIV -2147483648 -1 N3", "EOR",
+                "SOR", "XIC I0.0", "SQR 13 N4", "EOR",
+                "SOR", "XIC I0.0", "SQR 12 N5", "EOR",
+                "SOR", "XIC I0.0", "SQR 2147483647 N6", "EOR",
+                "SOR", "XIC I0.0", "SQR -30 N7", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "expect": {"N0": -3, "N1": 2147483647, "N2": -2147483648, "N3": 2147483647,
+                                         "N4": 4, "N5": 3, "N6": 46341, "N7": 5,
+                                         "S0.4": 1, "S0.5": 0, "S0.6": 0}}
+    ]
+  },
+  {
+    "name": "neg_tod_frd",
+    "description": "NEG satura -2^31; TOD/FRD convertem entre inteiro e BCD (8 digitos). Valor invalido liga S0.4 e deixa o destino inalterado.",
+    "program": [".inputs 8", ".outputs 8", ".words 6",
+                "SOR", "XIC I0.0", "NEG -2147483648 N0", "EOR",
+                "SOR", "XIC I0.0", "NEG 25 N1", "EOR",
+                "SOR", "XIC I0.0", "TOD 1234 N2", "EOR",
+                "SOR", "XIC I0.0", "FRD 0x9876 N3", "EOR",
+                "SOR", "XIC I0.0", "TOD 99999999 N4", "EOR",
+                "SOR", "XIC I0.3", "ADD 7 0 N5", "EOR",
+                "SOR", "XIC I0.1", "TOD -1 N5", "EOR",
+                "SOR", "XIC I0.2", "FRD 0x1A N5", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1}, "expect": {"N0": 2147483647, "N1": -25, "N2": 4660, "N3": 9876, "N4": -1717986919,
+                                         "S0.4": 0, "S0.5": 0, "S0.6": 1}},
+      {"inputs": {"I0.0": 0, "I0.1": 1, "I0.3": 1}, "expect": {"N5": 7, "S0.4": 1, "S0.5": 0, "S0.6": 0}},
+      {"inputs": {"I0.1": 0, "I0.3": 0, "I0.2": 1}, "expect": {"N5": 7, "S0.4": 1}}
+    ]
+  },
+  {
+    "name": "comparacoes",
+    "description": "EQU, NEQ, LES, GRT, LEQ, GEQ e LIM (normal e invertido) lendo um registrador que a primeira rede incrementa enquanto I0.0 estiver ligada.",
+    "program": [".inputs 8", ".outputs 8", ".words 1",
+                "SOR", "XIC I0.0", "ADD N0 1 N0", "EOR",
+                "SOR", "EQU N0 3", "OTE Q0.0", "EOR",
+                "SOR", "NEQ N0 3", "OTE Q0.1", "EOR",
+                "SOR", "LES N0 3", "OTE Q0.2", "EOR",
+                "SOR", "GRT N0 3", "OTE Q0.3", "EOR",
+                "SOR", "LEQ N0 3", "OTE Q0.4", "EOR",
+                "SOR", "GEQ N0 3", "OTE Q0.5", "EOR",
+                "SOR", "LIM 2 N0 4", "OTE Q0.6", "EOR",
+                "SOR", "LIM 4 N0 2", "OTE Q0.7", "EOR"],
+    "steps": [
+      {"expect": {"N0": 0, "Q0.0": 0, "Q0.1": 1, "Q0.2": 1, "Q0.3": 0, "Q0.4": 1, "Q0.5": 0, "Q0.6": 0, "Q0.7": 1}},
+      {"inputs": {"I0.0": 1}, "repeat": 3,
+       "expect": {"N0": 3, "Q0.0": 1, "Q0.1": 0, "Q0.2": 0, "Q0.3": 0, "Q0.4": 1, "Q0.5": 1, "Q0.6": 1, "Q0.7": 0}},
+      {"repeat": 2,
+       "expect": {"N0": 5, "Q0.0": 0, "Q0.1": 1, "Q0.3": 1, "Q0.4": 0, "Q0.5": 1, "Q0.6": 0, "Q0.7": 1}},
+      {"inputs": {"I0.0": 0}, "expect": {"N0": 5}}
+    ]
+  },
+  {
+    "name": "comparacao_em_serie_e_paralelo",
+    "description": "Comparacoes se comportam como contatos: em serie fazem AND com o RLO e podem ficar em ramos paralelos.",
+    "program": [".inputs 8", ".outputs 8", ".words 1",
+                "SOR", "XIC I0.0", "ADD N0 1 N0", "EOR",
+                "SOR", "XIC I0.1", "GEQ N0 2", "OTE Q0.0", "EOR",
+                "SOR", "BST", "EQU N0 0", "NXB", "EQU N0 4", "BND", "OTE Q0.1", "EOR"],
+    "steps": [
+      {"expect": {"Q0.0": 0, "Q0.1": 1}},
+      {"inputs": {"I0.0": 1}, "repeat": 2, "expect": {"N0": 2, "Q0.0": 0, "Q0.1": 0}},
+      {"inputs": {"I0.0": 0, "I0.1": 1}, "expect": {"N0": 2, "Q0.0": 1, "Q0.1": 0}},
+      {"inputs": {"I0.0": 1}, "repeat": 2, "expect": {"N0": 4, "Q0.0": 1, "Q0.1": 1}}
+    ]
+  },
+  {
+    "name": "meq_e_palavras_de_temporizador_contador_e_es",
+    "description": "MEQ com mascara sobre IW0; ACC/PRE de temporizador e contador como operandos; QW0 como destino (valor maior que as saidas liga S0.4 e grava so os bits existentes).",
+    "program": [".inputs 8", ".outputs 8", ".markers 8", ".words 2", ".timer T0 TON 50", ".counter C0 UP 10",
+                "SOR", "XIC I0.0", "CTU C0", "EOR",
+                "SOR", "XIC I0.1", "TON T0", "EOR",
+                "SOR", "MEQ IW0 0x0F 0x05", "OTE Q0.0", "EOR",
+                "SOR", "ADD C0.ACC T0.ACC N0", "EOR",
+                "SOR", "SUB C0.PRE C0.ACC N1", "EOR",
+                "SOR", "GEQ T0.ACC T0.PRE", "OTE M0.0", "EOR",
+                "SOR", "XIC I0.4", "ADD 300 0 QW0", "EOR"],
+    "steps": [
+      {"inputs": {"I0.0": 1, "I0.2": 1}, "expect": {"C0.ACC": 1, "Q0.0": 1, "N0": 1, "N1": 9, "M0.0": 0}},
+      {"inputs": {"I0.1": 1}, "expect": {"Q0.0": 0, "T0.ACC": 0, "N0": 1}},
+      {"repeat": 5, "expect": {"T0.ACC": 50, "N0": 51, "M0.0": 1}},
+      {"inputs": {"I0.4": 1}, "expect": {"Q0.0": 0, "Q0.2": 1, "Q0.3": 1, "Q0.5": 1, "Q0.1": 0, "Q0.4": 0,
+                                         "S0.4": 1, "S0.5": 0, "S0.6": 0}}
+    ]
+  }
+]

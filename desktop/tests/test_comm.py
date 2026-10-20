@@ -102,7 +102,7 @@ def wait_scans(client: DeviceClient, n: int = 5) -> Snapshot:
 def test_info_and_empty_device(device):
     c = device()
     info = c.info()
-    assert (info.n_inputs, info.n_outputs, info.fmt_major) == (8, 8, 1)
+    assert (info.n_inputs, info.n_outputs, info.fmt_major) == (8, 8, 2)
     st = c.status()
     assert st.state == DevState.STOP and not st.has_program
     with pytest.raises(DeviceError) as e:

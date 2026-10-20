@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from ..model.project import Contact, NotOp, Parallel, Project, Rung
+from ..model.project import CompareBox, Contact, NotOp, Parallel, Project, Rung
 
 MARGIN = 0.25        # espaco entre juncao vertical e o primeiro elemento do ramo
 OUT_W = 1.7          # largura de uma saida (caixas de temporizador/contador)
@@ -21,6 +21,7 @@ RUNG_GAP = 0.35      # espaco entre os cartoes de rede
 RUNG_HEAD = 0.45     # faixa de titulo "Rede N - comentario"
 RUNG_PAD = 0.15      # respiro abaixo do ultimo elemento
 SLOT_W = 0.34
+COMPARE_W = 1.6      # largura de um bloco de comparacao na condicao
 
 
 @dataclass
@@ -93,6 +94,8 @@ class Layout:
 def measure(node) -> tuple[float, float]:
     if isinstance(node, (Contact, NotOp)):
         return 1.0, 1.0
+    if isinstance(node, CompareBox):
+        return COMPARE_W, 1.0
     if isinstance(node, Parallel):
         sizes = [measure_series(b) for b in node.branches]
         return max(w for w, _ in sizes) + 2 * MARGIN, sum(h for _, h in sizes)
@@ -177,8 +180,9 @@ def _place_series(lay: Layout, r_index: int, nodes: list, x: float, y: float, ke
             key = ("bnd", node.id)
             cur += w
         else:
-            lay.elems.append(PlacedElem(node, r_index, cur, y, 1.0, 1.0, key, type(node).__name__))
+            w = measure(node)[0]
+            lay.elems.append(PlacedElem(node, r_index, cur, y, w, 1.0, key, type(node).__name__))
             key = ("elem", node.id)
-            cur += 1.0
+            cur += w
     lay.slots.append(Slot("cond", r_index, nodes, len(nodes), (cur - SLOT_W / 2, y, SLOT_W, 1.0), 3))
     return cur, key

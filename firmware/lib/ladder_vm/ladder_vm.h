@@ -34,6 +34,8 @@ typedef struct {
     uint8_t m[LV_MAX_MARKERS];
     lv_timer_t timers[LV_MAX_TIMERS];
     lv_counter_t counters[LV_MAX_COUNTERS];
+    int32_t n[LV_MAX_WORDS];                      /* registradores N */
+    uint8_t math_ov, math_zero, math_sign;        /* S0.4..S0.6 */
     uint8_t power[(LV_MAX_INSTRUCTIONS + 7) / 8]; /* RLO apos cada instrucao */
     uint32_t scan_count;
     uint32_t dt;
@@ -53,6 +55,7 @@ void lv_vm_reset(lv_vm_t *vm);
 uint16_t lv_vm_scan(lv_vm_t *vm, uint16_t inputs, uint32_t dt_ms);
 uint16_t lv_vm_outputs(const lv_vm_t *vm);
 int lv_vm_read_bit(const lv_vm_t *vm, uint8_t area, uint16_t index);
+int32_t lv_vm_read_word(const lv_vm_t *vm, uint8_t area, uint16_t index);
 int lv_vm_power(const lv_vm_t *vm, uint16_t instr);
 
 #ifdef __cplusplus

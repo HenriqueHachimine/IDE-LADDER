@@ -191,6 +191,16 @@ class Simulator:
         ref = self.result.element_operand.get(element_id)
         return None if ref is None else self.vm.read_bit(*ref)
 
+    def word_value(self, area: int, index: int) -> int | None:
+        try:
+            return self.vm.read_word(area, index)
+        except (IndexError, ValueError):
+            return None
+
+    def block_values(self, element_id: str) -> list[int | None] | None:
+        refs = self.result.element_words.get(element_id)
+        return None if refs is None else [self.word_value(*r) for r in refs]
+
     def timer_state(self, index: int) -> dict | None:
         if not 0 <= index < len(self.vm.timers):
             return None

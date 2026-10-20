@@ -6,11 +6,11 @@ operacao a arvore e normalizada (paralelos com um unico ramo sao desfeitos).
 """
 from __future__ import annotations
 
-from .project import (CondNode, Contact, CounterBox, Node, NotOp, OutputNode, Parallel, Project,
-                      ResetBox, Rung, TimerBox, Coil)
+from .project import (COMPARE_KINDS, MATH_KINDS, CompareBox, CondNode, Contact, CounterBox, MathBox, Node,
+                      NotOp, OutputNode, Parallel, Project, ResetBox, Rung, TimerBox, Coil, default_operands)
 
-COND_TYPES = (Contact, NotOp, Parallel)
-OUTPUT_TYPES = (Coil, TimerBox, CounterBox, ResetBox)
+COND_TYPES = (Contact, NotOp, Parallel, CompareBox)
+OUTPUT_TYPES = (Coil, TimerBox, CounterBox, ResetBox, MathBox)
 
 
 class EditError(ValueError):
@@ -24,7 +24,8 @@ def is_output_list(project: Project, container: list) -> bool:
 def insert(project: Project, container: list, index: int, node: Node) -> None:
     if is_output_list(project, container):
         if not isinstance(node, OUTPUT_TYPES):
-            raise EditError("apenas bobinas, temporizadores, contadores e RES vao na coluna de saidas")
+            raise EditError("apenas bobinas, temporizadores, contadores, RES e blocos matematicos vao na "
+                            "coluna de saidas")
     elif not isinstance(node, COND_TYPES):
         raise EditError("saidas devem ficar no fim da rede, a direita")
     container.insert(max(0, min(index, len(container))), node)
@@ -65,7 +66,7 @@ def wrap_in_parallel(project: Project, element_id: str) -> Parallel:
         raise EditError("elemento nao encontrado")
     _, node, container = hit
     if not isinstance(node, COND_TYPES):
-        raise EditError("somente contatos podem receber ramo paralelo")
+        raise EditError("somente contatos e comparacoes podem receber ramo paralelo")
     par = Parallel([[node], []])
     container[container.index(node)] = par
     return par
@@ -133,6 +134,8 @@ def _contains_list(par: Parallel, target: list) -> bool:
 
 
 def output_node_for_tool(tool: str) -> OutputNode | None:
+    if tool in MATH_KINDS:
+        return MathBox(tool, default_operands(tool))
     return {
         "OTE": lambda: Coil("OTE"), "OTL": lambda: Coil("OTL"), "OTU": lambda: Coil("OTU"),
         "TON": lambda: TimerBox("TON"), "TOF": lambda: TimerBox("TOF"), "RTO": lambda: TimerBox("RTO"),
@@ -141,6 +144,8 @@ def output_node_for_tool(tool: str) -> OutputNode | None:
 
 
 def cond_node_for_tool(tool: str) -> CondNode | None:
+    if tool in COMPARE_KINDS:
+        return CompareBox(tool, default_operands(tool))
     return {
         "XIC": lambda: Contact("XIC"), "XIO": lambda: Contact("XIO"), "NOT": lambda: NotOp(),
         "PAR": lambda: Parallel(),

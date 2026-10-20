@@ -2,8 +2,9 @@
 .inputs 8
 .outputs 8
 .markers 64
+.words 32
 .safe_outputs 0x0000
-.build_id 0xed7af0b7
+.build_id 0xc2641144
 .timer T0 TON 5000
 .timer T1 TON 2000
 .counter C0 UP 40

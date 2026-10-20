@@ -21,7 +21,8 @@ from ..compiler.compiler import COMPILER_VERSION, _Compiler
 from ..core import isa
 from ..core.asm import format_operand
 from ..core.isa import Area, CounterType, TimerType
-from ..model.project import Coil, Contact, CounterBox, NotOp, Parallel, Project, ResetBox, TimerBox
+from ..model.project import (Coil, CompareBox, Contact, CounterBox, MathBox, NotOp, Parallel, Project, ResetBox,
+                             TimerBox)
 
 _CPP_KEYWORDS = set("""alignas alignof and and_eq asm auto bitand bitor bool break case catch char char16_t
 char32_t class compl const constexpr const_cast continue decltype default delete do double dynamic_cast
@@ -34,7 +35,10 @@ _RUNTIME_NAMES = {"I", "Q", "M", "T", "C", "Timer", "Counter", "TON", "TOF", "RT
                   "plc_scan", "setup", "loop", "dt", "dt_ms", "inputs", "outputs", "k", "main", "NULL",
                   "HIGH", "LOW", "INPUT", "OUTPUT", "millis", "delay", "uint8_t", "uint16_t", "uint32_t",
                   "int32_t", "INT32_MAX", "INT32_MIN", "SCAN_PERIOD_MS", "IN_LABEL", "OUT_LABEL",
-                  "TIMER_LABEL", "COUNTER_LABEL", "print_help", "print_state", "report_changes", "stamp"}
+                  "TIMER_LABEL", "COUNTER_LABEL", "print_help", "print_state", "report_changes", "stamp",
+                  "N", "MathResult", "MATH_OV", "MATH_ZERO", "MATH_SIGN", "sat32", "ADD", "SUB", "MUL", "DIV",
+                  "SQR", "NEG", "TOD", "FRD", "LIM", "MEQ", "store", "store_QW", "set_math_flags", "IW", "QW",
+                  "int64_t", "uint64_t", "INT64_MAX"}
 # macros e nomes globais do Arduino/ESP32 (o arquivo tambem compila como sketch)
 _ARDUINO_NAMES = {"bit", "min", "max", "abs", "round", "constrain", "sq", "PI", "HEX", "DEC", "BIN",
                   "OCT", "LED_BUILTIN", "word", "byte", "boolean", "Serial", "Serial1", "Serial2",
@@ -132,6 +136,80 @@ static inline void RES(Timer &t) { t.acc = 0; t.en = false; t.tt = false; t.dn =
 static inline void RES(Counter &c) { counter_reset(c); }
 """
 
+WORD_RUNTIME = r"""
+// ---------------------------------------------------------------------------
+// Comparacao e matematica em inteiros de 32 bits com sinal (saturados).
+// MATH_OV/ZERO/SIGN = bits S0.4..S0.6: estado da ultima instrucao executada.
+// ---------------------------------------------------------------------------
+struct MathResult {
+    int32_t value;
+    bool ov;                          // estouro ou operacao invalida
+    bool valid;                       // false = destino fica inalterado (TOD/FRD)
+};
+
+static bool MATH_OV = false, MATH_ZERO = false, MATH_SIGN = false;
+
+static inline MathResult sat32(int64_t r) {
+    if (r > INT32_MAX) return {INT32_MAX, true, true};
+    if (r < INT32_MIN) return {INT32_MIN, true, true};
+    return {(int32_t)r, false, true};
+}
+static inline MathResult ADD(int32_t a, int32_t b) { return sat32((int64_t)a + b); }
+static inline MathResult SUB(int32_t a, int32_t b) { return sat32((int64_t)a - b); }
+static inline MathResult MUL(int32_t a, int32_t b) { return sat32((int64_t)a * b); }
+static inline MathResult NEG(int32_t a) { return sat32(-(int64_t)a); }
+// Divisao truncada em direcao a zero; por zero satura no sinal de A.
+static inline MathResult DIV(int32_t a, int32_t b) {
+    if (b == 0) return {a >= 0 ? INT32_MAX : INT32_MIN, true, true};
+    return sat32((int64_t)a / b);
+}
+// Raiz quadrada arredondada; origem negativa usa o modulo e liga MATH_OV.
+static inline MathResult SQR(int32_t a) {
+    uint64_t rem = a < 0 ? (uint64_t)(-(int64_t)a) : (uint64_t)a, r = 0, bit = (uint64_t)1 << 32;
+    while (bit > rem) bit >>= 2;
+    while (bit) {
+        if (rem >= r + bit) { rem -= r + bit; r = (r >> 1) + bit; } else { r >>= 1; }
+        bit >>= 2;
+    }
+    return {(int32_t)(rem > r ? r + 1 : r), a < 0, true};
+}
+// Inteiro (0 a 99999999) -> BCD.
+static inline MathResult TOD(int32_t a) {
+    if (a < 0 || a > 99999999) return {0, true, false};
+    uint32_t bcd = 0, v = (uint32_t)a;
+    for (unsigned shift = 0; v; shift += 4, v /= 10) bcd |= (v % 10) << shift;
+    return {(int32_t)bcd, false, true};
+}
+// BCD -> inteiro; digito acima de 9 e invalido.
+static inline MathResult FRD(int32_t a) {
+    uint32_t raw = (uint32_t)a, value = 0, scale = 1;
+    for (unsigned k = 0; k < 8; k++, raw >>= 4, scale *= 10) {
+        if ((raw & 0xFu) > 9u) return {0, true, false};
+        value += (raw & 0xFu) * scale;
+    }
+    return {(int32_t)value, false, true};
+}
+static inline void set_math_flags(const MathResult &r, bool ov) {
+    MATH_OV = ov;
+    MATH_ZERO = r.valid && r.value == 0;
+    MATH_SIGN = r.valid && r.value < 0;
+}
+static inline void store(int32_t &dst, MathResult r) {
+    if (r.valid) dst = r.value;
+    set_math_flags(r, r.ov);
+}
+// Limite: inferior <= superior -> dentro da faixa; senao fora da faixa invertida.
+static inline bool LIM(int32_t lo, int32_t test, int32_t hi) {
+    return lo <= hi ? (lo <= test && test <= hi) : (test >= lo || test <= hi);
+}
+// Comparacao com mascara: (origem AND mascara) == (comparar AND mascara).
+static inline bool MEQ(int32_t source, int32_t mask, int32_t cmp) {
+    return ((uint32_t)source & (uint32_t)mask) == ((uint32_t)cmp & (uint32_t)mask);
+}
+"""
+
+_COMPARE_OPS = {"EQU": "==", "NEQ": "!=", "LES": "<", "GRT": ">", "LEQ": "<=", "GEQ": ">="}
+
 
 @dataclass
 class CppCode:
@@ -226,7 +304,7 @@ class _Gen:
         c = _Compiler(project)
         io = project.io
         self.io_ok = (1 <= io.n_inputs <= isa.MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
-                      and 0 <= io.n_markers <= isa.MAX_MARKERS)
+                      and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS)
         if self.io_ok:
             c.load_symbols()
             c.collect_drivers()
@@ -239,6 +317,7 @@ class _Gen:
         self.bit_names: dict[tuple[int, int], str] = {}
         self.timer_names: dict[int, str] = {}
         self.counter_names: dict[int, str] = {}
+        self.word_names: dict[int, str] = {}
         self.error_ids = {d.element_id for d in c.r.errors if d.element_id}
         self._name_symbols()
 
@@ -253,10 +332,14 @@ class _Gen:
     def _name_symbols(self) -> None:
         io = self.p.io
         limits = {Area.I: io.n_inputs, Area.Q: io.n_outputs, Area.M: io.n_markers}
+        self.uses_words = bool(self.c.r.element_words) or any(
+            ins.area == Area.S and ins.index >= isa.SYSTEM_BITS["MATH_OV"] for ins in self.c.code)
         for name, (area, index) in self.c.symbols.items():
             sym = next(s.name.strip() for s in self.p.symbols if s.name.strip().upper() == name)
             if area in limits and index < limits[area]:
                 self.bit_names.setdefault((area, index), self._unique(sym))
+            elif area == Area.N and index < io.n_words and self.uses_words:
+                self.word_names.setdefault(index, self._unique(sym))
             elif area == Area.TIMER and index in self.c.timers:
                 self.timer_names.setdefault(index, self._unique(sym))
             elif area == Area.COUNTER and index in self.c.counters:
@@ -278,10 +361,35 @@ class _Gen:
         names = self.timer_names if area in (Area.T_EN, Area.T_TT, Area.T_DN) else self.counter_names
         return _E(f"{names[index]}.{fld}")
 
+    def word(self, area: int, index: int) -> str:
+        """Expressao C++ de um operando numerico."""
+        if area == Area.N:
+            return self.word_names.get(index, f"N[{index}]")
+        if area == Area.K:
+            value = self.c.constants[index]
+            return "INT32_MIN" if value == isa.INT32_MIN else str(value)
+        if area in (Area.T_ACC, Area.T_PRE):
+            return f"(int32_t){self.timer_names[index]}.{Area(area).name[2:].lower()}"
+        if area in (Area.C_ACC, Area.C_PRE):
+            return f"{self.counter_names[index]}.{Area(area).name[2:].lower()}"
+        return f"{Area(area).name}()"                     # IW() / QW()
+
+    def compare_expr(self, node, refs) -> _E | None:
+        args = [self.word(*r) for r in refs]
+        if node.kind in _COMPARE_OPS and args[0] == args[1]:     # A com A: resultado ja conhecido
+            return None if node.kind in ("EQU", "LEQ", "GEQ") else _FALSE
+        if node.kind in _COMPARE_OPS:
+            return _E(f"({args[0]} {_COMPARE_OPS[node.kind]} {args[1]})")
+        return _E(f"{node.kind}({', '.join(args)})")
+
     # ---------------------------------------------------------- expressoes
     def series(self, nodes: list, cur: _E | None, temps: list[str]) -> _E | None:
         for node in nodes:
-            if isinstance(node, Contact):
+            if isinstance(node, CompareBox):
+                refs = self.c.r.element_words.get(node.id)
+                term = _FALSE if refs is None or node.id in self.error_ids else self.compare_expr(node, refs)
+                cur = _and(cur, term)
+            elif isinstance(node, Contact):
                 ins = self._ins(node)
                 term = _FALSE if ins is None or node.id in self.error_ids else self.bit(ins.area, ins.index)
                 cur = _and(cur, term if node.kind == "XIC" else _not(term))
@@ -310,11 +418,35 @@ class _Gen:
         return self.c.code[pc] if pc is not None else None
 
     # --------------------------------------------------------------- redes
+    def _writes(self, out) -> set[str]:
+        """Nomes C++ que a saida pode alterar (para saber se a condicao precisa ser guardada antes)."""
+        ins = self._ins(out)
+        if ins is None:
+            return set()
+        if isinstance(out, Coil):
+            name = self.bit(ins.area, ins.index).text
+            return {name, "QW"} if ins.area == Area.Q else {name}     # QW() le todas as saidas
+        if isinstance(out, MathBox):
+            refs = self.c.r.element_words[out.id]
+            dst = refs[-1]
+            names = {"MATH_OV", "MATH_ZERO", "MATH_SIGN"}
+            if dst[0] == Area.QW:
+                return names | {"QW"} | {n for (a, _), n in self.bit_names.items() if a == Area.Q}
+            return names | {self.word(*dst).split("[")[0]}
+        if ins.area == Area.TIMER:
+            return {self.timer_names[ins.index]}
+        return {self.counter_names[ins.index]}
+
     def rung_body(self, rung) -> list[str]:
         temps: list[str] = []
         cond = self.series(rung.condition, None, temps)
-        if len(rung.outputs) > 1 and cond is not None and cond.prec > 0:
-            cond = self._temp(cond, temps, "rlo")
+        if len(rung.outputs) > 1 and cond is not None and cond is not _FALSE:
+            # O CLP calcula a condicao uma vez, antes das saidas. Se uma saida (exceto a
+            # ultima) altera algo que a condicao le, o valor e guardado antes.
+            read = set(re.findall(r"[A-Za-z_]\w*", cond.text))
+            changed = set().union(*(self._writes(o) for o in rung.outputs[:-1]))
+            if cond.prec > 0 or read & changed:
+                cond = self._temp(cond, temps, "rlo")
         text = "true" if cond is None else cond.text
         lines = list(temps)
         for out in rung.outputs:
@@ -331,6 +463,12 @@ class _Gen:
                     tag = "SET" if out.kind == "OTL" else "RESET"
                     lines.append(f"{name} = {value};  // {tag}" if cond is None
                                  else f"if ({text}) {name} = {value};  // {tag}")
+            elif isinstance(out, MathBox):
+                refs = self.c.r.element_words[out.id]
+                call = f"{out.kind}({', '.join(self.word(*r) for r in refs[:-1])})"
+                stmt = (f"store_QW({call});" if refs[-1][0] == Area.QW
+                        else f"store({self.word(*refs[-1])}, {call});")
+                lines.append(stmt if cond is None else f"if ({text}) {stmt}")
             elif isinstance(out, TimerBox):
                 lines.append(f"{out.kind}({self.timer_names[ins.index]}, {text}, dt);")
             elif isinstance(out, CounterBox):
@@ -348,6 +486,8 @@ class _Gen:
 
     @staticmethod
     def _describe(out) -> str:
+        if isinstance(out, MathBox):
+            return f"{out.kind} {', '.join(out.operands)}"
         return f"{getattr(out, 'kind', 'RES')} {out.operand}"
 
     # ------------------------------------------------------------ arquivo
@@ -395,12 +535,37 @@ class _Gen:
         out += ["static bool FIRST_SCAN = true;       // 1 so na primeira varredura",
                 "static bool CLOCK_1S = true;         // relogio de 1 s (500 ms ligado)",
                 "static uint32_t clock_phase = 0;", ""]
+        if self.uses_words:
+            if io.n_words:
+                out.append(f"static int32_t N[{io.n_words}];  // registradores N (inteiros de 32 bits)")
+            out += WORD_RUNTIME.splitlines()
+            mask = (1 << io.n_outputs) - 1
+            out += ["// Entradas e saidas como palavra (bit k = Ik / Qk).",
+                    "static inline int32_t IW() {",
+                    "    int32_t w = 0;",
+                    f"    for (int k = 0; k < {io.n_inputs}; k++) if (I[k]) w |= (int32_t)1 << k;",
+                    "    return w;", "}",
+                    "static inline int32_t QW() {",
+                    "    int32_t w = 0;",
+                    f"    for (int k = 0; k < {io.n_outputs}; k++) if (Q[k]) w |= (int32_t)1 << k;",
+                    "    return w;", "}",
+                    "// QW0 como destino: grava os bits que existem; valor fora da faixa liga MATH_OV.",
+                    "static inline void store_QW(MathResult r) {",
+                    "    bool ov = r.ov;",
+                    "    if (r.valid) {",
+                    f"        for (int k = 0; k < {io.n_outputs}; k++) Q[k] = ((uint32_t)r.value >> k) & 1u;",
+                    f"        ov = ov || r.value < 0 || r.value > {mask};",
+                    "    }",
+                    "    set_math_flags(r, ov);",
+                    "}", ""]
 
         # Simbolos (aliases): todos os declarados e enderecos usados sem nome.
         alias = []
         for (area, index), name in sorted(self.bit_names.items()):
             arr = Area(area).name
             alias.append((f"static bool &{name} = {arr}[{index}];", format_operand(area, index)))
+        for index, name in sorted(self.word_names.items()):
+            alias.append((f"static int32_t &{name} = N[{index}];", f"N{index}"))
         for index, name in sorted(self.timer_names.items()):
             kind = TimerType(c.timers[index][0]).name
             alias.append((f"static Timer &{name} = T[{index}];", f"T{index} {kind} {c.timers[index][1]} ms"))
@@ -426,6 +591,10 @@ class _Gen:
             out.append(f"    for (int k = 0; k < {n_t}; k++) RES(T[k]);")
         if n_c:
             out.append(f"    for (int k = 0; k < {n_c}; k++) {{ counter_reset(C[k]); C[k].prev = false; }}")
+        if self.uses_words:
+            if io.n_words:
+                out.append(f"    for (int k = 0; k < {io.n_words}; k++) N[k] = 0;")
+            out.append("    MATH_OV = false; MATH_ZERO = false; MATH_SIGN = false;")
         out += ["    FIRST_SCAN = true;", "    clock_phase = 0;", "}", "",
                 "// Uma varredura: le as entradas, executa as redes em ordem e devolve as saidas.",
                 "// dt_ms = tempo desde a varredura anterior (ignorado na primeira).",

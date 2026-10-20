@@ -2,8 +2,9 @@
 .inputs 8
 .outputs 8
 .markers 64
+.words 32
 .safe_outputs 0x0000
-.build_id 0xe8d4c0b6
+.build_id 0xfda61507
 .counter C0 UP 3
 .counter C1 DOWN 4
 SOR ; rede 0

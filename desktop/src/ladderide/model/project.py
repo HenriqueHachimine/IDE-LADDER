@@ -16,7 +16,31 @@ from pathlib import Path
 from typing import Iterator, Union
 
 PROJECT_FORMAT = "ladderide-project"
-PROJECT_FORMAT_VERSION = 1
+PROJECT_FORMAT_VERSION = 2
+
+# Blocos de comparacao (vao na condicao, como contatos) e de matematica (vao nas
+# saidas). Cada tipo tem uma lista fixa de operandos; o nome aparece no editor.
+COMPARE_KINDS: dict[str, tuple[str, ...]] = {
+    "EQU": ("A", "B"), "NEQ": ("A", "B"), "LES": ("A", "B"), "GRT": ("A", "B"),
+    "LEQ": ("A", "B"), "GEQ": ("A", "B"),
+    "LIM": ("Limite inferior", "Teste", "Limite superior"),
+    "MEQ": ("Origem", "Mascara", "Comparar"),
+}
+MATH_KINDS: dict[str, tuple[str, ...]] = {
+    "ADD": ("A", "B", "Destino"), "SUB": ("A", "B", "Destino"), "MUL": ("A", "B", "Destino"),
+    "DIV": ("A", "B", "Destino"),
+    "SQR": ("Origem", "Destino"), "NEG": ("Origem", "Destino"),
+    "TOD": ("Origem", "Destino"), "FRD": ("Origem", "Destino"),
+}
+DEFAULT_OPERANDS: dict[str, list[str]] = {
+    "LIM": ["0", "N0", "100"], "MEQ": ["N0", "0xFF", "0"],
+    "ADD": ["N0", "1", "N0"], "SUB": ["N0", "1", "N0"], "MUL": ["N0", "2", "N1"], "DIV": ["N0", "2", "N1"],
+    "SQR": ["N0", "N1"], "NEG": ["N0", "N1"], "TOD": ["N0", "N1"], "FRD": ["N0", "N1"],
+}
+
+
+def default_operands(kind: str) -> list[str]:
+    return list(DEFAULT_OPERANDS.get(kind, ["N0", "0"]))
 
 _ids = itertools.count(1)
 
@@ -44,7 +68,15 @@ class Parallel:
     id: str = field(default_factory=new_id)
 
 
-CondNode = Union[Contact, NotOp, Parallel]
+@dataclass(eq=False)
+class CompareBox:
+    """Comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, MEQ): conduz quando a condicao e verdadeira."""
+    kind: str = "EQU"
+    operands: list[str] = field(default_factory=lambda: ["N0", "0"])
+    id: str = field(default_factory=new_id)
+
+
+CondNode = Union[Contact, NotOp, Parallel, CompareBox]
 
 
 @dataclass(eq=False)
@@ -76,7 +108,15 @@ class ResetBox:
     id: str = field(default_factory=new_id)
 
 
-OutputNode = Union[Coil, TimerBox, CounterBox, ResetBox]
+@dataclass(eq=False)
+class MathBox:
+    """Matematica (ADD, SUB, MUL, DIV, SQR, NEG, TOD, FRD): executa quando a rede conduz."""
+    kind: str = "ADD"
+    operands: list[str] = field(default_factory=lambda: ["N0", "1", "N0"])
+    id: str = field(default_factory=new_id)
+
+
+OutputNode = Union[Coil, TimerBox, CounterBox, ResetBox, MathBox]
 Node = Union[CondNode, OutputNode]
 
 
@@ -101,6 +141,7 @@ class IOConfig:
     n_inputs: int = 8
     n_outputs: int = 8
     n_markers: int = 64
+    n_words: int = 32            # registradores N (inteiros de 32 bits)
     safe_outputs: int = 0        # bit k = estado do rele k em STOP/FAULT
     scan_period_ms: int = 10
 
@@ -231,7 +272,8 @@ def migrate(data: dict) -> dict:
     if version > PROJECT_FORMAT_VERSION:
         raise ProjectFormatError(
             f"projeto criado por versao mais nova (formato {version}); atualize a IDE")
-    # Migracoes futuras: while version < PROJECT_FORMAT_VERSION: data = MIGRATIONS[version](data)
+    if version == 1:            # v2: registradores N e blocos de comparacao/matematica (so adicoes)
+        data = dict(data, format_version=2)
     return data
 
 
@@ -275,6 +317,10 @@ def node_to_dict(node: Node) -> dict:
         return {"type": "counter", "kind": node.kind, "operand": node.operand, "preset": node.preset}
     if isinstance(node, ResetBox):
         return {"type": "reset", "operand": node.operand}
+    if isinstance(node, CompareBox):
+        return {"type": "compare", "kind": node.kind, "operands": list(node.operands)}
+    if isinstance(node, MathBox):
+        return {"type": "math", "kind": node.kind, "operands": list(node.operands)}
     raise TypeError(node)
 
 
@@ -306,6 +352,15 @@ def node_from_dict(d: dict) -> Node:
         return CounterBox(kind, str(d.get("operand", "")), int(d.get("preset", 0)))
     if t == "reset":
         return ResetBox(str(d.get("operand", "")))
+    if t in ("compare", "math"):
+        kinds = COMPARE_KINDS if t == "compare" else MATH_KINDS
+        kind = d.get("kind", "")
+        if kind not in kinds:
+            raise ProjectFormatError(f"bloco invalido: {kind}")
+        operands = [str(x) for x in d.get("operands", [])]
+        if len(operands) != len(kinds[kind]):
+            raise ProjectFormatError(f"{kind} exige {len(kinds[kind])} operandos")
+        return (CompareBox if t == "compare" else MathBox)(kind, operands)
     raise ProjectFormatError(f"tipo de elemento desconhecido: {t!r}")
 
 
@@ -319,9 +374,9 @@ def _rung_from_dict(d: dict) -> Rung:
     cond = [node_from_dict(n) for n in d.get("condition", [])]
     outs = [node_from_dict(n) for n in d.get("outputs", [])]
     for n in cond:
-        if not isinstance(n, (Contact, NotOp, Parallel)):
+        if not isinstance(n, (Contact, NotOp, Parallel, CompareBox)):
             raise ProjectFormatError("saida dentro da condicao da rede")
     for n in outs:
-        if not isinstance(n, (Coil, TimerBox, CounterBox, ResetBox)):
+        if not isinstance(n, (Coil, TimerBox, CounterBox, ResetBox, MathBox)):
             raise ProjectFormatError("contato na lista de saidas da rede")
     return Rung(cond, outs, d.get("comment", ""))

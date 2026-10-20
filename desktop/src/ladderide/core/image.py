@@ -1,4 +1,4 @@
-"""Codificacao, decodificacao e validacao de imagens de programa LDRB v1.
+"""Codificacao, decodificacao e validacao de imagens de programa LDRB v2.
 
 A ordem das verificacoes em `decode` e normativa (docs/intermediate-format.md,
 secao "Validacao") e e reproduzida passo a passo em firmware/lib/ladder_vm/lv_image.c,
@@ -13,12 +13,14 @@ from . import isa
 from .crc import crc32
 from .isa import Area, CounterType, ImageError, Op, TimerType
 
-_HEADER = struct.Struct("<4sBBHIBBHBBHHHII")
+_HEADER = struct.Struct("<4sBBHIBBHBBHHHIIHH")
 _ENTRY = struct.Struct("<B3sI")
 _INSTR = struct.Struct("<BBH")
+_CONST = struct.Struct("<i")
 assert _HEADER.size == isa.HEADER_SIZE
 assert _ENTRY.size == isa.TIMER_ENTRY_SIZE == isa.COUNTER_ENTRY_SIZE
 assert _INSTR.size == isa.INSTRUCTION_SIZE
+assert _CONST.size == isa.CONSTANT_ENTRY_SIZE
 
 
 @dataclass(frozen=True)
@@ -45,8 +47,10 @@ class Program:
     n_inputs: int = 8
     n_outputs: int = 8
     n_markers: int = 0
+    n_words: int = 0
     timers: list[TimerDef] = field(default_factory=list)
     counters: list[CounterDef] = field(default_factory=list)
+    constants: list[int] = field(default_factory=list)   # tabela de constantes (inteiros de 32 bits com sinal)
     code: list[Instruction] = field(default_factory=list)
     safe_outputs: int = 0
     build_id: int = 0
@@ -72,6 +76,8 @@ def encode(program: Program, *, n_rungs: int | None = None, flags: int = 0) -> b
         body += _ENTRY.pack(t.type, b"\0\0\0", t.preset_ms)
     for c in program.counters:
         body += _ENTRY.pack(c.type, b"\0\0\0", c.preset)
+    for value in program.constants:
+        body += _CONST.pack(value)
     for ins in program.code:
         body += _INSTR.pack(ins.op, ins.area, ins.index)
     total = isa.HEADER_SIZE + len(body) + isa.CRC_SIZE
@@ -81,6 +87,7 @@ def encode(program: Program, *, n_rungs: int | None = None, flags: int = 0) -> b
         len(program.timers), len(program.counters),
         program.n_rungs if n_rungs is None else n_rungs,
         len(program.code), program.safe_outputs, program.build_id, flags,
+        program.n_words, len(program.constants),
     )
     data = header + bytes(body)
     return data + struct.pack("<I", crc32(data))
@@ -99,17 +106,24 @@ def area_size(area: int, p: Program) -> int:
         Area.T_EN: len(p.timers), Area.T_TT: len(p.timers), Area.T_DN: len(p.timers),
         Area.C_DN: len(p.counters), Area.C_OV: len(p.counters), Area.C_UN: len(p.counters),
         Area.TIMER: len(p.timers), Area.COUNTER: len(p.counters),
+        Area.N: p.n_words, Area.K: len(p.constants),
+        Area.T_ACC: len(p.timers), Area.T_PRE: len(p.timers),
+        Area.C_ACC: len(p.counters), Area.C_PRE: len(p.counters),
+        Area.IW: 1, Area.QW: 1,
     }.get(area, 0)
 
 
-def _operand_ok(op: Op, area: int, index: int, p: Program) -> bool:
-    cls = isa.OPERAND_CLASS[op]
+def _operand_ok(cls: str, op: Op, area: int, index: int, p: Program) -> bool:
     if cls == "none":
         return area == Area.NONE and (index == 0 or op == Op.SOR)
     if cls == "bit_read":
         allowed = isa.BIT_READ_AREAS
     elif cls == "bit_write":
         allowed = isa.BIT_WRITE_AREAS
+    elif cls == "word_read":
+        allowed = isa.WORD_READ_AREAS
+    elif cls == "word_write":
+        allowed = isa.WORD_WRITE_AREAS
     elif cls == "timer":
         allowed = {Area.TIMER}
     elif cls == "counter":
@@ -126,7 +140,7 @@ def decode(data: bytes) -> Program:
     if n < isa.HEADER_SIZE:
         raise ImageValidationError(E.TOO_SHORT)
     (magic, major, minor, header_size, total_size, n_in, n_out, n_mark, n_tim, n_cnt,
-     n_rungs, n_instr, safe_out, build_id, flags) = _HEADER.unpack_from(data, 0)
+     n_rungs, n_instr, safe_out, build_id, flags, n_words, n_const) = _HEADER.unpack_from(data, 0)
     if magic != isa.MAGIC:
         raise ImageValidationError(E.BAD_MAGIC)
     if major != isa.FORMAT_MAJOR or minor > isa.FORMAT_MINOR:
@@ -144,16 +158,18 @@ def decode(data: bytes) -> Program:
         raise ImageValidationError(E.RESERVED_NONZERO, detail="flags")
     if (n_in > isa.MAX_INPUTS or n_out > isa.MAX_OUTPUTS or n_mark > isa.MAX_MARKERS
             or n_tim > isa.MAX_TIMERS or n_cnt > isa.MAX_COUNTERS
-            or n_rungs > isa.MAX_RUNGS or n_instr > isa.MAX_INSTRUCTIONS):
+            or n_rungs > isa.MAX_RUNGS or n_instr > isa.MAX_INSTRUCTIONS
+            or n_words > isa.MAX_WORDS or n_const > isa.MAX_CONSTANTS):
         raise ImageValidationError(E.LIMIT_EXCEEDED)
     expected = (isa.HEADER_SIZE + n_tim * isa.TIMER_ENTRY_SIZE + n_cnt * isa.COUNTER_ENTRY_SIZE
-                + n_instr * isa.INSTRUCTION_SIZE + isa.CRC_SIZE)
+                + n_const * isa.CONSTANT_ENTRY_SIZE + n_instr * isa.INSTRUCTION_SIZE + isa.CRC_SIZE)
     if expected != total_size:
         raise ImageValidationError(E.SIZE_MISMATCH, detail="contagens nao conferem com o tamanho")
     if safe_out >> n_out:
         raise ImageValidationError(E.RESERVED_NONZERO, detail="safe_outputs fora de n_outputs")
 
-    p = Program(n_inputs=n_in, n_outputs=n_out, n_markers=n_mark, safe_outputs=safe_out, build_id=build_id)
+    p = Program(n_inputs=n_in, n_outputs=n_out, n_markers=n_mark, n_words=n_words, safe_outputs=safe_out,
+                build_id=build_id)
     off = isa.HEADER_SIZE
     for i in range(n_tim):
         ttype, reserved, preset = _ENTRY.unpack_from(data, off)
@@ -167,12 +183,16 @@ def decode(data: bytes) -> Program:
         if ctype not in CounterType._value2member_map_ or reserved != b"\0\0\0" or preset > isa.MAX_PRESET:
             raise ImageValidationError(E.BAD_COUNTER_TABLE, detail=f"C{i}")
         p.counters.append(CounterDef(ctype, preset))
+    for _ in range(n_const):
+        p.constants.append(_CONST.unpack_from(data, off)[0])
+        off += _CONST.size
 
     in_rung = False
     rung = 0
     depth = 0
     timer_driven = [False] * n_tim
     counter_driven = [False] * n_cnt
+    pending: list[str] = []          # classes dos ARG que ainda faltam para a instrucao anterior
     for i in range(n_instr):
         opcode, area, index = _INSTR.unpack_from(data, off)
         off += _INSTR.size
@@ -181,8 +201,12 @@ def decode(data: bytes) -> Program:
         op = Op(opcode)
         if in_rung == (op == Op.SOR):
             raise ImageValidationError(E.BAD_STRUCTURE, i, "SOR/EOR fora de ordem")
-        if not _operand_ok(op, area, index, p):
+        if bool(pending) != (op == Op.ARG):
+            raise ImageValidationError(E.BAD_STRUCTURE, i, "ARG fora de lugar ou operando faltando")
+        cls = pending.pop(0) if op == Op.ARG else isa.OPERAND_CLASS[op]
+        if not _operand_ok(cls, op, area, index, p):
             raise ImageValidationError(E.BAD_OPERAND, i)
+        pending.extend(isa.ARG_CLASSES[op])
         if op == Op.SOR:
             if index != rung or rung >= n_rungs:
                 raise ImageValidationError(E.BAD_STRUCTURE, i, "numeracao de rede")

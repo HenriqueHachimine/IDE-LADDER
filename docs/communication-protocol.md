@@ -65,7 +65,7 @@ Estados permitidos: RUN exige programa válido e não estar em FAULT; carga
 exige STOP; TEST_* exigem STOP (as saídas físicas permanecem no estado seguro).
 Não existe comando para forçar entradas ou saídas físicas.
 
-## 4. Instantâneo (READ_VARS / TEST_SCAN), ≤ 630 bytes
+## 4. Instantâneo (READ_VARS / TEST_SCAN), ≤ 900 bytes
 
 ```
 u8 estado, u8 falha, u32 varreduras, u16 entradas, u16 Q_lógico, u16 Q_comandado,
@@ -78,6 +78,12 @@ u16 n_instr, ceil(n_instr/8) bytes de energia por instrução (RLO)
 
 O Desktop converte o instantâneo para o mesmo texto de `LadderVM.dump_line()`
 (`Snapshot.dump_line`) para as comparações de equivalência.
+
+Firmware com LDRB 2 acrescenta ao fim do instantâneo: `u8 n_words`,
+`n_words × i32` (registradores N) e `u8` com os bits da matemática (bit 0 =
+S0.4 estouro, bit 1 = S0.5 zero, bit 2 = S0.6 negativo). A IDE só lê esses
+campos se houver bytes depois dos bits de energia, então continua aceitando o
+instantâneo menor de firmwares antigos.
 
 ## 5. Transferência transacional
 

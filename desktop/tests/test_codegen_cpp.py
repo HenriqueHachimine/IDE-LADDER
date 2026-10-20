@@ -6,6 +6,7 @@ execucao sao pulados.
 """
 from __future__ import annotations
 
+import os
 import random
 import re
 import shutil
@@ -17,14 +18,17 @@ import pytest
 from ladderide.codegen import generate_cpp
 from ladderide.compiler import compile_project
 from ladderide.core import LadderVM
-from ladderide.model.project import (Coil, Contact, CounterBox, IOConfig, NotOp, Parallel, Project, ResetBox,
-                                     Rung, Symbol, TimerBox)
+from ladderide.model.project import (COMPARE_KINDS, MATH_KINDS, Coil, CompareBox, Contact, CounterBox, IOConfig,
+                                     MathBox, NotOp, Parallel, Project, ResetBox, Rung, Symbol, TimerBox)
 
 ROOT = Path(__file__).resolve().parents[2]
 CXX = shutil.which("g++") or shutil.which("c++") or shutil.which("clang++")
 DT_CHOICES = [0, 1, 5, 10, 10, 10, 37, 100, 999, 1000, 4294967295]
 # nomes que colidem com C++ ou com o runtime gerado: o gerador precisa renomear
-AWKWARD_NAMES = ["loop", "dt", "Timer", "int", "rlo1", "ramo1", "outputs", "k", "setup", "plc_scan", "TON"]
+AWKWARD_NAMES = ["loop", "dt", "Timer", "int", "rlo1", "ramo1", "outputs", "k", "setup", "plc_scan", "TON",
+                 "ADD", "store", "N", "MEQ"]
+CONSTANTS = ["0", "1", "-1", "3", "-7", "10", "255", "256", "1234", "0x9876", "0x1A", "99999999", "46341",
+             "2147483647", "-2147483648", "0x0F"]
 
 
 class ProjectGenerator:
@@ -33,7 +37,8 @@ class ProjectGenerator:
 
     def project(self) -> Project:
         r = self.rng
-        p = Project(name="aleatorio", io=IOConfig(n_inputs=8, n_outputs=8, n_markers=r.choice([0, 8, 16])))
+        p = Project(name="aleatorio", io=IOConfig(n_inputs=8, n_outputs=8, n_markers=r.choice([0, 8, 16]),
+                                                  n_words=r.choice([0, 4, 4, 8])))
         n_rungs = r.randint(1, 7)
         self.timers = [(k, r.choice(["TON", "TOF", "RTO"]), r.choice([0, 10, 30, 100, 250])) for k in range(r.randint(0, 3))]
         self.counters = [(k, r.choice(["CTU", "CTD"]), r.randint(0, 5)) for k in range(r.randint(0, 3))]
@@ -44,6 +49,7 @@ class ProjectGenerator:
                      + [f"T{k}" for k, *_ in self.timers] + [f"C{k}" for k, *_ in self.counters])
         if p.io.n_markers:
             addresses += [f"M0.{k}" for k in range(8)]
+        addresses += [f"N{k}" for k in range(p.io.n_words)]
         for addr in r.sample(addresses, min(len(addresses), r.randint(0, 6))):
             name = pool.pop()
             p.symbols.append(Symbol(name, addr))
@@ -88,12 +94,28 @@ class ProjectGenerator:
             return f"{self.names[base]}.{addr.split('.')[1]}"
         return self.ref(addr)
 
+    def word(self, write: bool = False) -> str:
+        r = self.rng
+        options = [f"N{r.randrange(self.p.io.n_words)}"] * 3 + ["QW0"]
+        if not write:
+            options += [r.choice(CONSTANTS) for _ in range(3)] + ["IW0", "QW0"]
+            options += [f"T{k}.{r.choice(['ACC', 'PRE'])}" for k, *_ in self.timers]
+            options += [f"C{k}.{r.choice(['ACC', 'PRE'])}" for k, *_ in self.counters]
+        text = r.choice(options)
+        base = text.split(".")[0]
+        if base in self.names and r.random() < 0.6:
+            return self.names[base] + text[len(base):]
+        return text
+
     def series(self, depth: int) -> list:
         r = self.rng
         nodes = []
         for _ in range(r.randint(0, 3)):
             kind = r.random()
-            if kind < 0.6 or depth >= 3:
+            if self.p.io.n_words and kind < 0.2:
+                op = r.choice(list(COMPARE_KINDS))
+                nodes.append(CompareBox(op, [self.word() for _ in COMPARE_KINDS[op]]))
+            elif kind < 0.6 or depth >= 3:
                 nodes.append(Contact(r.choice(["XIC", "XIO"]), self.readable()))
             elif kind < 0.88:
                 nodes.append(Parallel([self.series(depth + 1) for _ in range(r.randint(2, 3))]))
@@ -103,6 +125,10 @@ class ProjectGenerator:
 
     def output(self):
         r = self.rng
+        if self.p.io.n_words and r.random() < 0.3:
+            op = r.choice(list(MATH_KINDS))
+            n = len(MATH_KINDS[op])
+            return MathBox(op, [self.word() for _ in range(n - 1)] + [self.word(write=True)])
         if r.random() < 0.15 and (self.timers or self.counters):
             items = [f"T{k}" for k, *_ in self.timers] + [f"C{k}" for k, *_ in self.counters]
             return ResetBox(self.ref(r.choice(items)))
@@ -148,6 +174,13 @@ def dump_function(project: Project) -> str:
         sep = "," if k else ""
         lines.append(f'    printf("{sep}%ld/%x", (long)C[{k}].acc, '
                      f'(unsigned)(C[{k}].dn | C[{k}].ov << 1 | C[{k}].un << 2 | C[{k}].prev << 3));')
+    uses_words = "MATH_OV" in generate_cpp(project, arduino=False).text
+    lines.append('    printf(" N=");')
+    for k in range(prog.n_words):
+        sep = "," if k else ""
+        lines.append(f'    printf("{sep}%ld", (long)N[{k}]);' if uses_words else f'    printf("{sep}0");')
+    lines.append('    printf(" F=%x", (unsigned)(MATH_OV | MATH_ZERO << 1 | MATH_SIGN << 2));' if uses_words
+                 else '    printf(" F=0");')
     lines.append('    printf("\\n");')
     return "void dump(uint16_t q) {\n" + "\n".join(lines) + "\n}\n"
 
@@ -255,7 +288,7 @@ def test_generated_cpp_matches_simulator(tmp_path):
     rng = random.Random(20261017)
     gen = ProjectGenerator(rng)
     projects = [p for _, p in example_projects()]
-    projects += [gen.project() for _ in range(60)]
+    projects += [gen.project() for _ in range(int(os.environ.get("LADDER_CPP_PROJECTS", "80")))]
     scans = [random_scans(rng, 120) for _ in projects]
     cpp = run_cpp(projects, scans, tmp_path)
     for k, (project, seq, got) in enumerate(zip(projects, scans, cpp)):
@@ -358,3 +391,30 @@ def test_generated_sketch_with_timers_and_counters_compiles_and_runs(tmp_path):
             assert log.wait(f"  {label} ", since=start), label
     finally:
         proc.close()
+
+
+@pytest.mark.skipif(CXX is None, reason="sem compilador C++ (g++)")
+def test_condition_is_kept_when_an_output_changes_what_it_reads(tmp_path):
+    """O CLP calcula a condicao uma vez; o C++ nao pode reavaliar depois de uma saida mudar o operando."""
+    p = Project(io=IOConfig(n_words=2))
+    p.rungs = [Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.0")]),
+               Rung([Contact("XIC", "Q0.0")], [Coil("OTU", "Q0.0"), Coil("OTE", "Q0.1")]),
+               Rung([CompareBox("LES", ["N0", "3"])], [MathBox("ADD", ["N0", "1", "N0"]), Coil("OTE", "Q0.2")])]
+    text = generate_cpp(p, arduino=False).text
+    assert "bool rlo1 = Q0_0;" in text and "Q0_1 = rlo1;" in text
+    seq = [(10, 1), (10, 0), (10, 0), (10, 0), (10, 0)]
+    assert run_cpp([p], [seq], tmp_path)[0] == python_trace(p, seq)
+
+
+def test_cpp_compare_and_math_read_like_the_diagram():
+    p = Project(symbols=[Symbol("Pecas", "C0"), Symbol("Total", "N2")])
+    p.rungs = [Rung([Contact("XIC", "I0.0")], [CounterBox("CTU", "Pecas", 10)]),
+               Rung([CompareBox("GEQ", ["Pecas.ACC", "3"]), CompareBox("LIM", ["0", "Total", "100"])],
+                    [MathBox("MUL", ["Pecas.ACC", "-2147483648", "Total"])]),
+               Rung([Contact("XIC", "S0.4")], [MathBox("TOD", ["Total", "QW0"])])]
+    code = generate_cpp(p)
+    assert code.errors == 0, code.text
+    assert "static int32_t &Total = N[2];" in code.text
+    assert "if (Pecas.acc >= 3 && LIM(0, Total, 100)) store(Total, MUL(Pecas.acc, INT32_MIN));" in code.text \
+        or "if ((Pecas.acc >= 3) && LIM(0, Total, 100)) store(Total, MUL(Pecas.acc, INT32_MIN));" in code.text
+    assert "if (MATH_OV) store_QW(TOD(Total));" in code.text

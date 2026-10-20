@@ -9,7 +9,7 @@ from conftest import VECTORS, load_json
 from ladderide.core import ImageValidationError, LadderVM, assemble, build_image, decode, encode
 from ladderide.core.asm import parse_operand
 from ladderide.core.crc import crc32
-from ladderide.core.isa import ImageError
+from ladderide.core.isa import WORD_READ_AREAS, ImageError
 
 SCAN_CASES = [case for f in sorted((VECTORS / "scan").glob("*.json"))
               for case in load_json(f"scan/{f.name}")]
@@ -33,11 +33,9 @@ def expand_steps(steps: list[dict]) -> list[tuple[int, int, dict | None]]:
 def read_value(vm: LadderVM, key: str) -> int:
     if key == "SCAN":
         return vm.scan_count
-    if key.endswith(".ACC"):
-        elem = key[:-4]
-        table = vm.timers if elem[0] == "T" else vm.counters
-        return table[int(elem[1:])].acc
     area, index = parse_operand(key)
+    if area in WORD_READ_AREAS:                  # Nk, Tn.ACC, Cn.PRE, IW0...
+        return vm.read_word(area, index)
     return int(vm.read_bit(area, index))
 
 

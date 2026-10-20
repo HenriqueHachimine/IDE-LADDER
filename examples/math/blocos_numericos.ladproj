@@ -1,0 +1,407 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Blocos numericos",
+  "description": "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, MEQ) e de matematica (ADD, SUB, MUL, DIV, SQR, NEG, TOD, FRD). Os resultados ficam nos registradores N, vistos no monitor de variaveis.",
+  "version": "1.0.0",
+  "created": "2026-10-20T00:12:04",
+  "modified": "2026-10-20T00:12:04",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Sensor_Peca",
+      "address": "I0.0",
+      "comment": "Sensor de passagem de peca"
+    },
+    {
+      "name": "Zera",
+      "address": "I0.1",
+      "comment": "Botao para zerar a contagem"
+    },
+    {
+      "name": "Liga",
+      "address": "I0.2",
+      "comment": "Chave liga esteira"
+    },
+    {
+      "name": "Esteira",
+      "address": "Q0.0",
+      "comment": "Motor da esteira (para com 5 lotes)"
+    },
+    {
+      "name": "Lote_Fechado",
+      "address": "Q0.1",
+      "comment": "Lote de 6 pecas completo"
+    },
+    {
+      "name": "Inicio_Lote",
+      "address": "Q0.2",
+      "comment": "Primeiras pecas do lote (1 a 3)"
+    },
+    {
+      "name": "Meta",
+      "address": "Q0.3",
+      "comment": "5 lotes ou mais"
+    },
+    {
+      "name": "Dois_Botoes",
+      "address": "Q0.4",
+      "comment": "I0.4 e I0.5 juntos (MEQ com mascara)"
+    },
+    {
+      "name": "Erro_BCD",
+      "address": "Q0.5",
+      "comment": "TOD seguido de FRD nao devolveu o valor (nunca deve ligar)"
+    },
+    {
+      "name": "Pecas",
+      "address": "C0",
+      "comment": "CTU - pecas contadas"
+    },
+    {
+      "name": "Lotes",
+      "address": "N0",
+      "comment": "Lotes completos = Pecas / 6"
+    },
+    {
+      "name": "Pecas_Lotes",
+      "address": "N1",
+      "comment": "Pecas nos lotes completos = Lotes x 6"
+    },
+    {
+      "name": "Resto",
+      "address": "N2",
+      "comment": "Pecas do lote atual = Pecas - Pecas_Lotes"
+    },
+    {
+      "name": "Raiz",
+      "address": "N3",
+      "comment": "Raiz quadrada da contagem"
+    },
+    {
+      "name": "Falta",
+      "address": "N4",
+      "comment": "-Resto (negativo: pecas ja colocadas no lote)"
+    },
+    {
+      "name": "Pecas_BCD",
+      "address": "N5",
+      "comment": "Contagem em BCD (para um display)"
+    },
+    {
+      "name": "Pecas_Volta",
+      "address": "N6",
+      "comment": "BCD convertido de volta para inteiro"
+    },
+    {
+      "name": "Proximo_Lote",
+      "address": "N7",
+      "comment": "Numero do proximo lote = Lotes + 1"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Conta pecas",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Peca"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Pecas",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "Zera a contagem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Zera"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Pecas"
+        }
+      ]
+    },
+    {
+      "comment": "Lotes e resto: DIV, MUL, SUB e ADD a cada varredura",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Pecas.ACC",
+            "6",
+            "Lotes"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Lotes",
+            "6",
+            "Pecas_Lotes"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Pecas.ACC",
+            "Pecas_Lotes",
+            "Resto"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Lotes",
+            "1",
+            "Proximo_Lote"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Lote fechado: resto zero com alguma peca contada",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Resto",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Pecas.ACC",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lote_Fechado"
+        }
+      ]
+    },
+    {
+      "comment": "Esteira liga com a chave enquanto houver menos de 5 lotes",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Lotes",
+            "5"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira"
+        }
+      ]
+    },
+    {
+      "comment": "Resto entre 1 e 3",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "1",
+            "Resto",
+            "3"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Inicio_Lote"
+        }
+      ]
+    },
+    {
+      "comment": "Meta de 5 lotes",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Lotes",
+            "5"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Meta"
+        }
+      ]
+    },
+    {
+      "comment": "Mascara 0x30: so I0.4 e I0.5 importam",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "IW0",
+            "0x30",
+            "0x30"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Dois_Botoes"
+        }
+      ]
+    },
+    {
+      "comment": "Raiz e sinal",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SQR",
+          "operands": [
+            "Pecas.ACC",
+            "Raiz"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "NEG",
+          "operands": [
+            "Resto",
+            "Falta"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Conversao para BCD e de volta",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "TOD",
+          "operands": [
+            "Pecas.ACC",
+            "Pecas_BCD"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "FRD",
+          "operands": [
+            "Pecas_BCD",
+            "Pecas_Volta"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Conferencia: nunca deve ligar",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "NEQ",
+                "operands": [
+                  "Pecas_Volta",
+                  "Pecas.ACC"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LEQ",
+                "operands": [
+                  "Raiz",
+                  "-1"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Erro_BCD"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-20T00:12:04",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 11
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.0",
+    "build_id": "0x5cc154f0",
+    "size": 416,
+    "instructions": 85,
+    "date": "2026-10-20T00:12:04"
+  },
+  "environment": ""
+}

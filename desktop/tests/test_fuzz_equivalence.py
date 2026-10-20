@@ -14,10 +14,16 @@ import pytest
 from ladderide.core import (CounterDef, ImageValidationError, Instruction, LadderVM, Program,
                             TimerDef, build_image, decode)
 from ladderide.core.crc import crc32
+from ladderide.core import isa
 from ladderide.core.isa import Area, CounterType, Op, TimerType
 
 ITER = int(os.environ.get("LADDER_FUZZ_ITER", "150"))
 DT_CHOICES = [0, 1, 5, 10, 10, 10, 37, 100, 999, 1000, 4294967295]
+# constantes que exercitam limites: zero, sinais, saturacao, BCD valido/invalido, raizes
+CONST_POOL = [0, 1, -1, 2, 3, 7, -7, 9, 10, 100, 255, 256, 1234, 0x9876, 0x1A, 99999999, 100000000,
+              46340, 46341, 2147483647, -2147483648, -2147483647, 65535, -65536, 0x0F, -0x10]
+COMPARE = [Op.EQU, Op.NEQ, Op.LES, Op.GRT, Op.LEQ, Op.GEQ, Op.LIM, Op.MEQ]
+MATH = [Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.SQR, Op.NEG, Op.TOD, Op.FRD]
 
 
 class ProgramGenerator:
@@ -31,6 +37,8 @@ class ProgramGenerator:
                     for _ in range(r.randint(0, 4))]
         p.counters = [CounterDef(r.choice(list(CounterType)), r.randint(0, 5))
                       for _ in range(r.randint(0, 4))]
+        p.n_words = r.choice([0, 0, 2, 6])
+        p.constants = r.sample(CONST_POOL, r.randint(0, 8)) if p.n_words else []
         self.p = p
         self.timer_free = list(range(len(p.timers)))
         self.counter_free = list(range(len(p.counters)))
@@ -42,13 +50,13 @@ class ProgramGenerator:
             self.series(code, depth=0)
             outputs = [self.output() for _ in range(r.choice([1, 1, 2, 3]))]
             if len(outputs) == 1:
-                code.append(outputs[0])
+                code += outputs[0]
             else:
                 code.append(Instruction(Op.BST))
                 for k, out in enumerate(outputs):
                     if k:
                         code.append(Instruction(Op.NXB))
-                    code.append(out)
+                    code += out
                 code.append(Instruction(Op.BND))
             code.append(Instruction(Op.EOR))
         p.code = code
@@ -56,7 +64,7 @@ class ProgramGenerator:
 
     def readable(self) -> tuple[int, int]:
         r, p = self.rng, self.p
-        options = [(Area.I, 8), (Area.Q, 8), (Area.S, 4)]
+        options = [(Area.I, 8), (Area.Q, 8), (Area.S, isa.NUM_SYSTEM_BITS)]
         if p.n_markers:
             options.append((Area.M, p.n_markers))
         if p.timers:
@@ -66,11 +74,32 @@ class ProgramGenerator:
         area, size = r.choice(options)
         return area, r.randrange(size)
 
+    def word_read(self) -> tuple[int, int]:
+        r, p = self.rng, self.p
+        options = [(Area.N, p.n_words), (Area.IW, 1), (Area.QW, 1)]
+        if p.constants:
+            options += [(Area.K, len(p.constants))] * 3
+        if p.timers:
+            options += [(Area.T_ACC, len(p.timers)), (Area.T_PRE, len(p.timers))]
+        if p.counters:
+            options += [(Area.C_ACC, len(p.counters)), (Area.C_PRE, len(p.counters))]
+        area, size = r.choice(options)
+        return area, r.randrange(size)
+
+    def word_instr(self, op: Op) -> list[Instruction]:
+        """Instrucao de palavra com os operandos adicionais em ARG."""
+        refs = [self.word_read() for _ in range(1 + len(isa.ARG_CLASSES[op]))]
+        if op in isa.MATH_OPS:                 # o ultimo e o destino: N ou QW
+            refs[-1] = (Area.N, self.rng.randrange(self.p.n_words)) if self.rng.random() < 0.85 else (Area.QW, 0)
+        return [Instruction(op, *refs[0])] + [Instruction(Op.ARG, *ref) for ref in refs[1:]]
+
     def series(self, code: list[Instruction], depth: int) -> None:
         r = self.rng
         for _ in range(r.randint(0, 3)):
             kind = r.random()
-            if kind < 0.65 or depth >= 3:
+            if self.p.n_words and kind < 0.2:
+                code += self.word_instr(r.choice(COMPARE))
+            elif kind < 0.65 or depth >= 3:
                 area, index = self.readable()
                 code.append(Instruction(r.choice([Op.XIC, Op.XIO]), area, index))
             elif kind < 0.92:
@@ -83,7 +112,13 @@ class ProgramGenerator:
             else:
                 code.append(Instruction(Op.NOT))
 
-    def output(self) -> Instruction:
+    def output(self) -> list[Instruction]:
+        r, p = self.rng, self.p
+        if p.n_words and r.random() < 0.35:
+            return self.word_instr(r.choice(MATH))
+        return [self.single_output()]
+
+    def single_output(self) -> Instruction:
         r, p = self.rng, self.p
         choice = r.random()
         if choice < 0.2 and self.timer_free:

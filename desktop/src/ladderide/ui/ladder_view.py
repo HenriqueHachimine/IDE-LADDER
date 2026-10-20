@@ -13,7 +13,9 @@ from PySide6.QtGui import QAction, QColor, QDrag, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QGraphicsItem, QGraphicsLineItem, QGraphicsRectItem,
                                QGraphicsScene, QGraphicsView, QMenu)
 
-from ..model.project import Coil, Contact, CounterBox, NotOp, Parallel, Project, ResetBox, TimerBox
+from ..core.asm import parse_constant
+from ..model.project import (COMPARE_KINDS, MATH_KINDS, Coil, CompareBox, Contact, CounterBox, MathBox, NotOp,
+                             Parallel, Project, ResetBox, TimerBox)
 from .layout import RUNG_HEAD, RUNG_PAD, Layout, PlacedElem, Slot, build_layout
 from .symbols import (CURRENT_BORDER, DEENERGIZED, ENERGIZED, ERROR_FILL, NEUTRAL, SELECTED_BORDER,
                       SELECTED_FILL, SymbolState, paint_symbol)
@@ -32,8 +34,24 @@ COMMENT_TEXT = themed((100, 116, 139), (148, 163, 184))
 HINT_BORDER = themed((148, 163, 184), (71, 85, 105))
 MIME_TOOL = "application/x-ladder-tool"
 MIME_MOVE = "application/x-ladder-move"
-OUTPUT_TOOLS = {"OTE", "OTL", "OTU", "TON", "TOF", "RTO", "CTU", "CTD", "RES"}
-COND_TOOLS = {"XIC", "XIO", "NOT", "PAR"}
+OUTPUT_TOOLS = {"OTE", "OTL", "OTU", "TON", "TOF", "RTO", "CTU", "CTD", "RES"} | set(MATH_KINDS)
+COND_TOOLS = {"XIC", "XIO", "NOT", "PAR"} | set(COMPARE_KINDS)
+WRAPPABLE = {"XIC", "XIO", "NOT", "PAR"} | set(COMPARE_KINDS)
+
+
+BLOCK_TIPS = {
+    "EQU": "EQU - igual: conduz se A = B", "NEQ": "NEQ - diferente: conduz se A \u2260 B",
+    "LES": "LES - menor: conduz se A < B", "GRT": "GRT - maior: conduz se A > B",
+    "LEQ": "LEQ - menor ou igual: conduz se A \u2264 B", "GEQ": "GEQ - maior ou igual: conduz se A \u2265 B",
+    "LIM": "LIM - teste de limite: conduz se inferior \u2264 teste \u2264 superior\n"
+           "(com inferior > superior conduz fora da faixa)",
+    "MEQ": "MEQ - comparacao com mascara: (origem AND mascara) = (comparar AND mascara)",
+    "ADD": "ADD - soma: destino = A + B", "SUB": "SUB - subtracao: destino = A - B",
+    "MUL": "MUL - multiplicacao: destino = A \u00d7 B",
+    "DIV": "DIV - divisao inteira: destino = A \u00f7 B (truncada; divisao por zero liga S0.4)",
+    "SQR": "SQR - raiz quadrada (arredondada)", "NEG": "NEG - troca o sinal: destino = -origem",
+    "TOD": "TOD - converte inteiro para BCD", "FRD": "FRD - converte BCD para inteiro",
+}
 
 
 class LiveSource(Protocol):
@@ -43,6 +61,7 @@ class LiveSource(Protocol):
     def operand_value(self, element_id: str) -> bool | None: ...
     def timer_state(self, index: int): ...
     def counter_state(self, index: int): ...
+    def block_values(self, element_id: str) -> list[int | None] | None: ...
     @property
     def current_element(self) -> str | None: ...
 
@@ -54,7 +73,7 @@ def node_kind(node) -> str:
         return "NOT"
     if isinstance(node, Parallel):
         return "PAR"
-    if isinstance(node, (Coil, TimerBox, CounterBox)):
+    if isinstance(node, (Coil, TimerBox, CounterBox, CompareBox, MathBox)):
         return node.kind
     if isinstance(node, ResetBox):
         return "RES"
@@ -97,10 +116,41 @@ class ElementItem(QGraphicsItem):
             st.lines = (f"PRE {node.preset} ms", "ACC -")
         elif isinstance(node, CounterBox):
             st.lines = (f"PRE {node.preset}", "ACC -")
+        elif isinstance(node, (CompareBox, MathBox)):
+            st.label = st.sublabel = ""
+            self.set_rows(None)
         tip = {"XIC": "Contato normalmente aberto (NA / XIC)", "XIO": "Contato normalmente fechado (NF / XIO)",
                "NOT": "Inversor (NOT)", "OTE": "Bobina", "OTL": "Bobina SET (OTL)", "OTU": "Bobina RESET (OTU)",
                "RES": "Reset de temporizador/contador", "PAR": "Ramificacao paralela (OR)"}.get(self.kind, self.kind)
+        if isinstance(node, (CompareBox, MathBox)):
+            roles = (COMPARE_KINDS if isinstance(node, CompareBox) else MATH_KINDS)[node.kind]
+            tip = BLOCK_TIPS.get(node.kind, node.kind) + "\n" + "\n".join(
+                f"{role}: {text}" for role, text in zip(roles, node.operands))
+            self.setToolTip(tip)
+            return
         self.setToolTip(f"{tip}\n{operand}" if operand else tip)
+
+    def set_rows(self, values: list[int | None] | None) -> None:
+        """Linhas do bloco: operando (simbolo ou endereco) e, na simulacao, o valor atual."""
+        node, project = self.node, self.view.project
+        roles = (COMPARE_KINDS if isinstance(node, CompareBox) else MATH_KINDS)[node.kind]
+        rows = []
+        for k, (role, text) in enumerate(zip(roles, node.operands)):
+            short = {"Limite inferior": "Min", "Limite superior": "Max", "Destino": "\u2192", "Origem": "Orig",
+                     "Mascara": "Masc", "Comparar": "Comp"}.get(role, role)
+            shown = text.strip() or "?"
+            name = project.symbol_for(shown) if project is not None else None
+            if name:
+                shown = name
+            value = values[k] if values is not None and k < len(values) else None
+            try:
+                is_const = parse_constant(text) is not None
+            except ValueError:
+                is_const = False
+            if value is not None and not is_const:
+                shown = f"{shown}={value}"
+            rows.append((short, shown))
+        self.state.rows = tuple(rows)
 
     def paint(self, p: QPainter, option, widget=None) -> None:
         r = self.rect
@@ -277,6 +327,8 @@ class LadderView(QGraphicsView):
             if st.closed is not None and item.kind == "XIO":
                 st.closed = not st.closed
             node = item.node
+            if isinstance(node, (CompareBox, MathBox)):
+                item.set_rows(source.block_values(eid) if source is not None else None)
             if isinstance(node, (TimerBox, CounterBox)):
                 is_timer = isinstance(node, TimerBox)
                 pre = f"PRE {node.preset} ms" if is_timer else f"PRE {node.preset}"
@@ -402,7 +454,7 @@ class LadderView(QGraphicsView):
             in_branch = self.project.find_parent_parallel(eid) is not None
             if item.kind != "PAR":
                 add("Editar...", "edit", eid)
-            if item.kind in ("XIC", "XIO", "NOT", "PAR"):
+            if item.kind in WRAPPABLE:
                 add("Envolver em ramo paralelo", "wrap", eid)
             if item.kind == "PAR" or in_branch:
                 add("Adicionar ramo paralelo", "add_branch", eid)

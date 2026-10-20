@@ -28,7 +28,8 @@ Quem roda: `desktop/tests/test_vectors.py` (veja `docs/testing.md`).
 - `repeat`: número de varreduras do passo (padrão 1). `expect` é verificado
   após a última.
 - Chaves de `expect`: qualquer operando de bit (`I0.0`, `Q0.1`, `M0.0`, `S0.0`,
-  `T0.DN`, `T0.TT`, `T0.EN`, `C0.DN`, `C0.OV`, `C0.UN`), `Tn.ACC`, `Cn.ACC` e
+  `T0.DN`, `T0.TT`, `T0.EN`, `C0.DN`, `C0.OV`, `C0.UN`, `S0.4`...), qualquer
+  palavra (`N0`, `Tn.ACC`, `Tn.PRE`, `Cn.ACC`, `Cn.PRE`, `IW0`, `QW0`) e
   `SCAN` (contador de varreduras).
 
 ## `image-errors.json` — validação de imagens

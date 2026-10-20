@@ -16,8 +16,10 @@ from ..compiler.compiler import COMPILER_VERSION, TARGET_FORMAT, CompileResult
 from ..core.image import ImageValidationError
 from ..core.asm import AsmError
 from ..model import edit
-from ..model.project import (Contact, CounterBox, Project, ProjectFormatError, ResetBox, Symbol,
-                             TimerBox, Coil)
+from ..model.project import (CompareBox, Contact, CounterBox, MathBox, Project, ProjectFormatError, ResetBox,
+                             Symbol, TimerBox, Coil)
+
+EDITABLE_ON_INSERT = (Contact, Coil, TimerBox, CounterBox, ResetBox, CompareBox, MathBox)
 from ..sim.simulator import SimState, Simulator
 from ..comm.monitor import MonitorSource
 from ..comm.protocol import DevState
@@ -651,7 +653,7 @@ class MainWindow(QMainWindow):
         if not self.apply_edit(lambda: edit.insert(self.project, container, index, node)):
             return
         self.view.select(node.id)
-        if isinstance(node, (Contact, Coil, TimerBox, CounterBox, ResetBox)):
+        if isinstance(node, EDITABLE_ON_INSERT):
             self.edit_element(node.id, record_undo=False)
 
     def tool_clicked(self, tool: str) -> None:
@@ -697,7 +699,7 @@ class MainWindow(QMainWindow):
                     edit.move(self.project, payload, target, 0)
             if self.apply_edit(into_new_rung):
                 self.view.select(node.id if node is not None else payload)
-                if isinstance(node, (Contact, Coil, TimerBox, CounterBox, ResetBox)):
+                if isinstance(node, EDITABLE_ON_INSERT):
                     self.edit_element(node.id, record_undo=False)
             return
         if mode == "tool":
@@ -1069,7 +1071,7 @@ class MainWindow(QMainWindow):
         self.last_snapshot = snap
         src = MonitorSource(snap, self.result or CompileResult())
         self.device_panel.io.update_values(snap.inputs, snap.q_logical, snap.q_commanded, src.timer_state,
-                                           src.counter_state, src.read_bit)
+                                           src.counter_state, src.read_bit, src.word_value)
         self.esp32_panel.on_snapshot(snap)
         if self.monitoring:
             self._update_live()

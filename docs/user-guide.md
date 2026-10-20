@@ -135,6 +135,28 @@ Erros e avisos aparecem em **Mensagens** com a rede; clique para selecionar o
 elemento (destacado em vermelho). Programas com erro não são simulados nem
 transferidos. Arquivo → Exportar gera a listagem LIL (texto) ou a imagem LDRB.
 
+### Comparação e matemática
+
+Os grupos **Comparação** e **Matemática** da paleta trabalham com números
+inteiros de 32 bits:
+
+- **Comparação** (EQU =, NEQ ≠, LES <, GRT >, LEQ ≤, GEQ ≥, LIM faixa, MEQ
+  máscara) fica na condição da rede, como um contato: conduz quando a
+  comparação é verdadeira. Pode ficar em série e em ramos paralelos.
+- **Matemática** (ADD, SUB, MUL, DIV, SQR raiz, NEG troca o sinal, TOD inteiro
+  → BCD, FRD BCD → inteiro) fica na coluna de saídas e só executa quando a rede
+  conduz.
+
+Operandos: constantes (`100`, `-5`, `0x1F`), registradores `N0`…`N31` (a
+quantidade fica em Programa → Propriedades), `T0.ACC`/`T0.PRE`,
+`C0.ACC`/`C0.PRE`, `IW0` (entradas como número) e `QW0` (saídas como número).
+Destino: `N` ou `QW0`. Dê nomes aos registradores na aba Símbolos (ex.:
+`Total` = `N2`). Resultados fora de 32 bits saturam; divisão por zero, raiz de
+negativo e BCD inválido ligam `S0.4`; `S0.5` liga com resultado zero e `S0.6`
+com resultado negativo. Na simulação, cada bloco mostra o valor atual dos
+operandos e o monitor de variáveis lista os registradores usados. Exemplo:
+`examples/math/blocos_numericos.ladproj`.
+
 ## 5. Simular
 
 | Tecla | Ação |

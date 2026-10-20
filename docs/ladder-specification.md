@@ -1,4 +1,4 @@
-# Especificação semântica LADDER — v1.0 (normativa)
+# Especificação semântica LADDER — v2.0 (normativa)
 
 Este documento é a **referência** para o simulador do Desktop
 (`desktop/src/ladderide/core/vm.py`) e para o interpretador do firmware
@@ -17,6 +17,10 @@ Os códigos numéricos (opcodes, áreas, erros) estão em
 | Sistema | `S0.0`…`S0.3` | 4 | não | Ver §1.1 |
 | Temporizadores | `Tn`, `Tn.EN`, `Tn.TT`, `Tn.DN`, `Tn.ACC` | ≤ 32 | por instrução | ACC em ms |
 | Contadores | `Cn`, `Cn.DN`, `Cn.OV`, `Cn.UN`, `Cn.ACC` | ≤ 32 | por instrução | ACC inteiro de 32 bits com sinal |
+| Registradores | `N0`…`N63` | `n_words` ≤ 64 | por instrução matemática | Inteiro de 32 bits com sinal, não retentivo |
+| Palavras somente leitura | `Tn.ACC`, `Tn.PRE`, `Cn.ACC`, `Cn.PRE`, `IW0` | — | não | `IW0`: bit k = `Ik` |
+| Saídas como palavra | `QW0` | 1 | por instrução matemática | bit k = `Qk` |
+| Constantes | `123`, `-5`, `0x1F`, `0b101` | ≤ 128 distintas | não | Tabela de constantes da imagem |
 
 Endereço `X<byte>.<bit>` corresponde ao índice linear `byte*8 + bit`.
 
@@ -28,6 +32,9 @@ Endereço `X<byte>.<bit>` corresponde ao índice linear `byte*8 + bit`.
 | `S0.1` | ALWAYS_ON | sempre 1 |
 | `S0.2` | ALWAYS_OFF | sempre 0 |
 | `S0.3` | CLOCK_1S | `fase < 500`, onde `fase` (ms, 0–999) avança `dt mod 1000` a cada varredura, exceto a primeira |
+| `S0.4` | MATH_OV | 1 se a última instrução matemática executada estourou ou foi inválida (§9) |
+| `S0.5` | MATH_ZERO | 1 se o resultado da última instrução matemática executada foi 0 |
+| `S0.6` | MATH_SIGN | 1 se o resultado da última instrução matemática executada foi negativo |
 
 ## 2. Ciclo de varredura
 
@@ -54,7 +61,7 @@ hospedeiro, não à VM — ver `docs/architecture.md`.
 
 ### 2.1 Partida a frio (STOP → RUN, carga de programa, energização)
 
-`I`, `Q`, `M` := 0; todos os temporizadores := `{ACC=0, EN=TT=DN=0}`;
+`I`, `Q`, `M`, `N` := 0; `S0.4`–`S0.6` := 0; todos os temporizadores := `{ACC=0, EN=TT=DN=0}`;
 contadores UP := `{ACC=0}`, DOWN := `{ACC=PRE}`, `DN` recalculado, `OV=UN=0`,
 memória de borda := 0; `scan_count := 0`; `FIRST_SCAN := 1`; `fase := 0`.
 
@@ -215,8 +222,9 @@ Estados do dispositivo (detalhados em `docs/architecture.md`): `STOP`, `RUN`,
 
 - A VM executa apenas imagens aprovadas pela validação
   (`docs/intermediate-format.md` §4); não há erros de execução possíveis em um
-  programa válido: não existem laços, saltos, divisão ou acesso indireto, e o
-  tempo de execução é limitado por `n_instr ≤ 2048`.
+  programa válido: não existem laços, saltos ou acesso indireto, a divisão por
+  zero e os estouros têm resultado definido (§9), e o tempo de execução é
+  limitado por `n_instr ≤ 2048`.
 - `dt` é um inteiro sem sinal de 32 bits; valores enormes saturam os
   acumuladores no preset (vetor `ton_preset_zero_e_dt_grande`).
 - Violações de tempo de varredura (watchdog) são tratadas pelo hospedeiro, que
@@ -233,3 +241,50 @@ Estados do dispositivo (detalhados em `docs/architecture.md`): `STOP`, `RUN`,
 | TON/TOF/RTO | Tn | PRE (ms), tipo | ACC, EN, TT, DN | inalterado | usa `prev = EN` | RES §5.5 |
 | CTU/CTD | Cn | PRE, tipo | ACC, DN, OV, UN, prev | inalterado | subida do RLO | RES §5.5 |
 | RES | Tn ou Cn | — | — | inalterado | nível (RLO=1) | — |
+| EQU…GEQ, LIM, MEQ | 2 ou 3 palavras | — | — | RLO ∧ condição | — | — |
+| ADD…FRD | 1 ou 2 palavras + destino | — | N ou QW0, S0.4–S0.6 | inalterado | nível (RLO=1) | — |
+
+## 9. Comparação e matemática (LDRB 2)
+
+Todos os valores são inteiros de 32 bits com sinal. Operandos de leitura:
+constante, `Nk`, `Tn.ACC`, `Tn.PRE`, `Cn.ACC`, `Cn.PRE`, `IW0` e `QW0`
+(temporizadores e contadores precisam estar acionados por alguma instrução).
+Destino: `Nk` ou `QW0`. No binário, o primeiro operando fica na própria
+instrução e os demais nas instruções `ARG` seguintes (`docs/intermediate-format.md`).
+
+### 9.1 Comparações (condição, como um contato)
+
+`RLO := RLO AND condição`. A condição é avaliada mesmo com RLO = 0, sem efeitos.
+
+| Instrução | Operandos | Condição |
+|---|---|---|
+| `EQU` / `NEQ` | A, B | A = B / A ≠ B |
+| `LES` / `GRT` | A, B | A < B / A > B |
+| `LEQ` / `GEQ` | A, B | A ≤ B / A ≥ B |
+| `LIM` | inferior, teste, superior | se inferior ≤ superior: inferior ≤ teste ≤ superior; senão: teste ≥ inferior OU teste ≤ superior |
+| `MEQ` | origem, máscara, comparar | (origem AND máscara) = (comparar AND máscara), bit a bit em 32 bits |
+
+### 9.2 Matemática (saída, como uma bobina)
+
+Executa somente se `RLO = 1`; com RLO = 0 nada muda (nem os bits S0.4–S0.6).
+Instruções de saída não alteram o RLO.
+
+| Instrução | Operandos | Resultado | S0.4 (MATH_OV) liga quando |
+|---|---|---|---|
+| `ADD` / `SUB` / `MUL` | A, B, destino | A + B / A − B / A × B | o resultado exato sai de 32 bits (o valor satura em −2³¹ ou 2³¹−1) |
+| `DIV` | A, B, destino | A ÷ B truncado em direção a zero | B = 0 (resultado 2³¹−1 se A ≥ 0, senão −2³¹) ou −2³¹ ÷ −1 (satura) |
+| `SQR` | origem, destino | raiz quadrada de \|origem\| arredondada para o inteiro mais próximo (empate não ocorre) | origem negativa |
+| `NEG` | origem, destino | −origem | origem = −2³¹ (satura em 2³¹−1) |
+| `TOD` | origem, destino | origem em BCD (8 dígitos; o padrão de bits é gravado como inteiro com sinal) | origem < 0 ou > 99 999 999: **destino inalterado** |
+| `FRD` | origem, destino | origem lida como BCD convertida para inteiro | algum dígito (nibble) > 9: **destino inalterado** |
+
+Depois de executar: `S0.4` como na tabela; `S0.5 := (resultado = 0)`;
+`S0.6 := (resultado < 0)`. Quando o destino fica inalterado, `S0.5 = S0.6 = 0`.
+
+**Destino `QW0`:** `Qk := bit k do resultado` para `k < n_outputs`; se o
+resultado for negativo ou não couber em `n_outputs` bits, `S0.4 := 1` (os bits
+existentes são gravados mesmo assim). É uma escrita como a de uma bobina: vale
+a última da varredura (o compilador avisa quando há bobinas em Q no mesmo
+programa).
+
+Vetores: `shared/test-vectors/scan/words.json`.

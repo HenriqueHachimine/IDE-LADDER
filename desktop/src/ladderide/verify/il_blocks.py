@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from ..compiler.compiler import CompileResult
 from ..core.asm import format_operand
 from ..core.isa import Area, Op
-from ..model.project import Project
+from ..model.project import COMPARE_KINDS, MATH_KINDS, Project
 
 DESCRIPTION = {
     "SOR": "inicio da rede: resultado logico (RLO) = 1",
@@ -32,6 +32,14 @@ DESCRIPTION = {
     "CTU": "contador crescente (borda de subida)",
     "CTD": "contador decrescente (borda de subida)",
     "RES": "zera temporizador/contador se RLO = 1",
+    "EQU": "RLO = RLO E (A = B)", "NEQ": "RLO = RLO E (A <> B)", "LES": "RLO = RLO E (A < B)",
+    "GRT": "RLO = RLO E (A > B)", "LEQ": "RLO = RLO E (A <= B)", "GEQ": "RLO = RLO E (A >= B)",
+    "LIM": "RLO = RLO E (inferior <= teste <= superior)",
+    "MEQ": "RLO = RLO E ((origem AND mascara) = (comparar AND mascara))",
+    "ADD": "se RLO = 1: destino = A + B", "SUB": "se RLO = 1: destino = A - B",
+    "MUL": "se RLO = 1: destino = A * B", "DIV": "se RLO = 1: destino = A / B (inteira)",
+    "SQR": "se RLO = 1: destino = raiz quadrada", "NEG": "se RLO = 1: destino = -origem",
+    "TOD": "se RLO = 1: destino = BCD da origem", "FRD": "se RLO = 1: destino = inteiro do BCD",
 }
 
 
@@ -73,6 +81,7 @@ def il_blocks(project: Project, result: CompileResult) -> list[ILBlock]:
         return []
     blocks: list[ILBlock] = []
     depth = 0
+    roles: list[str] = []            # papeis dos ARG que seguem a instrucao atual
     for pc, ins in enumerate(result.program.code):
         op = Op(ins.op).name
         if op == "SOR":
@@ -81,10 +90,19 @@ def il_blocks(project: Project, result: CompileResult) -> list[ILBlock]:
             depth = 0
         if op in ("NXB", "BND"):
             depth -= 1
-        operand = "" if ins.area == Area.NONE else format_operand(ins.area, ins.index)
+        operand = "" if ins.area == Area.NONE else format_operand(ins.area, ins.index, result.program.constants)
+        kinds = COMPARE_KINDS.get(op) or MATH_KINDS.get(op)
+        if kinds:
+            roles = list(kinds)
+            description = DESCRIPTION.get(op, "") + f" ({roles.pop(0)} = {operand})"
+        elif op == "ARG":
+            description = f"operando {roles.pop(0) if roles else ''}".rstrip()
+        else:
+            description = DESCRIPTION.get(op, "")
         line = ILLine(pc, op, operand,
-                      _symbol(project, result, ins.area, ins.index, operand) if operand else "",
-                      DESCRIPTION.get(op, ""),
+                      _symbol(project, result, ins.area, ins.index, operand) if operand and ins.area != Area.K
+                      else "",
+                      description,
                       result.pc_element[pc] if pc < len(result.pc_element) else None, max(depth, 0))
         if op in ("TON", "TOF", "RTO"):
             line.description += f", PRE {result.program.timers[ins.index].preset_ms} ms"

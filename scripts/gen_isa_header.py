@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SPEC_PATH = ROOT / "shared" / "specifications" / "isa.json"
 HEADER_PATH = ROOT / "firmware" / "lib" / "ladder_vm" / "ladder_isa.h"
 
-OPERAND_CLASSES = ["none", "bit_read", "bit_write", "timer", "counter", "timer_or_counter"]
+OPERAND_CLASSES = ["none", "bit_read", "bit_write", "timer", "counter", "timer_or_counter", "word_read",
+                   "word_write", "arg"]
 
 
 def render(spec: dict) -> str:
@@ -32,6 +33,7 @@ def render(spec: dict) -> str:
         f"#define LV_HEADER_SIZE {f['header_size']}u",
         f"#define LV_TIMER_ENTRY_SIZE {f['timer_entry_size']}u",
         f"#define LV_COUNTER_ENTRY_SIZE {f['counter_entry_size']}u",
+        f"#define LV_CONSTANT_ENTRY_SIZE {f['constant_entry_size']}u",
         f"#define LV_INSTRUCTION_SIZE {f['instruction_size']}u",
         f"#define LV_CRC_SIZE {f['crc_size']}u",
         "",
@@ -40,7 +42,8 @@ def render(spec: dict) -> str:
         out.append(f"#define LV_{key.upper()} {value}u")
     out += [
         "#define LV_MAX_IMAGE_SIZE (LV_HEADER_SIZE + LV_MAX_TIMERS * LV_TIMER_ENTRY_SIZE + \\",
-        "    LV_MAX_COUNTERS * LV_COUNTER_ENTRY_SIZE + LV_MAX_INSTRUCTIONS * LV_INSTRUCTION_SIZE + LV_CRC_SIZE)",
+        "    LV_MAX_COUNTERS * LV_COUNTER_ENTRY_SIZE + LV_MAX_CONSTANTS * LV_CONSTANT_ENTRY_SIZE + \\",
+        "    LV_MAX_INSTRUCTIONS * LV_INSTRUCTION_SIZE + LV_CRC_SIZE)",
         "",
         "/* Areas de operando */",
     ]
@@ -61,6 +64,21 @@ def render(spec: dict) -> str:
             "    switch (opcode) {"]
     for o in spec["opcodes"]:
         out.append(f"    case LV_OP_{o['name']}: return LV_OPERAND_{o['operand'].upper()};")
+    out += ["    default: return LV_OPERAND_INVALID;", "    }", "}", "",
+            "/* Numero de instrucoes ARG que seguem a instrucao (operandos adicionais). */",
+            "static inline unsigned lv_arg_count(unsigned opcode)", "{", "    switch (opcode) {"]
+    for o in spec["opcodes"]:
+        if o.get("args"):
+            out.append(f"    case LV_OP_{o['name']}: return {len(o['args'])}u;")
+    out += ["    default: return 0u;", "    }", "}", "",
+            "/* Classe do k-esimo operando adicional (k = 0 e o primeiro ARG). */",
+            "static inline lv_operand_class_t lv_arg_class(unsigned opcode, unsigned k)", "{",
+            "    switch (opcode) {"]
+    for o in spec["opcodes"]:
+        if o.get("args"):
+            classes = ", ".join(f"LV_OPERAND_{c.upper()}" for c in o["args"])
+            out.append(f"    case LV_OP_{o['name']}: {{ static const lv_operand_class_t c[] = {{{classes}}}; "
+                       f"return k < {len(o['args'])}u ? c[k] : LV_OPERAND_INVALID; }}")
     out += ["    default: return LV_OPERAND_INVALID;", "    }", "}", "",
             "static inline const char *lv_opcode_name(unsigned opcode)", "{", "    switch (opcode) {"]
     for o in spec["opcodes"]:

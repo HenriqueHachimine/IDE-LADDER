@@ -149,7 +149,8 @@ size_t plc_snapshot(const plc_t *plc, uint8_t *b, size_t cap)
     unsigned nt = plc->has_program ? p->n_timers : 0;
     unsigned nc = plc->has_program ? p->n_counters : 0;
     unsigned ni = plc->has_program ? p->n_instr : 0;
-    size_t need = 22 + 2 + (nm + 7) / 8 + 1 + 5u * nt + 1 + 5u * nc + 2 + (ni + 7) / 8;
+    unsigned nw = plc->has_program ? p->n_words : 0;
+    size_t need = 22 + 2 + (nm + 7) / 8 + 1 + 5u * nt + 1 + 5u * nc + 2 + (ni + 7) / 8 + 1 + 4u * nw + 1;
     if (need > cap)
         return 0;
     size_t o = 0;
@@ -195,6 +196,13 @@ size_t plc_snapshot(const plc_t *plc, uint8_t *b, size_t cap)
     o += 2;
     memcpy(b + o, plc->vm.power, (ni + 7) / 8);
     o += (ni + 7) / 8;
+    /* LDRB 2: registradores N e bits de estado da matematica (S0.4..S0.6) */
+    b[o++] = (uint8_t)nw;
+    for (unsigned k = 0; k < nw; k++) {
+        put32(b + o, (uint32_t)plc->vm.n[k]);
+        o += 4;
+    }
+    b[o++] = plc->has_program ? (uint8_t)(plc->vm.math_ov | plc->vm.math_zero << 1 | plc->vm.math_sign << 2) : 0;
     return o;
 }
 

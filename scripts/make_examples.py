@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "desktop" / "src"))
 from ladderide.compiler import compile_project  # noqa: E402
 from ladderide.model import (Coil, Contact, CounterBox, NotOp, Parallel, Project, ResetBox, Rung,  # noqa: E402
                              Symbol, TimerBox)
+from ladderide.model.project import CompareBox, MathBox  # noqa: E402
 
 
 def demo() -> Project:
@@ -408,6 +409,54 @@ def batch_mixer() -> Project:
     return p
 
 
+def numeric_blocks() -> Project:
+    p = Project(name="Blocos numericos", version="1.0.0", description=(
+        "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
+        "MEQ) e de matematica (ADD, SUB, MUL, DIV, SQR, NEG, TOD, FRD). Os resultados ficam nos "
+        "registradores N, vistos no monitor de variaveis."))
+    p.symbols = [
+        Symbol("Sensor_Peca", "I0.0", "Sensor de passagem de peca"),
+        Symbol("Zera", "I0.1", "Botao para zerar a contagem"),
+        Symbol("Liga", "I0.2", "Chave liga esteira"),
+        Symbol("Esteira", "Q0.0", "Motor da esteira (para com 5 lotes)"),
+        Symbol("Lote_Fechado", "Q0.1", "Lote de 6 pecas completo"),
+        Symbol("Inicio_Lote", "Q0.2", "Primeiras pecas do lote (1 a 3)"),
+        Symbol("Meta", "Q0.3", "5 lotes ou mais"),
+        Symbol("Dois_Botoes", "Q0.4", "I0.4 e I0.5 juntos (MEQ com mascara)"),
+        Symbol("Erro_BCD", "Q0.5", "TOD seguido de FRD nao devolveu o valor (nunca deve ligar)"),
+        Symbol("Pecas", "C0", "CTU - pecas contadas"),
+        Symbol("Lotes", "N0", "Lotes completos = Pecas / 6"),
+        Symbol("Pecas_Lotes", "N1", "Pecas nos lotes completos = Lotes x 6"),
+        Symbol("Resto", "N2", "Pecas do lote atual = Pecas - Pecas_Lotes"),
+        Symbol("Raiz", "N3", "Raiz quadrada da contagem"),
+        Symbol("Falta", "N4", "-Resto (negativo: pecas ja colocadas no lote)"),
+        Symbol("Pecas_BCD", "N5", "Contagem em BCD (para um display)"),
+        Symbol("Pecas_Volta", "N6", "BCD convertido de volta para inteiro"),
+        Symbol("Proximo_Lote", "N7", "Numero do proximo lote = Lotes + 1"),
+    ]
+    p.rungs = [
+        Rung([Contact("XIC", "Sensor_Peca")], [CounterBox("CTU", "Pecas", 1000)], "Conta pecas"),
+        Rung([Contact("XIC", "Zera")], [ResetBox("Pecas")], "Zera a contagem"),
+        Rung([], [MathBox("DIV", ["Pecas.ACC", "6", "Lotes"]), MathBox("MUL", ["Lotes", "6", "Pecas_Lotes"]),
+                  MathBox("SUB", ["Pecas.ACC", "Pecas_Lotes", "Resto"]), MathBox("ADD", ["Lotes", "1", "Proximo_Lote"])],
+             "Lotes e resto: DIV, MUL, SUB e ADD a cada varredura"),
+        Rung([CompareBox("EQU", ["Resto", "0"]), CompareBox("GRT", ["Pecas.ACC", "0"])], [Coil("OTE", "Lote_Fechado")],
+             "Lote fechado: resto zero com alguma peca contada"),
+        Rung([Contact("XIC", "Liga"), CompareBox("LES", ["Lotes", "5"])], [Coil("OTE", "Esteira")],
+             "Esteira liga com a chave enquanto houver menos de 5 lotes"),
+        Rung([CompareBox("LIM", ["1", "Resto", "3"])], [Coil("OTE", "Inicio_Lote")], "Resto entre 1 e 3"),
+        Rung([CompareBox("GEQ", ["Lotes", "5"])], [Coil("OTE", "Meta")], "Meta de 5 lotes"),
+        Rung([CompareBox("MEQ", ["IW0", "0x30", "0x30"])], [Coil("OTE", "Dois_Botoes")],
+             "Mascara 0x30: so I0.4 e I0.5 importam"),
+        Rung([], [MathBox("SQR", ["Pecas.ACC", "Raiz"]), MathBox("NEG", ["Resto", "Falta"])], "Raiz e sinal"),
+        Rung([], [MathBox("TOD", ["Pecas.ACC", "Pecas_BCD"]), MathBox("FRD", ["Pecas_BCD", "Pecas_Volta"])],
+             "Conversao para BCD e de volta"),
+        Rung([Parallel([[CompareBox("NEQ", ["Pecas_Volta", "Pecas.ACC"])], [CompareBox("LEQ", ["Raiz", "-1"])]])],
+             [Coil("OTE", "Erro_BCD")], "Conferencia: nunca deve ligar"),
+    ]
+    return p
+
+
 def main() -> int:
     prefix = sys.argv[1] if len(sys.argv) > 1 else ""
     targets = {"demo/demonstracao.ladproj": demo, "combinational/portas_logicas.ladproj": combinational,
@@ -416,7 +465,7 @@ def main() -> int:
                "ambientes/silo.ladproj": silo, "ambientes/semaforo.ladproj": traffic_light,
                "ambientes/portao.ladproj": garage_door, "ambientes/elevador.ladproj": elevator,
                "ambientes/garrafas.ladproj": bottle_line, "ambientes/compressores.ladproj": air_compressors,
-               "ambientes/misturador.ladproj": batch_mixer}
+               "ambientes/misturador.ladproj": batch_mixer, "math/blocos_numericos.ladproj": numeric_blocks}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

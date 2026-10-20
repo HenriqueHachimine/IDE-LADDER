@@ -34,6 +34,8 @@ TimerType = IntEnum("TimerType", {t["name"]: t["code"] for t in SPEC["timer_type
 CounterType = IntEnum("CounterType", {t["name"]: t["code"] for t in SPEC["counter_types"]})
 
 OPERAND_CLASS: dict[Op, str] = {Op[o["name"]]: o["operand"] for o in SPEC["opcodes"]}
+# classes dos operandos adicionais (instrucoes ARG que seguem a instrucao)
+ARG_CLASSES: dict[Op, tuple[str, ...]] = {Op[o["name"]]: tuple(o.get("args", [])) for o in SPEC["opcodes"]}
 TIMER_OPCODE: dict[TimerType, Op] = {TimerType[t["name"]]: Op[t["opcode"]] for t in SPEC["timer_types"]}
 COUNTER_OPCODE: dict[CounterType, Op] = {CounterType[t["name"]]: Op[t["opcode"]] for t in SPEC["counter_types"]}
 SYSTEM_BITS: dict[str, int] = {s["name"]: s["index"] for s in SPEC["system_bits"]}
@@ -45,6 +47,7 @@ FORMAT_MINOR: int = FMT["minor"]
 HEADER_SIZE: int = FMT["header_size"]
 TIMER_ENTRY_SIZE: int = FMT["timer_entry_size"]
 COUNTER_ENTRY_SIZE: int = FMT["counter_entry_size"]
+CONSTANT_ENTRY_SIZE: int = FMT["constant_entry_size"]
 INSTRUCTION_SIZE: int = FMT["instruction_size"]
 CRC_SIZE: int = FMT["crc_size"]
 
@@ -54,6 +57,8 @@ MAX_OUTPUTS: int = LIM["max_outputs"]
 MAX_MARKERS: int = LIM["max_markers"]
 MAX_TIMERS: int = LIM["max_timers"]
 MAX_COUNTERS: int = LIM["max_counters"]
+MAX_WORDS: int = LIM["max_words"]
+MAX_CONSTANTS: int = LIM["max_constants"]
 MAX_RUNGS: int = LIM["max_rungs"]
 MAX_INSTRUCTIONS: int = LIM["max_instructions"]
 MAX_BRANCH_DEPTH: int = LIM["max_branch_depth"]
@@ -63,6 +68,7 @@ MAX_IMAGE_SIZE: int = (
     HEADER_SIZE
     + MAX_TIMERS * TIMER_ENTRY_SIZE
     + MAX_COUNTERS * COUNTER_ENTRY_SIZE
+    + MAX_CONSTANTS * CONSTANT_ENTRY_SIZE
     + MAX_INSTRUCTIONS * INSTRUCTION_SIZE
     + CRC_SIZE
 )
@@ -75,3 +81,9 @@ BIT_READ_AREAS = frozenset(
     {Area.I, Area.Q, Area.M, Area.S, Area.T_EN, Area.T_TT, Area.T_DN, Area.C_DN, Area.C_OV, Area.C_UN}
 )
 BIT_WRITE_AREAS = frozenset({Area.Q, Area.M})
+WORD_READ_AREAS = frozenset(
+    {Area.N, Area.K, Area.T_ACC, Area.T_PRE, Area.C_ACC, Area.C_PRE, Area.IW, Area.QW}
+)
+WORD_WRITE_AREAS = frozenset({Area.N, Area.QW})
+COMPARE_OPS = frozenset({Op.EQU, Op.NEQ, Op.LES, Op.GRT, Op.LEQ, Op.GEQ, Op.LIM, Op.MEQ})
+MATH_OPS = frozenset({Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.SQR, Op.NEG, Op.TOD, Op.FRD})

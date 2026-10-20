@@ -23,6 +23,22 @@ GROUPS = [
     ("Contadores", [("CTU", "CTU", "Contador crescente (borda de subida)"),
                     ("CTD", "CTD", "Contador decrescente (borda de subida)"),
                     ("RES", "RES", "Reset de temporizador ou contador")]),
+    ("Comparacao", [("EQU", "EQU", "Igual: conduz se A = B"),
+                    ("NEQ", "NEQ", "Diferente: conduz se A \u2260 B"),
+                    ("LES", "LES", "Menor: conduz se A < B"),
+                    ("GRT", "GRT", "Maior: conduz se A > B"),
+                    ("LEQ", "LEQ", "Menor ou igual: conduz se A \u2264 B"),
+                    ("GEQ", "GEQ", "Maior ou igual: conduz se A \u2265 B"),
+                    ("LIM", "LIM", "Teste de limite: conduz se inferior \u2264 teste \u2264 superior"),
+                    ("MEQ", "MEQ", "Comparacao com mascara: (origem AND mascara) = (comparar AND mascara)")]),
+    ("Matematica", [("ADD", "ADD", "Soma: destino = A + B"),
+                    ("SUB", "SUB", "Subtracao: destino = A - B"),
+                    ("MUL", "MUL", "Multiplicacao: destino = A \u00d7 B"),
+                    ("DIV", "DIV", "Divisao inteira: destino = A \u00f7 B"),
+                    ("SQR", "SQR", "Raiz quadrada (arredondada)"),
+                    ("NEG", "NEG", "Troca o sinal: destino = -origem"),
+                    ("TOD", "TOD", "Converte inteiro para BCD"),
+                    ("FRD", "FRD", "Converte BCD para inteiro")]),
 ]
 
 

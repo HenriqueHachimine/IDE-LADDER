@@ -14,18 +14,20 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ..core import isa
-from ..core.asm import disassemble, format_operand, parse_operand
+from ..core.asm import disassemble, format_operand, parse_constant, parse_operand
 from ..core.crc import crc32
 from ..core.image import (CounterDef, ImageValidationError, Instruction, Program, TimerDef, decode,
                           encode)
 from ..core.isa import Area, CounterType, Op, TimerType
-from ..model.project import (Coil, Contact, CounterBox, NotOp, Parallel, Project, ResetBox, Rung,
-                             TimerBox)
+from ..model.project import (Coil, CompareBox, Contact, CounterBox, MathBox, NotOp, Parallel, Project,
+                             ResetBox, Rung, TimerBox)
 
 COMPILER_VERSION = "1.0.0"
 TARGET_FORMAT = f"LDRB {isa.FORMAT_MAJOR}.{isa.FORMAT_MINOR}"
 _SYMBOL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,31}$")
-_ADDRESS_LIKE = re.compile(r"^([IQMS]\d+\.\d+|[TC]\d+(\.\w+)?)$", re.IGNORECASE)
+_ADDRESS_LIKE = re.compile(r"^([IQMS]\d+\.\d+|[TC]\d+(\.\w+)?|N\d+|[IQ]W\d+|K\d+)$", re.IGNORECASE)
+_WORD_NAMES = {"N": "registrador", "K": "constante", "T_ACC": "ACC de temporizador", "T_PRE": "PRE de temporizador",
+               "C_ACC": "ACC de contador", "C_PRE": "PRE de contador", "IW": "entradas", "QW": "saidas"}
 
 
 @dataclass
@@ -50,6 +52,7 @@ class CompileResult:
     element_pc: dict[str, int] = field(default_factory=dict)       # elemento -> instrucao
     branch_end_pc: dict[str, int] = field(default_factory=dict)    # paralelo -> BND
     element_operand: dict[str, tuple[int, int]] = field(default_factory=dict)
+    element_words: dict[str, list[tuple[int, int]]] = field(default_factory=dict)  # bloco -> operandos
     rung_pcs: list[tuple[int, int]] = field(default_factory=list)  # (SOR, EOR) por rede
     pc_element: list[str | None] = field(default_factory=list)     # instrucao -> elemento
     pc_rung: list[int] = field(default_factory=list)
@@ -78,6 +81,8 @@ class _Compiler:
         self.timers: dict[int, tuple[int, int, str]] = {}    # idx -> (tipo, preset, id)
         self.counters: dict[int, tuple[int, int, str]] = {}
         self.box_index: dict[str, int] = {}
+        self.constants: list[int] = []
+        self.qw_writers: list[tuple[int, MathBox]] = []
         self.rung = 0
 
     # ---------------------------------------------------------- diagnostico
@@ -130,6 +135,65 @@ class _Compiler:
             else:
                 self.error(f"operando invalido: {t}", element)
             return None
+
+    def resolve_word(self, text: str, element, write: bool) -> tuple[int, int] | None:
+        """Operando numerico: constante, Nk, Tn.ACC/PRE, Cn.ACC/PRE, IW0, QW0 ou simbolo."""
+        t = text.strip()
+        try:
+            value = parse_constant(t)
+        except ValueError as exc:
+            self.error(str(exc), element)
+            return None
+        if value is not None:
+            if write:
+                self.error(f"o destino nao pode ser uma constante ({t})", element)
+                return None
+            if value not in self.constants:
+                if len(self.constants) >= isa.MAX_CONSTANTS:
+                    self.error(f"constantes diferentes demais (maximo {isa.MAX_CONSTANTS})", element)
+                    return None
+                self.constants.append(value)
+            return Area.K, self.constants.index(value)
+        ref = self.resolve(t, element)
+        if ref is None:
+            return None
+        area, index = ref
+        allowed = isa.WORD_WRITE_AREAS if write else isa.WORD_READ_AREAS
+        if area not in allowed:
+            what = "N ou QW0" if write else "constante, N, Tn.ACC, Tn.PRE, Cn.ACC, Cn.PRE, IW0 ou QW0"
+            self.error(f"{t}: {'destino' if write else 'operando'} numerico precisa ser {what}", element)
+            return None
+        if area == Area.N and index >= self.p.io.n_words:
+            self.error(f"{t}: registrador fora da faixa configurada (N0 a N{self.p.io.n_words - 1})", element)
+            return None
+        if area in (Area.IW, Area.QW) and index != 0:
+            self.error(f"{t}: so existe {Area(area).name}0", element)
+            return None
+        if area in (Area.T_ACC, Area.T_PRE) and index not in self.timers:
+            self.error(f"T{index} e usado mas nenhuma instrucao TON/TOF/RTO o aciona", element)
+            return None
+        if area in (Area.C_ACC, Area.C_PRE) and index not in self.counters:
+            self.error(f"C{index} e usado mas nenhuma instrucao CTU/CTD o aciona", element)
+            return None
+        return area, index
+
+    def word_block(self, node, write_last: bool) -> list[tuple[int, int]] | None:
+        refs = []
+        for k, text in enumerate(node.operands):
+            ref = self.resolve_word(text, node, write_last and k == len(node.operands) - 1)
+            if ref is None:
+                return None
+            refs.append(ref)
+        if len(refs) != 1 + len(isa.ARG_CLASSES[Op[node.kind]]):
+            self.error(f"{node.kind} exige {1 + len(isa.ARG_CLASSES[Op[node.kind]])} operandos", node)
+            return None
+        self.r.element_words[node.id] = refs
+        return refs
+
+    def emit_word(self, node, refs: list[tuple[int, int]]) -> None:
+        self.emit(Op[node.kind], *refs[0], node)
+        for ref in refs[1:]:
+            self.emit(Op.ARG, *ref, node)
 
     def check_range(self, area: int, index: int, element, text: str) -> bool:
         io = self.p.io
@@ -186,7 +250,7 @@ class _Compiler:
         self.code.append(Instruction(op, area, index))
         self.r.pc_element.append(element.id if element is not None else None)
         self.r.pc_rung.append(self.rung)
-        if element is not None and op not in (Op.BST, Op.NXB):
+        if element is not None and op not in (Op.BST, Op.NXB, Op.ARG):
             self.r.element_pc[element.id] = pc
         return pc
 
@@ -198,7 +262,7 @@ class _Compiler:
 
     def compile_rung(self, rung: Rung) -> None:
         if not rung.outputs:
-            self.error("rede sem saida (adicione bobina, temporizador, contador ou RES)")
+            self.error("rede sem saida (adicione bobina, temporizador, contador, RES ou bloco matematico)")
         sor = self.emit(Op.SOR, Area.NONE, self.rung)
         self.series(rung.condition, depth=0)
         outs = rung.outputs
@@ -230,6 +294,12 @@ class _Compiler:
                     self.emit(Op[node.kind], ref[0], ref[1], node)
                 else:
                     self.emit(Op[node.kind], Area.S, isa.SYSTEM_BITS["ALWAYS_OFF"], node)  # placeholder
+            elif isinstance(node, CompareBox):
+                refs = self.word_block(node, write_last=False)
+                if refs:
+                    self.emit_word(node, refs)
+                else:
+                    self.emit(Op.XIC, Area.S, isa.SYSTEM_BITS["ALWAYS_OFF"], node)  # placeholder
             elif isinstance(node, NotOp):
                 self.emit(Op.NOT, element=node)
             elif isinstance(node, Parallel):
@@ -249,7 +319,8 @@ class _Compiler:
     def check_bit_read(self, ref: tuple[int, int], node) -> bool:
         area, index = ref
         if area not in isa.BIT_READ_AREAS:
-            self.error(f"contato precisa de um bit (ex.: I0.0, M1.2, T0.DN), recebeu {node.operand}", node)
+            hint = " (para comparar valores use EQU, GRT, LIM...)" if area in isa.WORD_READ_AREAS else ""
+            self.error(f"contato precisa de um bit (ex.: I0.0, M1.2, T0.DN), recebeu {node.operand}{hint}", node)
             return False
         if not self.check_range(area, index, node, node.operand):
             return False
@@ -277,6 +348,12 @@ class _Compiler:
             if out.id in self.box_index:
                 area = Area.TIMER if isinstance(out, TimerBox) else Area.COUNTER
                 self.emit(Op[out.kind], area, self.box_index[out.id], out)
+        elif isinstance(out, MathBox):
+            refs = self.word_block(out, write_last=True)
+            if refs:
+                self.emit_word(out, refs)
+                if refs[-1][0] == Area.QW:
+                    self.qw_writers.append((self.rung, out))
         elif isinstance(out, ResetBox):
             ref = self.resolve(out.operand, out)
             if ref is None:
@@ -307,6 +384,11 @@ class _Compiler:
             if "OTE" in kinds and kinds & {"OTL", "OTU"}:
                 r_index, coil = ote[0]
                 self.warn(f"{name} usado em bobina comum e em SET/RESET", coil, r_index)
+        coils_q = any(ref[0] == Area.Q for ref in writers)
+        if self.qw_writers and coils_q:
+            r_index, box = self.qw_writers[0]
+            self.warn("QW0 grava todas as saidas Q de uma vez e tambem ha bobinas em Q: "
+                      "vale a ultima escrita da varredura", box, r_index)
 
     # ------------------------------------------------------------- imagem
     def build(self) -> None:
@@ -322,7 +404,8 @@ class _Compiler:
         n_t = max(self.timers) + 1 if self.timers else 0
         n_c = max(self.counters) + 1 if self.counters else 0
         prog = Program(
-            n_inputs=io.n_inputs, n_outputs=io.n_outputs, n_markers=io.n_markers,
+            n_inputs=io.n_inputs, n_outputs=io.n_outputs, n_markers=io.n_markers, n_words=io.n_words,
+            constants=list(self.constants),
             timers=[TimerDef(*self.timers[k][:2]) if k in self.timers else TimerDef(TimerType.TON, 0)
                     for k in range(n_t)],
             counters=[CounterDef(*self.counters[k][:2]) if k in self.counters else CounterDef(CounterType.UP, 0)
@@ -330,7 +413,8 @@ class _Compiler:
             code=self.code, safe_outputs=io.safe_outputs & ((1 << io.n_outputs) - 1),
         )
         body = encode(prog)
-        prog.build_id = crc32(body[isa.HEADER_SIZE:-isa.CRC_SIZE] + struct.pack("<HHH", io.n_inputs, io.n_outputs, io.n_markers))
+        prog.build_id = crc32(body[isa.HEADER_SIZE:-isa.CRC_SIZE]
+                              + struct.pack("<HHHH", io.n_inputs, io.n_outputs, io.n_markers, io.n_words))
         image = encode(prog)
         try:
             self.r.program = decode(image)
@@ -347,7 +431,7 @@ def compile_project(project: Project) -> CompileResult:
     c = _Compiler(project)
     io = project.io
     if not (1 <= io.n_inputs <= isa.MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
-            and 0 <= io.n_markers <= isa.MAX_MARKERS):
+            and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS):
         c.error("configuracao de E/S fora dos limites", rung=None)
         return c.r
     c.load_symbols()

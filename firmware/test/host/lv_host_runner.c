@@ -41,6 +41,10 @@ static void dump(const lv_vm_t *vm)
         const lv_counter_t *c = &vm->counters[k];
         printf("%s%ld/%x", k ? "," : "", (long)c->acc, c->dn | c->ov << 1 | c->un << 2 | c->prev << 3);
     }
+    printf(" N=");
+    for (unsigned k = 0; k < p->n_words; k++)
+        printf("%s%ld", k ? "," : "", (long)vm->n[k]);
+    printf(" F=%x", vm->math_ov | vm->math_zero << 1 | vm->math_sign << 2);
     printf(" P=");
     for (unsigned b = 0; b < p->n_instr; b += 8) {
         unsigned byte = 0;

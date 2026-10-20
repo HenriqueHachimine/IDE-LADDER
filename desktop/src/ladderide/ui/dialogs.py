@@ -2,10 +2,11 @@
 from __future__ import annotations
 
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGridLayout,
-                               QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QVBoxLayout)
+                               QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QVBoxLayout, QWidget)
 
 from ..core import isa
-from ..model.project import Coil, Contact, CounterBox, Project, ResetBox, TimerBox
+from ..model.project import (COMPARE_KINDS, MATH_KINDS, Coil, CompareBox, Contact, CounterBox, MathBox,
+                             Project, ResetBox, TimerBox, default_operands)
 
 KIND_CHOICES = {
     Contact: [("XIC", "Normalmente aberto (NA / XIC)"), ("XIO", "Normalmente fechado (NF / XIO)")],
@@ -13,7 +14,26 @@ KIND_CHOICES = {
     TimerBox: [("TON", "TON - retardo na energizacao"), ("TOF", "TOF - retardo na desenergizacao"),
                ("RTO", "RTO - retentivo")],
     CounterBox: [("CTU", "CTU - crescente"), ("CTD", "CTD - decrescente")],
+    CompareBox: [("EQU", "EQU - igual (A = B)"), ("NEQ", "NEQ - diferente (A \u2260 B)"), ("LES", "LES - menor (A < B)"),
+                 ("GRT", "GRT - maior (A > B)"), ("LEQ", "LEQ - menor ou igual (A \u2264 B)"),
+                 ("GEQ", "GEQ - maior ou igual (A \u2265 B)"), ("LIM", "LIM - teste de limite (faixa)"),
+                 ("MEQ", "MEQ - comparacao com mascara")],
+    MathBox: [("ADD", "ADD - soma"), ("SUB", "SUB - subtracao"), ("MUL", "MUL - multiplicacao"),
+              ("DIV", "DIV - divisao inteira"), ("SQR", "SQR - raiz quadrada"), ("NEG", "NEG - troca o sinal"),
+              ("TOD", "TOD - inteiro para BCD"), ("FRD", "FRD - BCD para inteiro")],
 }
+
+
+def word_suggestions(project: Project, write: bool) -> list[str]:
+    """Operandos numericos: simbolos de N, registradores, ACC/PRE em uso e as palavras de E/S."""
+    words = [s.name for s in project.symbols if s.address.strip().upper().startswith("N")]
+    words += [f"N{k}" for k in range(min(project.io.n_words, 16))]
+    if write:
+        return words + ["QW0"]
+    for _, node, _ in project.walk():
+        if isinstance(node, (TimerBox, CounterBox)) and node.operand.strip():
+            words += [f"{node.operand.strip()}.ACC", f"{node.operand.strip()}.PRE"]
+    return words + ["IW0", "QW0", "0", "1", "10", "100"]
 
 
 def operand_suggestions(node, project: Project) -> list[str]:
@@ -42,8 +62,12 @@ class ElementDialog(QDialog):
     def __init__(self, node, project: Project, parent=None):
         super().__init__(parent)
         self.node = node
+        self.project = project
         self.setWindowTitle("Editar elemento")
         form = QFormLayout()
+        if isinstance(node, (CompareBox, MathBox)):
+            self._build_block(form)
+            return
         self.kind = None
         if type(node) in KIND_CHOICES:
             self.kind = QComboBox()
@@ -83,10 +107,68 @@ class ElementDialog(QDialog):
         box.addWidget(help_text)
         box.addWidget(buttons)
 
+    # ---------------------------------------------- comparacao / matematica
+    def _build_block(self, form: QFormLayout) -> None:
+        node = self.node
+        self.kind = QComboBox()
+        for code, text in KIND_CHOICES[type(node)]:
+            self.kind.addItem(text, code)
+        self.kind.setCurrentIndex(max(0, self.kind.findData(node.kind)))
+        form.addRow("Instrucao:", self.kind)
+        self.fields_box = QWidget()
+        self.fields_form = QFormLayout(self.fields_box)
+        self.fields_form.setContentsMargins(0, 0, 0, 0)
+        form.addRow(self.fields_box)
+        self.fields: list[QComboBox] = []
+        self._fill_fields(list(node.operands))
+        self.kind.currentIndexChanged.connect(self._kind_changed)
+        help_text = QLabel(
+            "Operandos: constante (123, -5, 0x1F), registrador N0-N{last}, Tn.ACC / Tn.PRE, Cn.ACC / Cn.PRE,\n"
+            "IW0 (entradas como numero) ou QW0 (saidas). Destino: N ou QW0. Valores inteiros de 32 bits;\n"
+            "S0.4 liga em estouro/operacao invalida, S0.5 com resultado zero, S0.6 com resultado negativo."
+            .replace("{last}", str(max(0, self.project.io.n_words - 1))))
+        help_text.setObjectName("muted")
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        box = QVBoxLayout(self)
+        box.addLayout(form)
+        box.addWidget(help_text)
+        box.addWidget(buttons)
+        self.operand = self.preset = None
+
+    def _roles(self, kind: str) -> tuple[str, ...]:
+        return (COMPARE_KINDS if isinstance(self.node, CompareBox) else MATH_KINDS)[kind]
+
+    def _fill_fields(self, values: list[str]) -> None:
+        while self.fields_form.rowCount():
+            self.fields_form.removeRow(0)
+        self.fields = []
+        roles = self._roles(self.kind.currentData())
+        for k, role in enumerate(roles):
+            write = isinstance(self.node, MathBox) and k == len(roles) - 1
+            combo = QComboBox()
+            combo.setEditable(True)
+            combo.addItems(word_suggestions(self.project, write))
+            combo.setCurrentText(values[k] if k < len(values) else "")
+            self.fields_form.addRow(f"{role}:", combo)
+            self.fields.append(combo)
+
+    def _kind_changed(self) -> None:
+        current = [f.currentText().strip() for f in self.fields]
+        kind = self.kind.currentData()
+        if len(current) != len(self._roles(kind)):     # muda a quantidade de operandos: usa o padrao
+            current = default_operands(kind)
+        self._fill_fields(current)
+
     def _update_seconds(self) -> None:
         self.seconds.setText(f"= {self.preset.value() / 1000:.3f} s")
 
     def apply(self) -> None:
+        if isinstance(self.node, (CompareBox, MathBox)):
+            self.node.kind = self.kind.currentData()
+            self.node.operands = [f.currentText().strip() for f in self.fields]
+            return
         if self.kind is not None:
             self.node.kind = self.kind.currentData()
         self.node.operand = self.operand.currentText().strip()
@@ -111,11 +193,13 @@ class ProjectDialog(QDialog):
         self.n_inputs = self._spin(1, isa.MAX_INPUTS, io.n_inputs)
         self.n_outputs = self._spin(1, isa.MAX_OUTPUTS, io.n_outputs)
         self.n_markers = self._spin(0, isa.MAX_MARKERS, io.n_markers)
+        self.n_words = self._spin(0, isa.MAX_WORDS, io.n_words)
         self.period = self._spin(1, 1000, io.scan_period_ms)
         self.period.setSuffix(" ms")
         form.addRow("Entradas digitais:", self.n_inputs)
         form.addRow("Saidas (reles):", self.n_outputs)
         form.addRow("Memorias M:", self.n_markers)
+        form.addRow("Registradores N (inteiros):", self.n_words)
         form.addRow("Periodo de varredura:", self.period)
         safe = QGroupBox("Estado seguro das saidas em STOP/FAULT (marcado = energizado)")
         grid = QGridLayout(safe)
@@ -153,6 +237,7 @@ class ProjectDialog(QDialog):
         p.io.n_inputs = self.n_inputs.value()
         p.io.n_outputs = self.n_outputs.value()
         p.io.n_markers = self.n_markers.value()
+        p.io.n_words = self.n_words.value()
         p.io.scan_period_ms = self.period.value()
         mask = sum(1 << k for k, cb in enumerate(self.safe) if cb.isChecked())
         p.io.safe_outputs = mask & ((1 << p.io.n_outputs) - 1)

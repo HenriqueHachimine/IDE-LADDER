@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox, QHeaderView, Q
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.asm import format_operand, parse_operand
-from ..core.isa import Area
+from ..core.isa import WORD_READ_AREAS, Area
 from ..model.project import Project
 
 from . import theme
@@ -149,12 +149,16 @@ class IOPanel(QWidget):
                 ref = parse_operand(s.address)
             except ValueError:
                 continue
-            if ref[0] in (Area.I, Area.Q, Area.M):
+            if ref[0] in (Area.I, Area.Q, Area.M, Area.N):
                 refs[ref] = s.name
         if result is not None and result.ok:
             for ref in result.element_operand.values():
                 if ref[0] == Area.M:
                     refs.setdefault(ref, "")
+            for refs_block in result.element_words.values():       # registradores usados nos blocos
+                for ref in refs_block:
+                    if ref[0] == Area.N:
+                        refs.setdefault(ref, "")
         self.var_rows = sorted(refs, key=lambda r: (r[0], r[1]))
         self.variables.setRowCount(len(self.var_rows))
         for row, ref in enumerate(self.var_rows):
@@ -198,7 +202,8 @@ class IOPanel(QWidget):
     # --------------------------------------------------------- valores
     def update_values(self, inputs: int | None, outputs: int | None, commanded: int | None,
                       timer: Callable[[int], dict | None], counter: Callable[[int], dict | None],
-                      read: Callable[[int, int], bool | None]) -> None:
+                      read: Callable[[int, int], bool | None],
+                      word: Callable[[int, int], int | None] | None = None) -> None:
         for k, b in enumerate(self.input_buttons):
             if (not self.editable or self.owned >> k & 1) and inputs is not None:
                 b.blockSignals(True)
@@ -218,5 +223,5 @@ class IOPanel(QWidget):
             self.elements.item(row, 2).setText(acc)
             self.elements.item(row, 3).setText(bits)
         for row, ref in enumerate(self.var_rows):
-            v = read(*ref)
+            v = (word(*ref) if word is not None else None) if ref[0] in WORD_READ_AREAS else read(*ref)
             self.variables.item(row, 2).setText("-" if v is None else str(int(v)))

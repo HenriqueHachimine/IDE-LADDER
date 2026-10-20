@@ -206,3 +206,34 @@ def test_layout_lock_freezes_panels_and_persists(window, monkeypatch, tmp_path):
         w2.persist_layout = False
         w2.close()
     w.persist_layout = False
+
+
+def test_compare_and_math_blocks_from_palette_show_live_values(window, monkeypatch):
+    """Blocos da paleta: comparacao na condicao, matematica nas saidas, valores na simulacao."""
+    from ladderide.model.project import CompareBox, Contact, MathBox, Project
+    from ladderide.ui import dialogs
+    app, w = window
+    monkeypatch.setattr(dialogs.ElementDialog, "exec", lambda self: True)   # aceita o padrao
+    w.set_project(Project(name="blocos"), None)
+    rung = w.project.rungs[0]
+    w.view.select(("rung", 0))
+    w.tool_clicked("XIC")                                 # I0.0
+    w.tool_clicked("ADD")                                 # N0 = N0 + 1
+    w.view.select(rung.condition[0].id)
+    w.tool_clicked("GRT")                                 # N0 > 0, depois do contato
+    assert [type(n) for n in rung.condition] == [Contact, CompareBox]
+    assert isinstance(rung.outputs[0], MathBox) and rung.outputs[0].operands == ["N0", "1", "N0"]
+    rung.condition[1].operands = ["N0", "-1"]              # sempre verdadeiro com N0 >= 0
+    assert w.compile()
+    w.sim_run()
+    w.sim.set_input(0, True)
+    for _ in range(4):
+        w.sim.scan_once()
+    w._update_live()
+    item = w.view.items_by_id[rung.outputs[0].id]
+    assert item.state.rows[0] == ("A", "N0=4") and item.state.rows[2] == ("→", "N0=4")
+    assert w.view.items_by_id[rung.condition[1].id].state.power_out is True
+    names = [w.sim_panel.io.variables.item(r, 1).text() for r in range(w.sim_panel.io.variables.rowCount())]
+    values = [w.sim_panel.io.variables.item(r, 2).text() for r in range(w.sim_panel.io.variables.rowCount())]
+    assert values[names.index("N0")] == "4"
+    w.sim_stop()

@@ -1,0 +1,93 @@
+; Blocos numericos - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x5cc154f0
+.counter C0 UP 1000
+SOR ; rede 0
+XIC I0.0
+CTU C0
+EOR
+SOR ; rede 1
+XIC I0.1
+RES C0
+EOR
+SOR ; rede 2
+BST
+DIV C0.ACC
+ARG 6
+ARG N0
+NXB
+MUL N0
+ARG 6
+ARG N1
+NXB
+SUB C0.ACC
+ARG N1
+ARG N2
+NXB
+ADD N0
+ARG 1
+ARG N7
+BND
+EOR
+SOR ; rede 3
+EQU N2
+ARG 0
+GRT C0.ACC
+ARG 0
+OTE Q0.1
+EOR
+SOR ; rede 4
+XIC I0.2
+LES N0
+ARG 5
+OTE Q0.0
+EOR
+SOR ; rede 5
+LIM 1
+ARG N2
+ARG 3
+OTE Q0.2
+EOR
+SOR ; rede 6
+GEQ N0
+ARG 5
+OTE Q0.3
+EOR
+SOR ; rede 7
+MEQ IW0
+ARG 48
+ARG 48
+OTE Q0.4
+EOR
+SOR ; rede 8
+BST
+SQR C0.ACC
+ARG N3
+NXB
+NEG N2
+ARG N4
+BND
+EOR
+SOR ; rede 9
+BST
+TOD C0.ACC
+ARG N5
+NXB
+FRD N5
+ARG N6
+BND
+EOR
+SOR ; rede 10
+BST
+NEQ N6
+ARG C0.ACC
+NXB
+LEQ N3
+ARG -1
+BND
+OTE Q0.5
+EOR

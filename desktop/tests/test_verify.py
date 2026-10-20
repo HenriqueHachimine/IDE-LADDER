@@ -86,7 +86,7 @@ def test_device_measurements_are_checked_against_watchdog():
         "Tempo de varredura medido no dispositivo"] == OK
     rep = verify_for_esp32(p, r, device_info=info, device_status=slow)
     assert statuses(rep)["Tempo de varredura medido no dispositivo"] == ERROR
-    old = SimpleNamespace(**{**vars(info), "fmt_major": 2})
+    old = SimpleNamespace(**{**vars(info), "fmt_major": 1})
     assert statuses(verify_for_esp32(p, r, device_info=old))["Compatibilidade com o dispositivo"] == ERROR
 
 

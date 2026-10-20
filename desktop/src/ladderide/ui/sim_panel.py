@@ -76,9 +76,11 @@ class SimPanel(QWidget):
             from ..core.asm import format_operand
             from ..core.isa import Area, Op
             ins = sim.program.code[vm.pc]
-            operand = "" if ins.area == Area.NONE else " " + format_operand(ins.area, ins.index)
+            operand = "" if ins.area == Area.NONE else " " + format_operand(ins.area, ins.index,
+                                                                                sim.program.constants)
             self.pc.setText(f"#{vm.pc}  {Op(ins.op).name}{operand}  (rede {sim.result.pc_rung[vm.pc]})")
         else:
             self.pc.setText("-")
         self.io.update_values(sim.effective_inputs(), sim.physical_outputs, None, sim.timer_state, sim.counter_state,
-                              lambda a, i: sim.vm.read_bit(a, i) if sim.active else None)
+                              lambda a, i: sim.vm.read_bit(a, i) if sim.active else None,
+                              lambda a, i: sim.word_value(a, i) if sim.active else None)

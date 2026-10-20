@@ -16,6 +16,8 @@ typedef struct {
     uint8_t n_inputs;
     uint8_t n_outputs;
     uint16_t n_markers;
+    uint16_t n_words;
+    uint16_t n_constants;
     uint8_t n_timers;
     uint8_t n_counters;
     uint16_t n_rungs;
@@ -27,6 +29,7 @@ typedef struct {
     uint32_t timer_preset[LV_MAX_TIMERS];
     uint8_t counter_type[LV_MAX_COUNTERS];
     int32_t counter_preset[LV_MAX_COUNTERS];
+    int32_t constants[LV_MAX_CONSTANTS];
     const uint8_t *code; /* n_instr * 4 bytes: opcode, area, index (u16 LE) */
 } lv_program_t;
 

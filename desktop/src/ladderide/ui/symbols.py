@@ -25,6 +25,14 @@ BOX_FILL = themed((255, 255, 255), (21, 30, 46))
 TIMER_HEAD = (themed((224, 231, 255), (49, 46, 129)), themed((55, 48, 163), (199, 210, 254)))
 COUNTER_HEAD = (themed((254, 243, 199), (120, 53, 15)), themed((146, 64, 14), (253, 230, 138)))
 DONE_OFF = themed((203, 213, 225), (71, 85, 105))
+COMPARE_HEAD = (themed((204, 251, 241), (19, 78, 74)), themed((15, 118, 110), (153, 246, 228)))
+MATH_HEAD = (themed((243, 232, 255), (76, 29, 149)), themed((107, 33, 168), (233, 213, 255)))
+COMPARE_KINDS = ("EQU", "NEQ", "LES", "GRT", "LEQ", "GEQ", "LIM", "MEQ")
+MATH_KINDS = ("ADD", "SUB", "MUL", "DIV", "SQR", "NEG", "TOD", "FRD")
+BLOCK_TITLE = {"EQU": "A = B", "NEQ": "A \u2260 B", "LES": "A < B", "GRT": "A > B", "LEQ": "A \u2264 B",
+               "GEQ": "A \u2265 B", "LIM": "faixa", "MEQ": "mascara", "ADD": "A + B", "SUB": "A \u2212 B",
+               "MUL": "A \u00d7 B", "DIV": "A \u00f7 B", "SQR": "\u221a", "NEG": "\u2212x", "TOD": "\u2192 BCD",
+               "FRD": "BCD \u2192"}
 
 
 @dataclass
@@ -36,6 +44,7 @@ class SymbolState:
     label: str = ""
     sublabel: str = ""
     lines: tuple[str, ...] = ()      # texto interno das caixas
+    rows: tuple[tuple[str, str], ...] = ()  # blocos de comparacao/matematica: (rotulo, valor)
     done: bool | None = None         # bit DN de temporizador/contador
 
 
@@ -183,6 +192,8 @@ def paint_symbol(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
             p.setFont(_font(7, True))
             p.drawText(QRectF(box.left() + 5, body_top + 2 * line_h, box.width() - 10, line_h),
                        Qt.AlignRight | Qt.AlignVCenter, st.lines[2])
+    elif kind in COMPARE_KINDS or kind in MATH_KINDS:
+        _paint_block(p, kind, r, st)
     elif kind == "PAR":
         p.setPen(_pen(None))
         p.drawLine(QPointF(r.left() + 3, r.top() + 6), QPointF(r.left() + 3, r.bottom() - 6))
@@ -191,14 +202,58 @@ def paint_symbol(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
         p.drawLine(QPointF(r.left() + 3, r.bottom() - 6), QPointF(r.right() - 3, r.bottom() - 6))
 
 
+def _paint_block(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
+    """Caixa de comparacao (na condicao: entrada e saida) ou de matematica (na coluna de saidas)."""
+    is_compare = kind in COMPARE_KINDS
+    head_bg, head_fg = COMPARE_HEAD if is_compare else MATH_HEAD
+    w, mid = r.width(), r.center().y()
+    inset = w * (0.05 if is_compare else 0.08)
+    box = QRectF(r.left() + inset, r.top() + 3, w - 2 * inset if is_compare else w * 0.84, r.height() - 6)
+    p.setPen(_pen(st.power_in))
+    p.drawLine(QPointF(r.left(), mid), QPointF(box.left(), mid))
+    if is_compare:
+        p.setPen(_pen(st.power_out))
+        p.drawLine(QPointF(box.right(), mid), QPointF(r.right(), mid))
+    lit = st.power_out if is_compare else st.power_in
+    p.setPen(QPen(color_for(lit), 2.2 if lit else 1.4))
+    p.setBrush(BOX_FILL)
+    p.drawRoundedRect(box, 5, 5)
+    head_h = min(15.0, box.height() * 0.28)
+    head = QRectF(box.left() + 1, box.top() + 1, box.width() - 2, head_h)
+    p.setPen(Qt.NoPen)
+    p.setBrush(head_bg)
+    p.drawRoundedRect(head, 4, 4)
+    p.drawRect(head.adjusted(0, head_h / 2, 0, 0))
+    p.setBrush(Qt.NoBrush)
+    p.setPen(head_fg)
+    p.setFont(_font(7.5, True))
+    p.drawText(head.adjusted(5, 0, -4, 0), Qt.AlignLeft | Qt.AlignVCenter, kind)
+    p.setFont(_font(7, False))
+    p.drawText(head.adjusted(5, 0, -5, 0), Qt.AlignRight | Qt.AlignVCenter, BLOCK_TITLE.get(kind, ""))
+    rows = st.rows or ()
+    top = head.bottom() + 1
+    line_h = (box.bottom() - top - 1) / max(3, len(rows))
+    for k, (label, value) in enumerate(rows):
+        area = QRectF(box.left() + 5, top + k * line_h, box.width() - 10, line_h)
+        p.setFont(_font(7, False, "mono"))
+        p.setPen(SUBLABEL)
+        tag = p.fontMetrics().elidedText(label, Qt.ElideRight, int(area.width() * 0.45))
+        p.drawText(area, Qt.AlignLeft | Qt.AlignVCenter, tag)
+        p.setFont(_font(7.5, True, "mono"))
+        p.setPen(LABEL)
+        p.drawText(area, Qt.AlignRight | Qt.AlignVCenter,
+                   p.fontMetrics().elidedText(value, Qt.ElideLeft, int(area.width() * 0.62)))
+
+
 def tool_icon(kind: str) -> QIcon:
     pix = QPixmap(112, 68)
     pix.setDevicePixelRatio(2)
     pix.fill(Qt.transparent)
     p = QPainter(pix)
-    if kind in ("TON", "TOF", "RTO", "CTU", "CTD"):
+    if kind in ("TON", "TOF", "RTO", "CTU", "CTD") or kind in COMPARE_KINDS or kind in MATH_KINDS:
         p.setRenderHint(QPainter.Antialiasing, True)
-        head_bg, head_fg = TIMER_HEAD if kind in ("TON", "TOF", "RTO") else COUNTER_HEAD
+        head_bg, head_fg = (TIMER_HEAD if kind in ("TON", "TOF", "RTO") else COMPARE_HEAD if kind in COMPARE_KINDS
+                            else MATH_HEAD if kind in MATH_KINDS else COUNTER_HEAD)
         p.setPen(QPen(NEUTRAL, 2))
         p.drawLine(QPointF(1, 17), QPointF(10, 17))
         p.drawLine(QPointF(46, 17), QPointF(55, 17))

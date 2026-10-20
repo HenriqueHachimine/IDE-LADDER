@@ -6,7 +6,21 @@ ensaios na placa real.
 
 ## [Não lançado]
 
+### Corrigido
+- C++ gerado: numa rede com várias saídas, quando uma saída alterava um bit lido pela condição
+  (ex.: `XIC Q0.0` → `OTU Q0.0` e `OTE Q0.1`), a condição era recalculada depois da alteração e o
+  resultado divergia do CLP. Agora a condição é guardada antes, como no interpretador.
+
 ### Adicionado
+- Blocos de comparação (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, MEQ) e de matemática (ADD, SUB, MUL,
+  DIV, SQR, NEG, TOD, FRD), com registradores `N0`–`N63` (inteiros de 32 bits), constantes,
+  `Tn.ACC/PRE`, `Cn.ACC/PRE`, `IW0`/`QW0` e os bits S0.4 (estouro), S0.5 (zero), S0.6 (negativo).
+  Paleta, diálogo, desenho com valores ao vivo, monitor de variáveis, blocos de instrução,
+  C++ gerado e as duas VMs (Python e firmware), conferidas por vetores e fuzzing diferencial.
+  Exemplo em `examples/math/blocos_numericos.ladproj`.
+- **Formato LDRB 2.0** (cabeçalho de 36 bytes, tabela de constantes, instrução `ARG`) e projeto
+  `.ladproj` versão 2. O firmware precisa ser regravado, e o programa transferido de novo, porque
+  imagens 1.x são rejeitadas.
 - Ambientes de simulação como plugins (`ladderide.envs`): silo de envase,
   semáforo de cruzamento e portão de garagem, com alarmes de erros de lógica,
   projetos de exemplo em `examples/ambientes/` e descoberta de ambientes do

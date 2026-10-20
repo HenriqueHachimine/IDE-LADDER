@@ -2,8 +2,9 @@
 .inputs 8
 .outputs 8
 .markers 64
+.words 32
 .safe_outputs 0x0000
-.build_id 0x474d7ea8
+.build_id 0x053e1bca
 SOR ; rede 0
 XIC I0.0
 XIC I0.1

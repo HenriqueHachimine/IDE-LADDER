@@ -28,15 +28,23 @@ static uint32_t area_size(const lv_program_t *p, uint8_t area)
     case LV_AREA_C_DN:
     case LV_AREA_C_OV:
     case LV_AREA_C_UN:
-    case LV_AREA_COUNTER: return p->n_counters;
+    case LV_AREA_COUNTER:
+    case LV_AREA_C_ACC:
+    case LV_AREA_C_PRE: return p->n_counters;
+    case LV_AREA_T_ACC:
+    case LV_AREA_T_PRE: return p->n_timers;
+    case LV_AREA_N: return p->n_words;
+    case LV_AREA_K: return p->n_constants;
+    case LV_AREA_IW:
+    case LV_AREA_QW: return 1;
     default: return 0;
     }
 }
 
-static int operand_ok(const lv_program_t *p, uint8_t op, uint8_t area, uint16_t index)
+static int operand_ok(const lv_program_t *p, lv_operand_class_t cls, uint8_t op, uint8_t area, uint16_t index)
 {
     int allowed;
-    switch (lv_operand_class(op)) {
+    switch (cls) {
     case LV_OPERAND_NONE:
         return area == LV_AREA_NONE && (index == 0 || op == LV_OP_SOR);
     case LV_OPERAND_BIT_READ:
@@ -53,6 +61,12 @@ static int operand_ok(const lv_program_t *p, uint8_t op, uint8_t area, uint16_t 
         break;
     case LV_OPERAND_TIMER_OR_COUNTER:
         allowed = area == LV_AREA_TIMER || area == LV_AREA_COUNTER;
+        break;
+    case LV_OPERAND_WORD_READ:
+        allowed = area >= LV_AREA_N && area <= LV_AREA_QW;
+        break;
+    case LV_OPERAND_WORD_WRITE:
+        allowed = area == LV_AREA_N || area == LV_AREA_QW;
         break;
     default:
         return 0;
@@ -106,14 +120,17 @@ lv_image_error_t lv_image_validate(const uint8_t *buf, size_t len, lv_program_t 
     p->n_instr = rd16(buf + 20);
     p->safe_outputs = rd16(buf + 22);
     p->build_id = rd32(buf + 24);
+    p->n_words = rd16(buf + 32);
+    p->n_constants = rd16(buf + 34);
     p->crc = stored_crc;
 
     if (p->n_inputs > LV_MAX_INPUTS || p->n_outputs > LV_MAX_OUTPUTS || p->n_markers > LV_MAX_MARKERS ||
         p->n_timers > LV_MAX_TIMERS || p->n_counters > LV_MAX_COUNTERS || p->n_rungs > LV_MAX_RUNGS ||
-        p->n_instr > LV_MAX_INSTRUCTIONS)
+        p->n_instr > LV_MAX_INSTRUCTIONS || p->n_words > LV_MAX_WORDS || p->n_constants > LV_MAX_CONSTANTS)
         FAIL(LV_ERR_LIMIT_EXCEEDED, -1);
     uint32_t expected = LV_HEADER_SIZE + (uint32_t)p->n_timers * LV_TIMER_ENTRY_SIZE +
                         (uint32_t)p->n_counters * LV_COUNTER_ENTRY_SIZE +
+                        (uint32_t)p->n_constants * LV_CONSTANT_ENTRY_SIZE +
                         (uint32_t)p->n_instr * LV_INSTRUCTION_SIZE + LV_CRC_SIZE;
     if (expected != total)
         FAIL(LV_ERR_SIZE_MISMATCH, -1);
@@ -135,6 +152,8 @@ lv_image_error_t lv_image_validate(const uint8_t *buf, size_t len, lv_program_t 
         p->counter_type[i] = e[0];
         p->counter_preset[i] = (int32_t)preset;
     }
+    for (unsigned i = 0; i < p->n_constants; i++, e += LV_CONSTANT_ENTRY_SIZE)
+        p->constants[i] = (int32_t)rd32(e);
     p->code = e;
 
     int in_rung = 0;
@@ -142,6 +161,8 @@ lv_image_error_t lv_image_validate(const uint8_t *buf, size_t len, lv_program_t 
     unsigned depth = 0;
     uint8_t timer_driven[LV_MAX_TIMERS] = {0};
     uint8_t counter_driven[LV_MAX_COUNTERS] = {0};
+    uint8_t pending_op = 0;   /* instrucao cujos operandos ARG ainda faltam */
+    unsigned pending_k = 0, pending_n = 0;
     for (uint16_t i = 0; i < p->n_instr; i++) {
         uint8_t op = lv_instr_op(p, i);
         uint8_t area = lv_instr_area(p, i);
@@ -150,8 +171,16 @@ lv_image_error_t lv_image_validate(const uint8_t *buf, size_t len, lv_program_t 
             FAIL(LV_ERR_BAD_OPCODE, i);
         if (in_rung == (op == LV_OP_SOR))
             FAIL(LV_ERR_BAD_STRUCTURE, i);
-        if (!operand_ok(p, op, area, index))
+        if ((pending_k < pending_n) != (op == LV_OP_ARG))
+            FAIL(LV_ERR_BAD_STRUCTURE, i);
+        lv_operand_class_t cls = op == LV_OP_ARG ? lv_arg_class(pending_op, pending_k++) : lv_operand_class(op);
+        if (!operand_ok(p, cls, op, area, index))
             FAIL(LV_ERR_BAD_OPERAND, i);
+        if (op != LV_OP_ARG) {
+            pending_op = op;
+            pending_k = 0;
+            pending_n = lv_arg_count(op);
+        }
         switch (op) {
         case LV_OP_SOR:
             if (index != rung || rung >= p->n_rungs)

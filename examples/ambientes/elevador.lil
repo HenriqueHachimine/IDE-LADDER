@@ -2,8 +2,9 @@
 .inputs 8
 .outputs 8
 .markers 64
+.words 32
 .safe_outputs 0x0000
-.build_id 0xe17fa3ab
+.build_id 0xd6714052
 .timer T0 TON 3000
 .timer T1 TOF 2800
 SOR ; rede 0

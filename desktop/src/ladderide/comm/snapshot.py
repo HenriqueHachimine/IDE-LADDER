@@ -89,6 +89,8 @@ class Snapshot:
     timers: list[TimerSnap] = field(default_factory=list)
     counters: list[CounterSnap] = field(default_factory=list)
     power: list[bool] = field(default_factory=list)
+    words: list[int] = field(default_factory=list)       # registradores N
+    math_flags: int = 0                                  # bit0 S0.4 estouro, bit1 S0.5 zero, bit2 S0.6 negativo
 
     @classmethod
     def parse(cls, b: bytes) -> "Snapshot":
@@ -115,8 +117,14 @@ class Snapshot:
         o += 2
         pbytes = b[o:o + (ni + 7) // 8]
         power = [bool(pbytes[k // 8] >> (k % 8) & 1) for k in range(ni)]
+        o += (ni + 7) // 8
+        words, flags = [], 0
+        if o < len(b):                                   # firmware com LDRB 2 acrescenta N e os bits da matematica
+            nw = b[o]
+            words = list(struct.unpack_from(f"<{nw}i", b, o + 1))
+            flags = b[o + 1 + 4 * nw]
         return cls(DevState(state), Fault(fault), scans, inputs, q, qc, build, crc, bool(test), nm,
-                   markers, timers, counters, power)
+                   markers, timers, counters, power, words, flags)
 
     def dump_line(self) -> str:
         """Mesmo formato de LadderVM.dump_line() (comparacao de equivalencia)."""
@@ -126,5 +134,6 @@ class Snapshot:
         t = ",".join(f"{s.acc}/{int(s.en) | int(s.tt) << 1 | int(s.dn) << 2:x}" for s in self.timers)
         c = ",".join(f"{s.acc}/{int(s.dn) | int(s.ov) << 1 | int(s.un) << 2 | int(s.prev) << 3:x}"
                      for s in self.counters)
+        n = ",".join(str(v) for v in self.words)
         return (f"S={self.scan_count} Q={self.q_logical:04x} M={bits_hex(self.markers)} "
-                f"T={t} C={c} P={bits_hex(self.power)}")
+                f"T={t} C={c} N={n} F={self.math_flags:x} P={bits_hex(self.power)}")

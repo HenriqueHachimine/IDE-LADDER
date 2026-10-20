@@ -37,7 +37,33 @@ class MonitorSource:
         if area in (Area.C_DN, Area.C_OV, Area.C_UN) and index < len(s.counters):
             c = s.counters[index]
             return {Area.C_DN: c.dn, Area.C_OV: c.ov, Area.C_UN: c.un}[area]
-        return None  # bits de sistema nao sao transmitidos
+        if area == Area.S and 4 <= index <= 6:          # S0.4..S0.6: estado da ultima conta
+            return bool(s.math_flags >> (index - 4) & 1)
+        return None  # demais bits de sistema nao sao transmitidos
+
+    def block_values(self, element_id: str) -> list[int | None] | None:
+        refs = self.r.element_words.get(element_id)
+        return None if refs is None else [self.word_value(*r) for r in refs]
+
+    def word_value(self, area: int, index: int) -> int | None:
+        s, prog = self.s, self.r.program
+        if area == Area.N:
+            return s.words[index] if index < len(s.words) else None
+        if area == Area.K:
+            return prog.constants[index] if prog and index < len(prog.constants) else None
+        if area == Area.T_ACC and index < len(s.timers):
+            return s.timers[index].acc
+        if area == Area.C_ACC and index < len(s.counters):
+            return s.counters[index].acc
+        if area == Area.T_PRE and prog and index < len(prog.timers):
+            return prog.timers[index].preset_ms
+        if area == Area.C_PRE and prog and index < len(prog.counters):
+            return prog.counters[index].preset
+        if area == Area.IW:
+            return s.inputs
+        if area == Area.QW:
+            return s.q_logical
+        return None
 
     def operand_value(self, element_id: str) -> bool | None:
         ref = self.r.element_operand.get(element_id)
