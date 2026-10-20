@@ -27,8 +27,9 @@ SIM_DIR = FIRMWARE / "test" / "host" / "arduino_sim"
 
 def list_sketches() -> list[str]:
     """Exemplos disponiveis (pastas de firmware/examples com arquivos .cpp)."""
-    if not EXAMPLES.is_dir():
-        return []
+    if getattr(sys, "frozen", False) or not EXAMPLES.is_dir():     # instalacao: exemplos pre-compilados
+        names = {re.sub(r"_[0-9a-f]{10}$", "", p.stem[len("sketch_"):]) for p in BUILD.glob(f"sketch_*{EXE_SUFFIX}")}
+        return sorted(names)
     return sorted(d.name for d in EXAMPLES.iterdir() if d.is_dir() and any(d.glob("*.cpp")))
 
 

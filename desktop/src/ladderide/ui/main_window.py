@@ -153,6 +153,8 @@ class MainWindow(QMainWindow):
           "Mostra o diagrama convertido em lista de instrucoes, bloco por rede")
         A("esp32_sim", "Simulador da placa ESP32", self.show_esp32, "Ctrl+Shift+E",
           "Placa de 8 reles com o firmware rodando no PC: pinos, registradores e configuracao")
+        A("flash_firmware", "Gravar firmware na placa...", self.flash_firmware, None,
+          "Grava o firmware do CLP no ESP32 pela USB (necessario uma vez, antes de transferir programas)")
         A("environment", "Ambiente de simulacao", self.show_environment, "Ctrl+E",
           "Processos animados (silo, semaforo, portao...) controlados pelo programa")
         A("theme_toggle", "Alternar tema claro/escuro", self.toggle_theme, "Ctrl+Shift+T")
@@ -218,7 +220,8 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         m.addAction(a["environment"])
         self.device_menu = mb.addMenu("&Dispositivo")
-        for k in ("esp32_sim", None, "verify", "device_transfer", None, "dev_run", "dev_stop", "dev_monitor"):
+        for k in ("esp32_sim", None, "verify", "device_transfer", None, "dev_run", "dev_stop", "dev_monitor", None,
+                  "flash_firmware"):
             self.device_menu.addSeparator() if k is None else self.device_menu.addAction(a[k])
         self.device_menu.addSeparator()
         self.device_menu.addAction(self.device_dock.toggleViewAction())
@@ -922,6 +925,10 @@ class MainWindow(QMainWindow):
         self.il_dock.show()
         self.il_dock.raise_()
         self._refresh_il()
+
+    def flash_firmware(self) -> None:
+        from .flash_dialog import FlashDialog
+        FlashDialog(before_flash=self.session.close, parent=self).exec()
 
     def show_esp32(self) -> None:
         self.esp32_dock.show()

@@ -4,7 +4,18 @@
 
 A IDE roda no **Windows** e no **Linux**.
 
-**Executável:** gere com `python scripts/build_app.py` no próprio sistema.
+**Instalador do Windows:** execute `LadderIDE-Setup-<versão>.exe`. Ele instala
+só para o seu usuário, sem pedir administrador, em
+`%LOCALAPPDATA%\Programs\LadderIDE`. Também cria atalhos no menu Iniciar (e,
+se marcado, na área de trabalho), abre os `.ladproj` com a IDE e registra a
+desinstalação em Configurações → Aplicativos. Já vêm junto o simulador, o
+dispositivo virtual, a verificação para ESP32, os exemplos Arduino do simulador
+da placa e o firmware com o esptool para gravar a placa (seção 7). Para gerar
+o instalador: `python scripts/build_installer.py`, que precisa de PyInstaller,
+gcc/g++ e, para incluir o firmware, PlatformIO. Executar de novo atualiza a
+instalação; os projetos e a pasta `~/.ladderide` nunca são apagados.
+
+**Executável sem instalador:** gere com `python scripts/build_app.py` no próprio sistema.
 - Windows: copie a pasta `dist\LadderIDE` e execute `LadderIDE.exe`.
 - Linux: descompacte `LadderIDE-linux-x86_64.tar.gz`, execute `./LadderIDE`
   ou rode `./install.sh` para criar o atalho no menu de aplicativos.
@@ -220,6 +231,16 @@ a IDE não estima esse valor. As verificações que dependem da VM C precisam
 do gcc (MinGW). No executável da IDE, essa VM já vem incluída.
 
 ## 7. Dispositivo
+
+**Primeira vez com a placa:** Dispositivo → **Gravar firmware na placa...**.
+Escolha a porta (COM) e clique em Gravar. A IDE usa o esptool com os mesmos
+parâmetros do `pio run -t upload` (bootloader em 0x1000, partições em 0x8000,
+boot_app0 em 0xe000, firmware em 0x10000, 460800 baud). Se a placa não entrar
+sozinha no modo de gravação, segure BOOT, aperte e solte RST, e solte BOOT. A
+gravação não apaga o programa LADDER salvo na placa: um programa de uma versão
+antiga da IDE deixa a placa em FAULT até a próxima transferência. Na pasta do
+projeto, o firmware usado é a última compilação do PlatformIO
+(`pio run -e esp32dev`).
 
 1. Aba **Dispositivo** (direita) → Meio: Serial (escolha a COM) ou Dispositivo virtual → **Conectar**.
 2. **Transferir programa** (F8): compila, confirma se o CLP estiver em RUN,

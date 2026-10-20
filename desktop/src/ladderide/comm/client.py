@@ -94,6 +94,16 @@ class DeviceClient:
         raise CommError(f"sem resposta do dispositivo ({Cmd(cmd).name}, {self.retries + 1} tentativas)")
 
     # -------------------------------------------------------------- comandos
+    def wait_ready(self, seconds: float = 10.0) -> DeviceInfo:
+        """Primeiro INFO com prazo maior: o processo do dispositivo virtual pode demorar a iniciar
+        (na primeira execucao de um .exe o antivirus do Windows costuma atrasar a partida)."""
+        saved = self.retries
+        self.retries = max(saved, int(seconds / max(self.timeout, 0.05)))
+        try:
+            return self.info()
+        finally:
+            self.retries = saved
+
     def info(self) -> DeviceInfo:
         return DeviceInfo.parse(self.request(Cmd.INFO))
 

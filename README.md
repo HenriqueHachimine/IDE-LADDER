@@ -83,6 +83,12 @@ python -m ladderide examples/demo/demonstracao.ladproj
 sudo usermod -aG dialout $USER     # acesso a /dev/ttyUSB0 do ESP32 (saia e entre na sessao)
 ```
 
+**Instalador do Windows:** `python scripts/build_installer.py` gera
+`dist\LadderIDE-Setup-<versão>.exe`, um único arquivo que instala a IDE para o
+usuário (sem administrador), com atalhos, associação de `.ladproj`,
+desinstalador e o firmware para gravar a placa pela IDE (Dispositivo → Gravar
+firmware na placa).
+
 **Executável** (gerado no próprio sistema de destino):
 `python -m pip install pyinstaller` e `python scripts/build_app.py`.
 - Windows: `dist\LadderIDE\LadderIDE.exe`.

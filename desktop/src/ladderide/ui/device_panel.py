@@ -99,7 +99,7 @@ class DeviceSession(QObject):
         client = DeviceClient(transport, timeout=0.4 if not isinstance(transport, ProcessTransport) else 0.6)
         client.on_traffic = self.traffic.emit
         try:
-            info = client.info()
+            info = client.wait_ready() if isinstance(transport, ProcessTransport) else client.info()
         except Exception:
             client.close()
             raise

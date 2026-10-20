@@ -29,7 +29,9 @@ def _client(args) -> DeviceClient:
     if args.virtual:
         storage = Path(args.virtual_storage) if args.virtual_storage else virtual_storage_path()
         storage.parent.mkdir(parents=True, exist_ok=True)
-        return DeviceClient(start_virtual_device(storage), timeout=0.5)
+        client = DeviceClient(start_virtual_device(storage), timeout=0.5)
+        client.wait_ready()                    # o processo pode demorar a iniciar
+        return client
     if args.host:
         return DeviceClient(TcpTransport(args.host, args.tcp_port))
     if not args.port:

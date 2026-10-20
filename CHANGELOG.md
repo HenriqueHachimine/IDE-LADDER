@@ -12,6 +12,11 @@ ensaios na placa real.
   resultado divergia do CLP. Agora a condição é guardada antes, como no interpretador.
 
 ### Adicionado
+- Instalador do Windows (`scripts/build_installer.py` → `LadderIDE-Setup-<versão>.exe`): instala
+  por usuário sem administrador, atalhos, associação de `.ladproj`, desinstalador; inclui os
+  exemplos Arduino pré-compilados e o firmware com o esptool.
+- Dispositivo → Gravar firmware na placa: grava o firmware do CLP pela USB com o esptool, com os
+  mesmos parâmetros do `pio run -t upload`. Ainda não testado com a placa real.
 - Escolha do controlador ao criar o projeto (ESP32 Relay X8, Somente simulação com 16 E/S,
   Personalizado), que limita entradas, saídas, memórias, temporizadores, contadores e
   registradores; o compilador confere os limites. Controladores do usuário em

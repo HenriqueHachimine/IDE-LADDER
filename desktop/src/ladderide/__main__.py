@@ -16,9 +16,17 @@ def _smoke_test(window, out_path: str) -> None:
         from .comm import DeviceClient
         from .comm.virtual import start_virtual_device, virtual_storage_path
         client = DeviceClient(start_virtual_device(virtual_storage_path()), timeout=1.0)
-        info = client.info()
+        info = client.wait_ready()
         lines.append(f"virtual OK firmware={info.firmware}")
         client.close()
+        from .comm.sketch import build_sketch, list_sketches
+        names = list_sketches()
+        lines.append(f"sketches {' '.join(names) or '-'} " + " ".join(build_sketch(n).name for n in names))
+        from .comm.flasher import esptool_command, find_firmware
+        lines.append(f"firmware {find_firmware().describe()}")
+        lines.append(f"esptool {' '.join(esptool_command())}")
+        from .model.controllers import load_controllers
+        lines.append("controladores " + ", ".join(c.id for c in load_controllers()))
     except Exception as exc:  # noqa: BLE001 - relatorio de diagnostico
         lines.append(f"FALHA {type(exc).__name__}: {exc}")
     with open(out_path, "w", encoding="utf-8") as f:
