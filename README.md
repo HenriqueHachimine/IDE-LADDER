@@ -4,8 +4,8 @@ IDE LADDER para Windows (editor gráfico, compilador, simulador, transferência 
 monitor online) e firmware interpretador para uma placa ESP32 com 8 relés.
 Trabalho final da disciplina de Controladores Lógicos Programáveis.
 
-> **Situação (v0.9.0, 2026-10-16):** software completo e testado no PC
-> (207 testes, incluindo o firmware executado como "dispositivo virtual").
+> **Situação (v0.9.0, 2026-10-20):** software completo e testado no PC
+> (322 testes, incluindo o firmware executado como "dispositivo virtual").
 > O firmware compila para o ESP32, mas **ainda não foi testado na placa** —
 > ver [roteiro de hardware](docs/hardware-test-procedure.md).
 
@@ -14,9 +14,15 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
 - **Editor gráfico** com arrastar e soltar, ramos paralelos, símbolos,
   desfazer/refazer, zoom, numeração e comentários de redes
 - **Instruções:** contato NA (XIC), NF (XIO), NOT, bobina, SET (OTL), RESET
-  (OTU), TON, TOF, RTO, CTU, CTD, RES
+  (OTU), TON, TOF, RTO, CTU, CTD, RES; comparação (EQU, NEQ, LES, GRT, LEQ,
+  GEQ, LIM, MEQ) e matemática (ADD, SUB, MUL, DIV, SQR, NEG, TOD, FRD) com
+  registradores inteiros de 32 bits
+- **Escolha do controlador** ao criar o projeto (ESP32 Relay X8, simulação com
+  16 E/S ou personalizado), que limita E/S e variáveis ([controladores](docs/controllers.md))
 - **Compilador** com erros e avisos por rede e elemento; nunca gera programa inválido
-- **Simulador** contínuo (0,1× a 10×), por varredura e passo a passo, com
+- **Simulador** contínuo com velocidade ajustável (0,01× a 1000× ou a máxima do
+  PC, pela barra de ferramentas, barra deslizante ou Ctrl+. / Ctrl+,), por
+  varredura e passo a passo, com
   fluxo de energia, entradas virtuais, temporizadores e contadores ao vivo
 - **Transferência** USB transacional (CRC, validação no firmware, gravação
   atômica; falhas preservam o programa anterior)
@@ -25,6 +31,7 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
 - **Firmware** com STOP/RUN/PROGRAM_LOADING/FAULT, varredura de 10 ms,
   watchdog, estado seguro configurável e Modbus RTU somente leitura
 - **Dispositivo virtual**: o firmware rodando no PC, para aulas e testes sem placa
+- **Gravar firmware na placa** pela IDE (esptool), sem instalar o PlatformIO
 - **Ambientes de simulação** animados (silo de envase, semáforo, portão de garagem, elevador,
   linha de garrafas, ar comprimido, misturador de batelada)
   controlados pelo programa, com alarmes de erros de lógica; novos ambientes são
@@ -47,9 +54,11 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
 desktop/   IDE (Python + PySide6): core, model, compiler, sim, comm, ui, cli
 firmware/  ESP32 (PlatformIO): lib/ladder_vm, lib/plc_core (C99 portátil), src/ (HAL ESP32)
 shared/    isa.json, protocol.json (fontes únicas) e vetores de teste
-examples/  demonstração, portas lógicas, temporizadores, contadores, testes de hardware
+examples/  demonstração, portas lógicas, temporizadores, contadores, blocos numéricos,
+           ambientes de simulação, testes de hardware
+installer/ instalador do Windows (um único .exe, sem administrador)
 docs/      especificações, arquitetura, ADRs, manual, testes, relatório
-scripts/   geração de headers, exemplos, executável Windows
+scripts/   geração de headers e exemplos, empacotamento (build_app, build_installer)
 ```
 
 Detalhes: [arquitetura](docs/architecture.md) · [especificação LADDER](docs/ladder-specification.md) ·
@@ -65,7 +74,12 @@ Detalhes: [arquitetura](docs/architecture.md) · [especificação LADDER](docs/l
 
 ## Instalação e execução
 
-**Windows** (PowerShell):
+**Instalador do Windows (sem Python):** baixe `LadderIDE-Setup-<versão>.exe` na
+página de *Releases* do repositório e execute. Instala para o usuário, sem
+administrador. O Windows SmartScreen pode avisar na primeira vez (o executável
+não é assinado): "Mais informações" → "Executar assim mesmo".
+
+**A partir do código — Windows** (PowerShell):
 
 ```powershell
 python -m pip install -e "desktop[gui,comm,dev]"
@@ -73,7 +87,7 @@ python -m ladderide                                   # abre a IDE
 python -m ladderide examples\demo\demonstracao.ladproj
 ```
 
-**Linux** (bash):
+**A partir do código — Linux** (bash):
 
 ```bash
 sudo apt install python3-venv build-essential libxcb-cursor0   # Debian/Ubuntu
@@ -83,7 +97,7 @@ python -m ladderide examples/demo/demonstracao.ladproj
 sudo usermod -aG dialout $USER     # acesso a /dev/ttyUSB0 do ESP32 (saia e entre na sessao)
 ```
 
-**Instalador do Windows:** `python scripts/build_installer.py` gera
+**Gerar o instalador do Windows:** `python scripts/build_installer.py` gera
 `dist\LadderIDE-Setup-<versão>.exe`, um único arquivo que instala a IDE para o
 usuário (sem administrador), com atalhos, associação de `.ladproj`,
 desinstalador e o firmware para gravar a placa pela IDE (Dispositivo → Gravar
@@ -120,6 +134,7 @@ Sem placa, escolha "Dispositivo virtual".
 | `examples/combinational` | AND, OR, NOT, XOR, NAND, SET/RESET |
 | `examples/timers` | TON, TOF, RTO, oscilador |
 | `examples/counters` | CTU, CTD, RES |
+| `examples/math` | Blocos de comparação e matemática |
 | `examples/hardware` | Teste de relés em sequência, espelho de entradas |
 | `examples/ambientes` | Soluções para os ambientes de simulação (um programa por ambiente) |
 

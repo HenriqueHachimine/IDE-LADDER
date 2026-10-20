@@ -12,6 +12,10 @@ ensaios na placa real.
   resultado divergia do CLP. Agora a condição é guardada antes, como no interpretador.
 
 ### Adicionado
+- Velocidade da simulação ajustável: valor digitado de 0,01× a 1000× ou "max", predefinições até
+  100×, barra deslizante no painel Simulador, seletor na barra de ferramentas e atalhos
+  Ctrl+. / Ctrl+, / Ctrl+;. O painel mostra a velocidade real e avisa quando o PC não acompanha
+  (o resultado não muda, só fica mais lento). A velocidade fica salva entre sessões.
 - Instalador do Windows (`scripts/build_installer.py` → `LadderIDE-Setup-<versão>.exe`): instala
   por usuário sem administrador, atalhos, associação de `.ladproj`, desinstalador; inclui os
   exemplos Arduino pré-compilados e o firmware com o esptool.
