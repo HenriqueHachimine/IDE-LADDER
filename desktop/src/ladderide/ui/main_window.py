@@ -35,6 +35,7 @@ from . import theme
 from .ladder_view import COND_TOOLS, OUTPUT_TOOLS, LadderView
 from .palette import Palette
 from .sim_panel import SimPanel
+from .speed_control import SpeedCombo, format_speed, parse_speed
 
 FILE_FILTER = "Projeto LADDER (*.ladproj)"
 QWIDGETSIZE_MAX = (1 << 24) - 1     # limite de tamanho de widget do Qt (nao exportado pelo PySide6)
@@ -102,12 +103,11 @@ class MainWindow(QMainWindow):
         self._default_layout = self.saveState(self.LAYOUT_VERSION)
         if persist_layout:
             self._restore_layout()
-            self.sim_panel.speed.blockSignals(True)
-            try:
-                self.sim_panel.set_speed(float(self._settings().value("sim/speed", "1.0", type=str)))
-            except ValueError:
-                pass
-            self.sim_panel.speed.blockSignals(False)
+            saved = parse_speed(self._settings().value("sim/speed", "1", type=str))
+            if saved is not None:
+                self._restoring_speed = True
+                self.sim_panel.set_speed(saved)
+                self._restoring_speed = False
         self.set_layout_locked(persist_layout and self._settings().value("ui/layout_locked", False, type=bool),
                                save=False)
         self.refresh()
@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         groups = {
             "Edicao": ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "zoom_in", "zoom_out"),
             "Simulacao": ("cpp_code", "compile", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
-                          None, "environment"),
+                          "speed", None, "environment"),
             "Dispositivo": ("esp32_sim", "verify", "device_transfer", None, "il_blocks"),
         }
         with_text = {"cpp_code", "compile", "sim_run", "sim_stop", "environment", "device_transfer"}
@@ -285,6 +285,10 @@ class MainWindow(QMainWindow):
             for k in keys:
                 if k is None:
                     tb.addSeparator()
+                    continue
+                if k == "speed":                # velocidade ao lado dos comandos da simulacao
+                    self.toolbar_speed = SpeedCombo(self.sim_panel.speed_model)
+                    tb.addWidget(self.toolbar_speed)
                     continue
                 tb.addAction(a[k])
                 tb.widgetForAction(a[k]).setToolButtonStyle(
@@ -302,7 +306,7 @@ class MainWindow(QMainWindow):
 
         self.sim_panel = SimPanel(self.actions_)
         self.sim_panel.io.inputChanged.connect(self.on_input)
-        self.sim_panel.speed.currentIndexChanged.connect(self.on_speed_changed)
+        self.sim_panel.speed_model.changed.connect(self.on_speed_changed)
         self.sim_dock = self._dock("Simulador", self.sim_panel, Qt.RightDockWidgetArea, "dock_sim", scroll=True)
 
         self.messages = QListWidget()
@@ -1064,12 +1068,14 @@ class MainWindow(QMainWindow):
             self.sim.set_input(index, value)
             self._update_live()
 
-    def on_speed_changed(self, _index: int = 0) -> None:
-        self.statusBar().showMessage(f"Velocidade da simulacao: {self.sim_panel.speed.currentText()}", 2500)
+    def on_speed_changed(self, value: float) -> None:
+        if getattr(self, "_restoring_speed", False):
+            return
+        self.statusBar().showMessage(f"Velocidade da simulacao: {format_speed(value)}", 2500)
         if self.sim is not None:
             self.sim.actual_speed = 0.0         # recomeca a media da velocidade real
         if self.persist_layout:
-            self._settings().setValue("sim/speed", str(self.sim_panel.speed_factor))   # "inf" = maxima
+            self._settings().setValue("sim/speed", format_speed(value))
 
     def tick(self) -> None:
         if self.sim is not None and self.sim.state == SimState.RUNNING:

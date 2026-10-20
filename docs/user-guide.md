@@ -194,8 +194,12 @@ valor do operando. Caixas mostram PRE, ACC e bits. Entradas: botões de
 retenção ou, marcando "Botões pulsadores", momentâneos. O tempo é virtual
 (cada varredura avança o período configurado em Propriedades do projeto).
 
-**Velocidade:** no painel Simulador (ou com Ctrl+. e Ctrl+,) escolha de 0,1×
-a 100×, ou **Máxima** (o mais rápido que o PC conseguir). Acelerar não muda o
+**Velocidade:** controle de velocidade na barra de ferramentas (ao lado de
+Parar) e no painel Simulador. Escolha uma predefinição (0,1× a 100× ou
+**Máxima**, o mais rápido que o PC conseguir), digite qualquer valor de 0,01×
+a 1000× (ex.: `3`, `0,5` ou `2,5x`; `max` para a máxima) ou arraste a barra do
+painel. Ctrl+. e Ctrl+, passam para a predefinição seguinte/anterior e Ctrl+;
+volta ao tempo real. Acelerar não muda o
 resultado: temporizadores e ambiente veem os mesmos passos de tempo, só que
 mais deles por segundo. A linha **Velocidade real** mostra quanto o tempo
 simulado está andando; se aparecer "limite do PC", o computador não acompanha

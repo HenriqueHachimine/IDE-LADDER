@@ -1,24 +1,13 @@
 """Painel do simulador offline."""
 from __future__ import annotations
 
-import math
-
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtWidgets import (QComboBox, QFormLayout, QGridLayout, QLabel, QSizePolicy, QToolButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QFormLayout, QGridLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout,
+                               QWidget)
 
 from ..sim.simulator import SimState, Simulator
 from .io_panel import IOPanel
-
-SPEEDS = [("0,1x", 0.1), ("0,25x", 0.25), ("0,5x", 0.5), ("1x (tempo real)", 1.0), ("2x", 2.0),
-          ("5x", 5.0), ("10x", 10.0), ("20x", 20.0), ("50x", 50.0), ("100x", 100.0),
-          ("Maxima", math.inf)]
-REAL_TIME = 3
-
-
-def format_speed(value: float) -> str:
-    text = f"{value:.1f}" if value < 10 else f"{value:.0f}"
-    return text.replace(".", ",").removesuffix(",0") + "x"
+from .speed_control import SpeedCombo, SpeedModel, SpeedSlider, format_speed
 
 
 class SimPanel(QWidget):
@@ -38,12 +27,9 @@ class SimPanel(QWidget):
         layout.addLayout(bar)
         form = QFormLayout()
         form.setHorizontalSpacing(14)
-        self.speed = QComboBox()
-        for text, value in SPEEDS:
-            self.speed.addItem(text, value)
-        self.speed.setCurrentIndex(REAL_TIME)
-        self.speed.setToolTip("Multiplica o tempo da simulacao (temporizadores e ambiente). "
-                              "Ctrl+. acelera, Ctrl+, desacelera")
+        self.speed_model = SpeedModel(1.0, self)
+        self.speed = SpeedCombo(self.speed_model)
+        self.speed_slider = SpeedSlider(self.speed_model)
         self.state = QLabel("PARADO")
         self.state.setObjectName("stateBadge")
         self.scans = QLabel("0")
@@ -54,6 +40,7 @@ class SimPanel(QWidget):
                                    "so mais devagar.")
         self.pc = QLabel("-")
         form.addRow("Velocidade:", self.speed)
+        form.addRow("", self.speed_slider)
         form.addRow("Estado:", self.state)
         form.addRow("Varreduras:", self.scans)
         form.addRow("Tempo simulado:", self.vtime)
@@ -68,15 +55,13 @@ class SimPanel(QWidget):
 
     @property
     def speed_factor(self) -> float:
-        return float(self.speed.currentData())
+        return self.speed_model.value
 
     def change_speed(self, steps: int) -> None:
-        self.speed.setCurrentIndex(max(0, min(self.speed.count() - 1, self.speed.currentIndex() + steps)))
+        self.speed_model.step(steps)
 
     def set_speed(self, value: float) -> None:
-        index = self.speed.findData(value)
-        if index >= 0:
-            self.speed.setCurrentIndex(index)
+        self.speed_model.set(value)
 
     def _show_real_speed(self, sim: Simulator) -> None:
         if sim.state != SimState.RUNNING or sim.actual_speed <= 0:

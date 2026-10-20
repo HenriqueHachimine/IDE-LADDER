@@ -164,3 +164,28 @@ def test_speed_shortcuts_change_simulation_speed(window):
     panel.refresh(w.sim)
     assert w.sim.virtual_ms >= 1990 and panel.real_speed.text().startswith("20")
     w.sim_stop()
+
+
+def test_speed_can_be_typed_or_dragged_and_stays_in_sync(window):
+    w = window
+    model = w.sim_panel.speed_model
+    w.toolbar_speed.lineEdit().setText("3,5x")
+    w.toolbar_speed.lineEdit().editingFinished.emit()
+    assert model.value == 3.5 and w.sim_panel.speed.currentText() == "3,5x"
+    w.sim_panel.speed.lineEdit().setText("banana")              # invalido: volta ao valor atual
+    w.sim_panel.speed.lineEdit().editingFinished.emit()
+    assert model.value == 3.5 and w.sim_panel.speed.currentText() == "3,5x"
+    w.sim_panel.speed.lineEdit().setText("max")
+    w.sim_panel.speed.lineEdit().editingFinished.emit()
+    assert model.value == float("inf") and w.toolbar_speed.currentText() == "Maxima"
+    slider = w.sim_panel.speed_slider
+    slider.slider.setValue(slider.position(1.0))
+    assert model.value == 1.0 and w.toolbar_speed.currentText() == "1x (tempo real)"
+    slider.slider.setValue(slider.STEPS)
+    assert model.value == 100.0
+    model.set(7.0)                                             # entre predefinicoes: atalhos seguem
+    w.actions_["sim_faster"].trigger()
+    assert model.value == 10.0
+    model.set(7.0)
+    w.actions_["sim_slower"].trigger()
+    assert model.value == 5.0

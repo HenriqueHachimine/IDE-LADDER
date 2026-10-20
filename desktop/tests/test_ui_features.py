@@ -146,7 +146,7 @@ def test_layout_fits_laptop_screen_and_follows_work_mode(window):
     app, w = window
     assert w.minimumSizeHint().height() <= 700                  # cabe em 1366x768
     buttons = [tb.widgetForAction(act) for tb in w.toolbars for act in tb.actions() if not act.isSeparator()]
-    texts = [b for b in buttons if b.toolButtonStyle() == mw.Qt.ToolButtonTextBesideIcon]
+    texts = [b for b in buttons if isinstance(b, mw.QToolButton) and b.toolButtonStyle() == mw.Qt.ToolButtonTextBesideIcon]
     assert len(texts) == 6                                      # demais acoes: so icone (cabe em 1366 px)
     assert w.env_dock.objectName() == "dock_env" and w.dockWidgetArea(w.env_dock) == mw.Qt.BottomDockWidgetArea
     w.file_open(str(PORTAO))

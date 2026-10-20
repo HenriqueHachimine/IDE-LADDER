@@ -133,3 +133,14 @@ def test_reset_restores_cold_start():
     vm.reset()
     assert vm.dump_line() == fresh
     assert vm.counters[0] == vm.counters[0].__class__(acc=3)
+
+
+def test_speed_text_parsing_and_format():
+    import math
+    from ladderide.ui.speed_control import MAX_SPEED, format_speed, parse_speed
+    assert parse_speed("3") == 3.0 and parse_speed(" 2,5x ") == 2.5 and parse_speed("0.5 X") == 0.5
+    assert parse_speed("Max") == math.inf and parse_speed("1x (tempo real)") == 1.0
+    assert parse_speed("abc") is None and parse_speed("0") is None and parse_speed("-2") is None
+    assert parse_speed("99999") == MAX_SPEED
+    assert [format_speed(v) for v in (0.25, 1.0, 3.5, 12.5, 250.0, math.inf)] == \
+        ["0,25x", "1x", "3,5x", "12,5x", "250x", "Maxima"]
