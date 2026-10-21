@@ -80,6 +80,11 @@ def node_kind(node) -> str:
     return "?"
 
 
+def has_address(node) -> bool:
+    """Elementos com um unico operando (contato, bobina, temporizador, contador, RES)."""
+    return hasattr(node, "operand") and not isinstance(node, (CompareBox, MathBox))
+
+
 class ElementItem(QGraphicsItem):
     def __init__(self, placed: PlacedElem, view: "LadderView"):
         super().__init__()
@@ -214,6 +219,7 @@ class RungCard(QGraphicsRectItem):
 class LadderView(QGraphicsView):
     selectionChangedTo = Signal(object)          # id de elemento, ("rung", n) ou None
     editRequested = Signal(str)                  # id
+    addressRequested = Signal(str, object)       # id, posicao global (duplo clique no endereco)
     dropRequested = Signal(str, str, object)     # "tool"|"move", payload, Slot
     actionRequested = Signal(str, object)        # acao, alvo
 
@@ -423,7 +429,12 @@ class LadderView(QGraphicsView):
     def mouseDoubleClickEvent(self, event) -> None:
         item = self._item_at(event.position().toPoint())
         if isinstance(item, ElementItem) and item.kind != "PAR":
-            self.editRequested.emit(item.node.id)
+            pos = self.mapToScene(event.position().toPoint())
+            on_address = has_address(item.node) and pos.y() >= item.rect.top() + 0.62 * item.rect.height()
+            if on_address:                       # clique no endereco (texto de baixo): troca rapida
+                self.addressRequested.emit(item.node.id, self.mapToGlobal(event.position().toPoint()))
+            else:
+                self.editRequested.emit(item.node.id)
         elif item is not None and not isinstance(item, ElementItem):
             self.actionRequested.emit("rung_comment", item.data(0))
 
@@ -454,6 +465,8 @@ class LadderView(QGraphicsView):
             in_branch = self.project.find_parent_parallel(eid) is not None
             if item.kind != "PAR":
                 add("Editar...", "edit", eid)
+            if has_address(item.node):
+                add("Alterar endereco...", "address", eid)
             if item.kind in WRAPPABLE:
                 add("Envolver em ramo paralelo", "wrap", eid)
             if item.kind == "PAR" or in_branch:

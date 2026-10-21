@@ -1,10 +1,11 @@
 """Janela principal da IDE."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
-from PySide6.QtGui import QAction, QActionGroup, QGuiApplication, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QCursor, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHBoxLayout, QInputDialog, QLabel,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QScrollArea,
                                QTableWidget, QToolButton,
@@ -20,15 +21,17 @@ from ..model.project import (CompareBox, Contact, CounterBox, MathBox, Project, 
                              Symbol, TimerBox, Coil)
 
 EDITABLE_ON_INSERT = (Contact, Coil, TimerBox, CounterBox, ResetBox, CompareBox, MathBox)
+from ..sim.factoryio import FactoryIOConfig
 from ..sim.simulator import SimState, Simulator
 from ..comm.monitor import MonitorSource
 from ..comm.protocol import DevState
 from .device_panel import DevicePanel, DeviceSession
-from .dialogs import ElementDialog, NewProjectDialog, ProjectDialog
+from .dialogs import AddressPopup, ElementDialog, NewProjectDialog, ProjectDialog
 from .env_panel import EnvironmentPanel
 from .icons import make_icon
 from .cpp_panel import CppPanel
 from .esp32_panel import Esp32Panel
+from .factoryio_panel import FactoryIOPanel
 from .il_panel import ILPanel
 from .verify_dialog import VerifyDialog
 from . import theme
@@ -42,7 +45,7 @@ QWIDGETSIZE_MAX = (1 << 24) - 1     # limite de tamanho de widget do Qt (nao exp
 
 
 class MainWindow(QMainWindow):
-    LAYOUT_VERSION = 4          # mude ao reorganizar os paineis: invalida layouts salvos antigos
+    LAYOUT_VERSION = 5          # mude ao reorganizar os paineis: invalida layouts salvos antigos
 
     def __init__(self, project: Project | None = None, path: str | None = None, persist_layout: bool = False):
         super().__init__()
@@ -66,6 +69,7 @@ class MainWindow(QMainWindow):
         self.view.dropRequested.connect(self.on_drop)
         self.view.actionRequested.connect(self.on_view_action)
         self.view.editRequested.connect(self.edit_element)
+        self.view.addressRequested.connect(self.edit_address)
         self.view.selectionChangedTo.connect(lambda _: self._update_actions())
 
         self.status_mode = QLabel()
@@ -103,6 +107,7 @@ class MainWindow(QMainWindow):
         self._default_layout = self.saveState(self.LAYOUT_VERSION)
         if persist_layout:
             self._restore_layout()
+            self._restore_factoryio_config()
             saved = parse_speed(self._settings().value("sim/speed", "1", type=str))
             if saved is not None:
                 self._restoring_speed = True
@@ -169,6 +174,8 @@ class MainWindow(QMainWindow):
           "Grava o firmware do CLP no ESP32 pela USB (necessario uma vez, antes de transferir programas)")
         A("environment", "Ambiente de simulacao", self.show_environment, "Ctrl+E",
           "Processos animados (silo, semaforo, portao...) controlados pelo programa")
+        A("factoryio", "Factory IO (Modbus TCP)...", self.show_factoryio, None,
+          "Liga a simulacao a uma cena do Factory IO pelo driver Modbus TCP/IP Server")
         A("theme_toggle", "Alternar tema claro/escuro", self.toggle_theme, "Ctrl+Shift+T")
         A("dev_run", "RUN (executar no ESP32)", lambda: self.device_panel.run_btn.click(), None,
           "Coloca o dispositivo em RUN")
@@ -234,6 +241,7 @@ class MainWindow(QMainWindow):
             m.addAction(a[k])
         m.addSeparator()
         m.addAction(a["environment"])
+        m.addAction(a["factoryio"])
         self.device_menu = mb.addMenu("&Dispositivo")
         for k in ("esp32_sim", None, "verify", "device_transfer", None, "dev_run", "dev_stop", "dev_monitor", None,
                   "flash_firmware"):
@@ -259,7 +267,7 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         panels = m.addMenu("Paineis")
         for dock in (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.cpp_dock,
-                     self.env_dock, self.esp32_dock, self.msgs_dock, self.symbols_dock):
+                     self.env_dock, self.esp32_dock, self.fio_dock, self.msgs_dock, self.symbols_dock):
             panels.addAction(dock.toggleViewAction())
         m.addAction(a["layout_lock"])
         m.addAction(a["layout_reset"])
@@ -361,6 +369,12 @@ class MainWindow(QMainWindow):
         self.esp32_panel = Esp32Panel(self.session, self.device_panel, lambda: self.device_transfer())
         self.esp32_dock = self._dock("Placa ESP32", self.esp32_panel, Qt.BottomDockWidgetArea, "dock_esp32")
         self.tabifyDockWidget(self.env_dock, self.esp32_dock)
+        # Factory IO (Modbus TCP): outro "processo" para a simulacao, ao lado do ambiente
+        self.fio_panel = FactoryIOPanel()
+        self.fio_panel.linkChanged.connect(self.on_factoryio_changed)
+        self.fio_dock = self._dock("Factory IO", self.fio_panel, Qt.BottomDockWidgetArea, "dock_factoryio")
+        self.tabifyDockWidget(self.esp32_dock, self.fio_dock)
+        self._speed_before_fio: float | None = None
         self.msgs_dock.raise_()
         self.il_dock.visibilityChanged.connect(lambda visible: visible and self._refresh_il())
         self.view.selectionChangedTo.connect(self.il_panel.highlight)
@@ -437,7 +451,7 @@ class MainWindow(QMainWindow):
 
     def _docks(self) -> tuple[QDockWidget, ...]:
         return (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.cpp_dock,
-                self.env_dock, self.esp32_dock, self.msgs_dock, self.symbols_dock)
+                self.env_dock, self.esp32_dock, self.fio_dock, self.msgs_dock, self.symbols_dock)
 
     def set_layout_locked(self, locked: bool, save: bool = True) -> None:
         """Layout travado: paineis e barras nao podem ser movidos, desacoplados, fechados
@@ -515,6 +529,8 @@ class MainWindow(QMainWindow):
         self._refresh_il()
         self._refresh_cpp()
         self.esp32_panel.set_project(self.project)
+        self.fio_panel.set_limits(self.project.io.n_inputs, self.project.io.n_outputs, self.project.io.n_words)
+        self.fio_panel.set_symbols({s.address: s.name for s in self.project.symbols})
 
     def _update_title(self) -> None:
         name = Path(self.path).name if self.path else "sem arquivo"
@@ -606,7 +622,10 @@ class MainWindow(QMainWindow):
             self.view.update_live(None)
         self.sim_panel.refresh(self.sim)
         sim_on = self.sim is not None and self.sim.active
-        self.env_panel.refresh(self.sim.physical_outputs if sim_on else 0)
+        self.env_panel.refresh(self.sim.physical_outputs if sim_on and not self.fio_panel.linked else 0)
+        if self.fio_panel.link is not None:     # parada/pausa tambem chegam a cena (estado seguro)
+            self.fio_panel.link.show_outputs(self.sim.physical_outputs if self.sim is not None else 0)
+            self.fio_panel.link.show_words(self.sim.vm.n if sim_on else [])
         if self.il_dock.isVisible():
             vm = self.sim.vm if sim_on else None
             self.il_panel.update_live(vm.power if vm else None, vm.pc if vm and vm.in_scan else None)
@@ -741,6 +760,8 @@ class MainWindow(QMainWindow):
         p = self.project
         if action == "edit":
             self.edit_element(target)
+        elif action == "address":
+            self.edit_address(target)
         elif action == "delete":
             self.apply_edit(lambda: edit.remove(p, target))
         elif action == "wrap":
@@ -777,13 +798,33 @@ class MainWindow(QMainWindow):
         hit = self.project.find(element_id)
         if hit is None or isinstance(hit[1], (edit.Parallel, edit.NotOp)):
             return
-        dlg = ElementDialog(hit[1], self.project, self)
+        dlg = ElementDialog(hit[1], self.project, self, ports=self.fio_panel.port_names())
         if dlg.exec():
             if record_undo:
                 self.push_undo()
             dlg.apply()
             self.modified()
             self.view.select(element_id)
+
+    def edit_address(self, element_id, global_pos=None) -> AddressPopup | None:
+        """Troca rapida do endereco de um elemento, sobre o diagrama (duplo clique no endereco)."""
+        if not isinstance(element_id, str) or not self._can_edit():
+            return None
+        hit = self.project.find(element_id)
+        if hit is None or not hasattr(hit[1], "operand"):
+            return None
+        node = hit[1]
+
+        def apply(value: str) -> None:
+            if value != node.operand:
+                self.apply_edit(lambda: setattr(node, "operand", value))
+                self.view.select(element_id)
+
+        popup = AddressPopup(node, self.project, self.fio_panel.port_names(), apply, self)
+        popup.move(global_pos if global_pos is not None else QCursor.pos())
+        popup.show()
+        self._address_popup = popup
+        return popup
 
     def project_properties(self) -> None:
         if not self._can_edit():
@@ -876,9 +917,9 @@ class MainWindow(QMainWindow):
                                                    "Veja a aba Mensagens.")
             return None
         self.sim = Simulator(self.result, self.project.io.scan_period_ms)
-        self.sim.attach_plant(self.env_panel.plant)
+        self.sim.attach_plant(self._plant())
         self.sim_panel.io.configure(self.project, self.result)
-        self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
+        self.sim_panel.io.set_owned(self._plant_owned())
         return self.sim
 
     def _after_sim_command(self) -> None:
@@ -1034,8 +1075,8 @@ class MainWindow(QMainWindow):
             self.dirty = True
             self._update_title()
         if self.sim is not None:
-            self.sim.attach_plant(self.env_panel.plant)
-        self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
+            self.sim.attach_plant(self._plant())
+        self.sim_panel.io.set_owned(self._plant_owned())
         self._grow_environment()
         self._update_live()
 
@@ -1063,6 +1104,53 @@ class MainWindow(QMainWindow):
             return
         self.file_open(str(path))
 
+    # =================================================== Factory IO (Modbus TCP)
+    def _plant(self):
+        """Processo ligado a simulacao: o Factory IO, se conectado, senao o ambiente interno."""
+        return self.fio_panel.link if self.fio_panel.link is not None else self.env_panel.plant
+
+    def _plant_owned(self) -> int:
+        plant = self._plant()
+        return plant.owned_inputs if plant is not None else 0
+
+    def show_factoryio(self) -> None:
+        self.fio_dock.show()
+        self.fio_dock.raise_()
+
+    def on_factoryio_changed(self, link) -> None:
+        if self.sim is not None:
+            self.sim.attach_plant(self._plant())
+        self.sim_panel.io.set_owned(self._plant_owned())
+        self._lock_speed(link is not None)
+        if link is not None:
+            if self.persist_layout:
+                self._settings().setValue("factoryio/config", json.dumps(link.config.to_dict()))
+            self.statusBar().showMessage("Factory IO conectado: a simulacao usa os sensores e atuadores da cena "
+                                         "(ambiente interno desligado, velocidade 1x).", 6000)
+        else:
+            self.statusBar().showMessage("Factory IO desconectado.", 4000)
+        self._update_live()
+
+    def _lock_speed(self, locked: bool) -> None:
+        """O Factory IO roda em tempo real: com ele ligado a simulacao fica em 1x."""
+        if locked and self._speed_before_fio is None:
+            self._speed_before_fio = self.sim_panel.speed_factor
+            self.sim_panel.set_speed(1.0)
+        elif not locked and self._speed_before_fio is not None:
+            self.sim_panel.set_speed(self._speed_before_fio)
+            self._speed_before_fio = None
+        for w in (self.sim_panel.speed, self.sim_panel.speed_slider, self.toolbar_speed):
+            w.setEnabled(not locked)
+        for k in ("sim_faster", "sim_slower", "sim_realtime"):
+            self.actions_[k].setEnabled(not locked)
+
+    def _restore_factoryio_config(self) -> None:
+        raw = self._settings().value("factoryio/config", "", type=str)
+        try:
+            self.fio_panel.set_config(FactoryIOConfig.from_dict(json.loads(raw)))
+        except (ValueError, TypeError, AttributeError):
+            pass
+
     def on_input(self, index: int, value: bool) -> None:
         if self.sim is not None:
             self.sim.set_input(index, value)
@@ -1089,6 +1177,7 @@ class MainWindow(QMainWindow):
         """Polling: 200 ms com monitor ligado, 1 s sem monitor, reconexao a cada 2 s."""
         self.device_ticks += 1
         self._sync_device_status()
+        self.fio_panel.refresh_status()
         if self.device_panel.connected:
             board_visible = not self.esp32_dock.visibleRegion().isEmpty()
             if self.monitoring or board_visible or self.device_ticks % 5 == 0:
@@ -1197,7 +1286,7 @@ class MainWindow(QMainWindow):
         self.view.selection = None
         self.device_panel.load_target(project.target)
         self.env_panel.select(project.environment)
-        self.sim_panel.io.set_owned(self.env_panel.owned_inputs)
+        self.sim_panel.io.set_owned(self._plant_owned())
         if project.environment and self.env_panel.env is not None:
             self.env_dock.show()
             self.env_dock.raise_()
@@ -1292,6 +1381,7 @@ class MainWindow(QMainWindow):
                 self._save_layout()
             self.session.close()
             self.esp32_panel.shutdown()          # encerra o exemplo Arduino, se estiver rodando
+            self.fio_panel.shutdown()            # desliga os atuadores da cena e fecha a conexao
             event.accept()
         else:
             event.ignore()

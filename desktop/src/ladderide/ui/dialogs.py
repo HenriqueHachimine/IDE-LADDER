@@ -1,7 +1,8 @@
 """Dialogos de edicao de elemento e de propriedades do projeto."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QGridLayout,
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout,
                                QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QVBoxLayout, QWidget)
 
 from ..core import isa
@@ -59,8 +60,69 @@ def operand_suggestions(node, project: Project) -> list[str]:
     return syms
 
 
+def operand_choices(node, project: Project, ports: dict[str, str] | None = None) -> list[tuple[str, str]]:
+    """(texto exibido, operando): cada sugestao com o simbolo/endereco e a porta do Factory IO ligada a ela."""
+    ports = {k.upper(): v for k, v in (ports or {}).items()}
+    by_name = {s.name.upper(): s.address.strip().upper() for s in project.symbols}
+    by_addr = {s.address.strip().upper(): s.name for s in project.symbols}
+    choices = []
+    for value in operand_suggestions(node, project):
+        addr = by_name.get(value.upper(), value.upper())
+        parts = [value]
+        parts.append(addr if value.upper() in by_name else by_addr.get(addr, ""))
+        if addr in ports:
+            parts.append(f"{ports[addr]} (Factory IO)")
+        choices.append(("  \u00b7  ".join(p for p in parts if p), value))
+    return choices
+
+
+def fill_operand_combo(combo: QComboBox, node, project: Project, ports: dict[str, str] | None = None) -> None:
+    combo.clear()
+    for text, value in operand_choices(node, project, ports):
+        combo.addItem(text, value)
+    combo.setCurrentText(getattr(node, "operand", ""))
+
+
+def combo_operand(combo: QComboBox) -> str:
+    """Operando escolhido: o valor do item da lista ou o texto digitado."""
+    text = combo.currentText().strip()
+    index = combo.findText(text)
+    return combo.itemData(index) if index >= 0 and combo.itemData(index) else text
+
+
+class AddressPopup(QFrame):
+    """Escolha rapida do endereco de um elemento, aberta sobre o proprio diagrama."""
+
+    def __init__(self, node, project: Project, ports: dict[str, str] | None, on_accept, parent=None):
+        super().__init__(parent, Qt.Popup)
+        self.setFrameShape(QFrame.StyledPanel)
+        self.on_accept = on_accept
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 8)
+        title = QLabel("Endereco (ou simbolo) - Enter confirma, Esc cancela")
+        title.setObjectName("muted")
+        layout.addWidget(title)
+        self.combo = QComboBox()
+        self.combo.setEditable(True)
+        self.combo.setInsertPolicy(QComboBox.NoInsert)
+        self.combo.setMinimumWidth(320)
+        self.combo.setMaxVisibleItems(16)
+        fill_operand_combo(self.combo, node, project, ports)
+        self.combo.activated.connect(lambda _i: self.accept_value())
+        self.combo.lineEdit().returnPressed.connect(self.accept_value)
+        layout.addWidget(self.combo)
+        self.combo.lineEdit().selectAll()
+        self.combo.setFocus()
+
+    def accept_value(self) -> None:
+        value = combo_operand(self.combo)
+        self.close()
+        if value:
+            self.on_accept(value)
+
+
 class ElementDialog(QDialog):
-    def __init__(self, node, project: Project, parent=None):
+    def __init__(self, node, project: Project, parent=None, ports: dict[str, str] | None = None):
         super().__init__(parent)
         self.node = node
         self.project = project
@@ -78,8 +140,8 @@ class ElementDialog(QDialog):
             form.addRow("Tipo:", self.kind)
         self.operand = QComboBox()
         self.operand.setEditable(True)
-        self.operand.addItems(operand_suggestions(node, project))
-        self.operand.setCurrentText(node.operand)
+        self.operand.setInsertPolicy(QComboBox.NoInsert)
+        fill_operand_combo(self.operand, node, project, ports)
         form.addRow("Operando (endereco ou simbolo):", self.operand)
         self.preset = None
         if isinstance(node, (TimerBox, CounterBox)):
@@ -172,7 +234,7 @@ class ElementDialog(QDialog):
             return
         if self.kind is not None:
             self.node.kind = self.kind.currentData()
-        self.node.operand = self.operand.currentText().strip()
+        self.node.operand = combo_operand(self.operand)
         if self.preset is not None:
             self.node.preset = self.preset.value()
 

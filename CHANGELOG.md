@@ -12,6 +12,25 @@ ensaios na placa real.
   resultado divergia do CLP. Agora a condição é guardada antes, como no interpretador.
 
 ### Adicionado
+- Relatório reestruturado segundo a ABNT (NBR 14724, 6024, 6028, 6023): capa, folha de rosto,
+  resumo/abstract, listas, sumário, seções numeradas, quadros com fonte e referências;
+  conteúdo atualizado (blocos numéricos, ambientes, Factory IO, padrões de projeto, 338 testes).
+  `docs/report/build_docx.js` gera `relatorio.docx` formatado a partir de `relatorio.md`.
+- Documentação dos padrões de projeto usados (`docs/design-patterns.md`: Adapter, Strategy,
+  Template Method, Composite, Interpreter, Observer, Memento, Command, Facade, Factory Method,
+  Registry/Plugin, máquina de estados, camadas e HAL) e ADR 0007 (Factory IO por Modbus TCP).
+- Factory IO: a tabela do painel lista todas as portas do driver (Inputs, Input Regs, Coils,
+  Holding Regs) com o endereço no CLP, o símbolo e o valor ao vivo; os registradores analógicos
+  vão e vêm dos registradores N (FC04/FC16). No diagrama LADDER, duplo clique no endereço de um
+  elemento (ou "Alterar endereço..." no botão direito) abre a escolha rápida do endereço, com a
+  porta do Factory IO de cada um.
+- Ligação com o Factory IO (Simulação → Factory IO): o simulador vira cliente Modbus TCP do driver
+  *Modbus TCP/IP Server* e troca sensores (Inputs ou Coils → I) e atuadores (Q → Coils) a cada
+  20 ms. Velocidade travada em 1× enquanto conectado, reconexão automática, sensores em 0 sem
+  conexão e atuadores desligados ao desconectar. Comando `ladderide.cli factoryio` para
+  diagnóstico. Cliente Modbus TCP próprio, sem dependências (`docs/factory-io.md`). Exemplo
+  `examples/factoryio/esteira_lote.ladproj` (esteira com lote de 5 caixas e alarme de
+  atolamento). Ainda não testado com o Factory IO real.
 - Velocidade da simulação ajustável: valor digitado de 0,01× a 1000× ou "max", predefinições até
   100×, barra deslizante no painel Simulador, seletor na barra de ferramentas e atalhos
   Ctrl+. / Ctrl+, / Ctrl+;. O painel mostra a velocidade real e avisa quando o PC não acompanha

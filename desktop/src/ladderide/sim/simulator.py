@@ -22,6 +22,10 @@ class Plant(Protocol):
 
     owned_inputs: mascara das entradas que o processo controla (sensores e
     botoes desenhados no ambiente); as demais continuam no painel de E/S.
+
+    Opcionais (processos com valores analogicos, ex.: Factory IO):
+      input_words() -> {indice N: valor}  aplicado aos registradores N antes de cada varredura;
+      advance_words(n: list[int])          recebe os registradores N depois de cada varredura.
     """
     @property
     def owned_inputs(self) -> int: ...
@@ -68,9 +72,20 @@ class Simulator:
         owned = self.plant.owned_inputs
         return (self.inputs & ~owned) | (self.plant.input_bits() & owned)
 
+    def _plant_words_in(self) -> None:
+        words = getattr(self.plant, "input_words", None)
+        if words is not None:
+            n = self.vm.n
+            for index, value in words().items():
+                if 0 <= index < len(n):
+                    n[index] = value
+
     def _after_scan(self) -> None:
         if self.plant is not None:
             self.plant.advance(self.period_ms, self.vm.outputs)
+            words_out = getattr(self.plant, "advance_words", None)
+            if words_out is not None:
+                words_out(self.vm.n)
 
     # ------------------------------------------------------------- estados
     def start(self) -> None:
@@ -131,6 +146,7 @@ class Simulator:
             self.vm.end_scan()
         else:
             self._time_step()
+            self._plant_words_in()
             self.vm.scan(self.effective_inputs(), self.period_ms)
         self._after_scan()
 
@@ -139,6 +155,7 @@ class Simulator:
         self._ensure_active()
         if not self.vm.in_scan:
             self._time_step()
+            self._plant_words_in()
             self.vm.begin_scan(self.effective_inputs(), self.period_ms)
             if not self.program.code:
                 self.vm.end_scan()

@@ -217,6 +217,17 @@ projeto** adiciona os nomes dos pontos de E/S, e **Abrir programa exemplo**
 carrega uma solução. Erros de lógica aparecem como alarmes vermelhos sobre o
 desenho. Para criar novos ambientes, veja `docs/simulation-environments.md`.
 
+### Factory IO (Modbus TCP)
+
+**Simulação → Factory IO (Modbus TCP)...** liga a simulação a uma cena do Factory IO
+pelo driver *Modbus TCP/IP Server*: os sensores da cena viram as entradas I e as saídas Q
+comandam os atuadores. Informe o endereço, o Slave ID e quantos sensores e atuadores
+trocar, e clique em **Conectar**. Enquanto conectado, a velocidade fica em 1× e o ambiente
+interno fica desligado. A tabela do painel mostra todas as portas do driver (Inputs, Input
+Regs, Coils e Holding Regs) com o endereço no CLP. Para trocar o endereço de um elemento
+do diagrama, dê duplo clique no endereço escrito embaixo dele: a lista mostra a porta do
+Factory IO de cada endereço. Configuração do Factory IO e diagnóstico: `docs/factory-io.md`.
+
 ### Blocos de instrução (F12)
 
 Mostra o diagrama convertido em lista de instruções (IL), um bloco por rede,
@@ -325,6 +336,7 @@ python -m ladderide.cli --virtual status          # dispositivo virtual
 python -m ladderide.cli verify projeto.ladproj      # verificacao para o ESP32 (codigo de saida 1 se houver erro)
 python -m ladderide.cli il projeto.ladproj -o projeto.il   # blocos de instrucao
 python -m ladderide.cli cpp projeto.ladproj -o projeto.cpp # codigo C++ (nao precisa compilar)
+python -m ladderide.cli factoryio 127.0.0.1 --count 0      # testa a ligacao com o Factory IO
 ```
 
 ## 9. Segurança
