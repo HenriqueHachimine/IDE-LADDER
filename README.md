@@ -36,6 +36,8 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   linha de garrafas, ar comprimido, misturador de batelada)
   controlados pelo programa, com alarmes de erros de lógica; novos ambientes são
   plugins independentes ([guia](docs/simulation-environments.md))
+- **Factory IO** pelo driver Modbus TCP/IP Server: a simulação controla cenas 3D, com os
+  sensores nas entradas I e os atuadores nas saídas Q ([guia](docs/factory-io.md))
 - **Verificar para ESP32** (F9): executa o programa no código C do firmware,
   compara com o simulador varredura a varredura e confere memória, E/S e limites da placa
 - **Blocos de instrução** (F12): o diagrama convertido em lista de instruções por
@@ -55,7 +57,7 @@ desktop/   IDE (Python + PySide6): core, model, compiler, sim, comm, ui, cli
 firmware/  ESP32 (PlatformIO): lib/ladder_vm, lib/plc_core (C99 portátil), src/ (HAL ESP32)
 shared/    isa.json, protocol.json (fontes únicas) e vetores de teste
 examples/  demonstração, portas lógicas, temporizadores, contadores, blocos numéricos,
-           ambientes de simulação, testes de hardware
+           ambientes de simulação, Factory IO, testes de hardware
 installer/ instalador do Windows (um único .exe, sem administrador)
 docs/      especificações, arquitetura, ADRs, manual, testes, relatório
 scripts/   geração de headers e exemplos, empacotamento (build_app, build_installer)
@@ -63,7 +65,8 @@ scripts/   geração de headers e exemplos, empacotamento (build_app, build_inst
 
 Detalhes: [arquitetura](docs/architecture.md) · [especificação LADDER](docs/ladder-specification.md) ·
 [formato LDRB](docs/intermediate-format.md) · [protocolo](docs/communication-protocol.md) ·
-[formato de projeto](docs/project-format.md) · [decisões](docs/decisions/)
+[formato de projeto](docs/project-format.md) · [padrões de projeto](docs/design-patterns.md) ·
+[Factory IO](docs/factory-io.md) · [decisões](docs/decisions/)
 
 ## Requisitos
 

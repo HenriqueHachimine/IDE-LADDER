@@ -20,3 +20,7 @@ firmware/.vscode/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Gerador do relatorio (docs/report/build_docx.js)
+docs/report/node_modules/
+docs/report/package*.json
