@@ -6,6 +6,27 @@ on:
   pull_request:
 
 jobs:
+  sem-assinatura-de-ia:
+    # Regra do projeto (CONTRIBUTING): nada de assinatura de ferramentas de IA no repositorio,
+    # nem nas mensagens de commit nem nos arquivos. O padrao c[l]aude evita citar o nome aqui.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Mensagens de commit
+        run: |
+          if git log --format='%H %B' | grep -inE 'c[l]aude|co-authored-by:.*@anthropic\.com'; then
+            echo "::error::Mensagem de commit com assinatura de ferramenta de IA (ver CONTRIBUTING.md)"
+            exit 1
+          fi
+      - name: Arquivos
+        run: |
+          if git grep -nIiE 'c[l]aude'; then
+            echo "::error::Arquivo com mencao a ferramenta de IA (ver CONTRIBUTING.md)"
+            exit 1
+          fi
+
   desktop-and-core:
     strategy:
       matrix:

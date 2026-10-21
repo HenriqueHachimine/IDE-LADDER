@@ -4,6 +4,10 @@
 2. Rode `python -m pytest -q` em `desktop/` antes de abrir o *pull request*.
 3. Peça revisão de outro integrante; `main` deve permanecer sempre verde.
 4. Atualize a documentação afetada e o `CHANGELOG.md` no mesmo PR.
+5. **Sem assinatura de ferramentas de IA.** Mensagens de commit, descrições de PR e
+   arquivos não levam linhas automáticas de coautoria (`Co-Authored-By` de assistentes)
+   nem rodapés do tipo "Generated with ...". A CI (job `sem-assinatura-de-ia`) recusa o
+   que tiver.
 
 ## Alterando a semântica, a ISA ou o formato LDRB
 
