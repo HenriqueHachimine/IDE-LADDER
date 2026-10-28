@@ -18,13 +18,14 @@ from ..comm import (CommError, DeviceClient, DeviceError, ProcessTransport, Seri
                     TransportError, list_serial_ports)
 from ..comm.protocol import FAULT_TEXT, DevState
 from ..comm.virtual import BuildError, start_virtual_device, virtual_storage_path
+from . import theme
 from .io_panel import IOPanel
 
 STORAGE_OVERRIDE: Path | None = None   # usado pelos testes para isolar a "flash" virtual
 
 STATE_STYLE = {
-    "STOP": "background:#f59e0b; color:white;",
-    "RUN": "background:#16a34a; color:white;",
+    "STOP": "background:#b45309; color:white;",
+    "RUN": "background:#15803d; color:white;",
     "PROGRAM_LOADING": "background:#2563eb; color:white;",
     "FAULT": "background:#dc2626; color:white;",
     "DESCONECTADO": "background:#64748b; color:white;",
@@ -109,7 +110,7 @@ class DeviceSession(QObject):
 
     def close(self) -> None:
         self.auto_reconnect = False
-        self.submit("close", lambda: self._lost("desconectado pelo usuario"))
+        self.submit("close", lambda: self._lost("desconectado pelo usuário"))
 
     def run_on_client(self, tag: str, fn: Callable[[DeviceClient], object]) -> None:
         def job():
@@ -154,9 +155,10 @@ class DevicePanel(QWidget):
     def __init__(self, session: DeviceSession, parent=None):
         super().__init__(parent)
         self.session = session
+        self.virtual_args: list[str] = []   # placa simulada (E/S e nome), escolhida no painel Placa
         layout = QVBoxLayout(self)
 
-        conn = QGroupBox("Conexao")
+        conn = QGroupBox("Conexão")
         form = QFormLayout(conn)
         self.kind = QComboBox()
         self.kind.addItems(["Serial (USB)", "Dispositivo virtual (PC)", "TCP/Wi-Fi"])
@@ -232,9 +234,9 @@ class DevicePanel(QWidget):
         self.io = IOPanel(show_commanded=True)
         self.io.set_inputs_editable(False)
         self.io.inputChanged.connect(self._sim_input)
-        note = QLabel("Comandado = enviado aos reles (estado fisico nao medido).")
-        note.setToolTip("\"Comandado\" e o que o firmware enviou aos reles. A placa nao tem realimentacao: "
-                        "o estado fisico dos contatos NAO e medido.")
+        note = QLabel("Comandado = enviado aos relés (estado físico não medido).")
+        note.setToolTip("\"Comandado\" e o que o firmware enviou aos relés. A placa não tem realimentação: "
+                        "o estado físico dos contatos NÃO e medido.")
         note.setWordWrap(True)
         note.setObjectName("muted")
         layout.addWidget(note)
@@ -266,7 +268,8 @@ class DevicePanel(QWidget):
             return (lambda: SerialTransport(port, baud)), False
         if kind == 1:
             storage = virtual_storage_path() if STORAGE_OVERRIDE is None else STORAGE_OVERRIDE
-            return (lambda: start_virtual_device(Path(storage))), True
+            args = list(self.virtual_args)
+            return (lambda: start_virtual_device(Path(storage), *args)), True
         host, port = self.host.text().strip(), self.tcp_port.value()
         return (lambda: TcpTransport(host, port)), False
 
@@ -310,7 +313,7 @@ class DevicePanel(QWidget):
         self.connected = True
         self.device_info = info
         self.link.setText("Conectado" + (" (virtual)" if self.session.is_virtual else ""))
-        self.link.setStyleSheet("color:#16a34a; font-weight:bold;")
+        self.link.setStyleSheet(f"color:{theme.colors['SUCCESS']}; font-weight:bold;")
         self.info.setText(f"{info.firmware} | {info.hardware}\nLDRB {info.fmt_major}.{info.fmt_minor}, "
                           f"E/S {info.n_inputs}/{info.n_outputs}, varredura {info.scan_period_ms} ms")
         self.io.set_inputs_editable(self.session.is_virtual)
@@ -320,7 +323,7 @@ class DevicePanel(QWidget):
     def on_disconnected(self, reason: str) -> None:
         self.connected = False
         if self.session.auto_reconnect:
-            self.link.setText(f"Comunicacao perdida: {reason}. Tentando reconectar...")
+            self.link.setText(f"Comunicação perdida: {reason}. Tentando reconectar...")
         else:
             self.link.setText("Desconectado")
         self.link.setStyleSheet("color:#dc2626; font-weight:bold;")
@@ -341,7 +344,7 @@ class DevicePanel(QWidget):
         fault = f"\nFalha: {FAULT_TEXT.get(st.fault, st.fault)}" if st.fault else ""
         self.program.setText((f"build_id 0x{st.build_id:08x}" if st.has_program else "nenhum") + fault
                              + (self._match_text(st) if st.has_program else ""))
-        self.timing.setText(f"{st.scan_count} varreduras; execucao {st.last_exec_us} us (max {st.max_exec_us}); "
+        self.timing.setText(f"{st.scan_count} varreduras; execução {st.last_exec_us} us (max {st.max_exec_us}); "
                             f"intervalo max {st.max_interval_us / 1000:.1f} ms; atrasos {st.overruns}")
         self._update_buttons()
 
@@ -349,7 +352,7 @@ class DevicePanel(QWidget):
 
     def _match_text(self, st) -> str:
         if self.expected_build_id is None:
-            return "\n(projeto nao compilado)"
+            return "\n(projeto não compilado)"
         return "\nIgual ao projeto aberto" if st.build_id == self.expected_build_id else \
             "\nDIFERENTE do projeto aberto (transfira para monitorar o diagrama)"
 

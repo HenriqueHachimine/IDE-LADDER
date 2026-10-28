@@ -177,7 +177,7 @@ def test_speed_can_be_typed_or_dragged_and_stays_in_sync(window):
     assert model.value == 3.5 and w.sim_panel.speed.currentText() == "3,5x"
     w.sim_panel.speed.lineEdit().setText("max")
     w.sim_panel.speed.lineEdit().editingFinished.emit()
-    assert model.value == float("inf") and w.toolbar_speed.currentText() == "Maxima"
+    assert model.value == float("inf") and w.toolbar_speed.currentText() == "Máxima"
     slider = w.sim_panel.speed_slider
     slider.slider.setValue(slider.position(1.0))
     assert model.value == 1.0 and w.toolbar_speed.currentText() == "1x (tempo real)"

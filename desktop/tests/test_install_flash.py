@@ -19,7 +19,7 @@ def test_flash_command_matches_platformio_upload(tmp_path, monkeypatch):
     (tmp_path / "flash.json").write_text(json.dumps({"version": "1.0.0", "hardware": "hw",
                                                      "parts": [[o, n] for o, n in flasher.LAYOUT]}))
     bundle = flasher.find_firmware()
-    assert bundle.source == "incluido na instalacao"
+    assert bundle.source == "incluído na instalação"
     monkeypatch.setattr(flasher, "esptool_command", lambda: ["esptool"])
     cmd = flasher.flash_command("COM5", bundle)
     assert cmd[:20] == ["esptool", "--chip", "esp32", "--port", "COM5", "--baud", "460800", "--before",

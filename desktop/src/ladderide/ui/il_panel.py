@@ -30,7 +30,7 @@ class ILPanel(QWidget):
         layout.addWidget(self.info)
         self.tree = QTreeWidget()
         self.tree.setColumnCount(5)
-        self.tree.setHeaderLabels(["#", "Instrucao", "Operando", "Simbolo", "O que faz"])
+        self.tree.setHeaderLabels(["#", "Instrução", "Operando", "Símbolo", "O que faz"])
         self.tree.setRootIsDecorated(True)
         self.tree.setUniformRowHeights(True)
         self.tree.setAlternatingRowColors(True)
@@ -68,15 +68,15 @@ class ILPanel(QWidget):
         self._last_power = self._last_pc = None
         if project is None or result is None or not result.ok:
             self.text = ""
-            self.info.setText("Corrija os erros de compilacao para ver os blocos de instrucao."
-                              if result is not None else "Os blocos aparecem aqui depois da compilacao.")
+            self.info.setText("Corrija os erros de compilação para ver os blocos de instrução."
+                              if result is not None else "Os blocos aparecem aqui depois da compilação.")
             for b in (self.copy_btn, self.save_btn):
                 b.setEnabled(False)
             return
         blocks = il_blocks(project, result)
-        self.text = il_text(blocks, f"{project.name} - lista de instrucoes gerada pela LadderIDE "
+        self.text = il_text(blocks, f"{project.name} - lista de instruções gerada pela LadderIDE "
                                     f"(id 0x{result.build_id:08x})")
-        self.info.setText(f"{len(blocks)} blocos (um por rede), {len(result.program.code)} instrucoes - "
+        self.info.setText(f"{len(blocks)} blocos (um por rede), {len(result.program.code)} instruções - "
                           "exatamente o que o ESP32 executa, na mesma ordem. Clique numa linha para "
                           "localizar o elemento no diagrama.")
         bold = QFont(self.font())
@@ -146,7 +146,7 @@ class ILPanel(QWidget):
             self.tree.scrollToItem(self.line_items[pc])
 
     def _save(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(self, "Salvar lista de instrucoes", "", "Lista de instrucoes (*.il)")
+        path, _ = QFileDialog.getSaveFileName(self, "Salvar lista de instruções", "", "Lista de instruções (*.il)")
         if path:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(self.text)

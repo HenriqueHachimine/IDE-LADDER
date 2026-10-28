@@ -31,7 +31,7 @@ class SerialTransport(Transport):
         try:
             import serial
         except ImportError as exc:  # pragma: no cover
-            raise TransportError("pyserial nao instalado: python -m pip install pyserial") from exc
+            raise TransportError("pyserial não instalado: python -m pip install pyserial") from exc
         self.description = f"{port} @ {baudrate}"
         s = serial.Serial()
         s.port = port
@@ -43,7 +43,7 @@ class SerialTransport(Transport):
         try:
             s.open()
         except (serial.SerialException, OSError) as exc:
-            raise TransportError(f"nao foi possivel abrir {port}: {exc}") from exc
+            raise TransportError(f"não foi possível abrir {port}: {exc}") from exc
         self._s = s
 
     def write(self, data: bytes) -> None:
@@ -76,7 +76,7 @@ class TcpTransport(Transport):
         try:
             self._sock = socket.create_connection((host, port), timeout=connect_timeout)
         except OSError as exc:
-            raise TransportError(f"nao foi possivel conectar a {host}:{port}: {exc}") from exc
+            raise TransportError(f"não foi possível conectar a {host}:{port}: {exc}") from exc
 
     def write(self, data: bytes) -> None:
         try:
@@ -93,7 +93,7 @@ class TcpTransport(Transport):
         except OSError as exc:
             raise TransportError(str(exc)) from exc
         if not data:
-            raise TransportError("conexao encerrada pelo dispositivo")
+            raise TransportError("conexão encerrada pelo dispositivo")
         return data
 
     def close(self) -> None:
@@ -112,7 +112,7 @@ class ProcessTransport(Transport):
             self._proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                           stderr=subprocess.DEVNULL, bufsize=0)
         except OSError as exc:
-            raise TransportError(f"nao foi possivel iniciar {argv[0]}: {exc}") from exc
+            raise TransportError(f"não foi possível iniciar {argv[0]}: {exc}") from exc
         self._q: queue.Queue[bytes] = queue.Queue()
         self._reader = threading.Thread(target=self._pump, daemon=True)
         self._reader.start()

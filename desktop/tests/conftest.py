@@ -74,8 +74,8 @@ def c_vm(tmp_path_factory) -> CVM:
         exe = _compile_runner()
     except FileNotFoundError:
         if os.environ.get("LADDER_REQUIRE_C") == "1":
-            pytest.fail("compilador C nao encontrado e LADDER_REQUIRE_C=1")
-        pytest.skip("compilador C (gcc) nao encontrado; testes de equivalencia pulados")
+            pytest.fail("compilador C não encontrado e LADDER_REQUIRE_C=1")
+        pytest.skip("compilador C (gcc) não encontrado; testes de equivalência pulados")
     except subprocess.CalledProcessError as exc:
         pytest.fail(f"falha ao compilar a VM C:\n{exc.stderr}")
     return CVM(exe, tmp_path_factory.mktemp("cvm"))

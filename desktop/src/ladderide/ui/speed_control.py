@@ -20,7 +20,7 @@ HINT = ("Velocidade do tempo simulado (temporizadores e ambiente). Digite qualqu
 
 def format_speed(value: float) -> str:
     if math.isinf(value):
-        return "Maxima"
+        return "Máxima"
     if value >= 100:
         text = f"{value:.0f}"
     elif value >= 10:
@@ -35,7 +35,7 @@ def format_speed(value: float) -> str:
 def parse_speed(text: str) -> float | None:
     """'3', '2,5x', '0.5 x', 'max' -> valor; None se nao for uma velocidade valida."""
     t = text.strip().lower().replace(" ", "").removesuffix("(temporeal)")
-    if t in ("max", "maxima", "máx", "máxima", "inf"):
+    if t in ("max", "maxima", "máxima", "máx", "inf"):
         return math.inf
     t = t.removesuffix("x").replace(",", ".")
     try:
@@ -87,7 +87,7 @@ class SpeedCombo(QComboBox):
         for p in PRESETS:
             self.addItem("1x (tempo real)" if p == 1.0 else format_speed(p), p)
         self.setToolTip(HINT)
-        self.setMinimumContentsLength(8)
+        self.setMinimumContentsLength(11)          # cabe "1x (tempo real)" inteiro (texto estreito)
         self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.activated.connect(lambda i: self._apply(self.itemText(i)))
         self.lineEdit().editingFinished.connect(lambda: self._apply(self.currentText()))

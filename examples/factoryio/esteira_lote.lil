@@ -1,0 +1,64 @@
+; Factory IO - esteira com lote - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0xc665fa12
+.timer T0 TON 4000
+.counter C0 UP 5
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC M0.0
+BND
+XIC I0.1
+OTE M0.0
+EOR
+SOR ; rede 1
+XIC M0.0
+OTE Q0.2
+EOR
+SOR ; rede 2
+XIC I0.0
+BST
+RES C0
+NXB
+OTU M0.1
+BND
+EOR
+SOR ; rede 3
+XIC M0.0
+XIO C0.DN
+XIO M0.1
+OTE Q0.0
+EOR
+SOR ; rede 4
+XIC Q0.0
+XIO I0.2
+OTE Q0.1
+EOR
+SOR ; rede 5
+XIC Q0.0
+XIC I0.3
+CTU C0
+EOR
+SOR ; rede 6
+XIC Q0.0
+XIC I0.3
+TON T0
+EOR
+SOR ; rede 7
+XIC T0.DN
+OTL M0.1
+EOR
+SOR ; rede 8
+BST
+XIC C0.DN
+NXB
+XIC M0.1
+XIC S0.3
+BND
+OTE Q0.3
+EOR

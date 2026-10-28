@@ -457,6 +457,49 @@ def numeric_blocks() -> Project:
     return p
 
 
+def factoryio_conveyor() -> Project:
+    """Cena do Factory IO: emissor -> esteira -> removedor, com sensores na entrada e na saida."""
+    p = Project(name="Factory IO - esteira com lote", version="1.0.0", description=(
+        "Exemplo para o Factory IO (driver Modbus TCP/IP Server, ver docs/factory-io.md). Partida liga o "
+        "sistema (selo), o emissor solta caixas com a entrada livre, a esteira leva ate a saida e cada caixa "
+        "e contada. Com 5 caixas a esteira para e acende Lote_Completo; Partida comeca outro lote. Caixa "
+        "parada na saida por 4 s com a esteira ligada e atolamento: para tudo e a lampada pisca ate Partida. "
+        "Parada e NF (Stop do Factory IO): sem conexao a entrada le 0 e o sistema desliga."))
+    p.symbols = [
+        Symbol("Partida", "I0.0", "Input 0 - Start Button (NA)"),
+        Symbol("Parada", "I0.1", "Input 1 - Stop Button (NF: le 1 quando solto)"),
+        Symbol("Sensor_Entrada", "I0.2", "Input 2 - Diffuse Sensor no inicio da esteira"),
+        Symbol("Sensor_Saida", "I0.3", "Input 3 - Diffuse Sensor no fim da esteira"),
+        Symbol("Esteira", "Q0.0", "Coil 0 - Belt Conveyor"),
+        Symbol("Emissor", "Q0.1", "Coil 1 - Emitter (caixas)"),
+        Symbol("Luz_Partida", "Q0.2", "Coil 2 - Start Button Light (sistema ligado)"),
+        Symbol("Luz_Lote", "Q0.3", "Coil 3 - Light Indicator (lote completo; pisca no atolamento)"),
+        Symbol("Ligado", "M0.0", "Sistema ligado (selo)"),
+        Symbol("Atolado", "M0.1", "Alarme de atolamento memorizado"),
+        Symbol("Tempo_Atolamento", "T0", "TON 4 s com caixa parada no sensor de saida"),
+        Symbol("Caixas", "C0", "CTU 5 caixas por lote"),
+    ]
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Partida")], [Contact("XIC", "Ligado")]]), Contact("XIC", "Parada")],
+             [Coil("OTE", "Ligado")], "Selo: Partida liga, Parada (NF) desliga"),
+        Rung([Contact("XIC", "Ligado")], [Coil("OTE", "Luz_Partida")], "Lampada do botao Partida"),
+        Rung([Contact("XIC", "Partida")], [ResetBox("Caixas"), Coil("OTU", "Atolado")],
+             "Partida comeca um lote novo e reconhece o alarme"),
+        Rung([Contact("XIC", "Ligado"), Contact("XIO", "Caixas.DN"), Contact("XIO", "Atolado")],
+             [Coil("OTE", "Esteira")], "Esteira anda ate completar o lote"),
+        Rung([Contact("XIC", "Esteira"), Contact("XIO", "Sensor_Entrada")], [Coil("OTE", "Emissor")],
+             "Nova caixa so com a entrada livre"),
+        Rung([Contact("XIC", "Esteira"), Contact("XIC", "Sensor_Saida")], [CounterBox("CTU", "Caixas", 5)],
+             "Conta as caixas que chegam a saida"),
+        Rung([Contact("XIC", "Esteira"), Contact("XIC", "Sensor_Saida")],
+             [TimerBox("TON", "Tempo_Atolamento", 4000)], "Caixa parada na saida com a esteira ligada"),
+        Rung([Contact("XIC", "Tempo_Atolamento.DN")], [Coil("OTL", "Atolado")], "Memoriza o atolamento"),
+        Rung([Parallel([[Contact("XIC", "Caixas.DN")], [Contact("XIC", "Atolado"), Contact("XIC", "S0.3")]])],
+             [Coil("OTE", "Luz_Lote")], "Lote completo (fixa) ou atolamento (pisca 1 Hz)"),
+    ]
+    return p
+
+
 def main() -> int:
     prefix = sys.argv[1] if len(sys.argv) > 1 else ""
     targets = {"demo/demonstracao.ladproj": demo, "combinational/portas_logicas.ladproj": combinational,
@@ -465,7 +508,8 @@ def main() -> int:
                "ambientes/silo.ladproj": silo, "ambientes/semaforo.ladproj": traffic_light,
                "ambientes/portao.ladproj": garage_door, "ambientes/elevador.ladproj": elevator,
                "ambientes/garrafas.ladproj": bottle_line, "ambientes/compressores.ladproj": air_compressors,
-               "ambientes/misturador.ladproj": batch_mixer, "math/blocos_numericos.ladproj": numeric_blocks}
+               "ambientes/misturador.ladproj": batch_mixer, "math/blocos_numericos.ladproj": numeric_blocks,
+               "factoryio/esteira_lote.ladproj": factoryio_conveyor}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

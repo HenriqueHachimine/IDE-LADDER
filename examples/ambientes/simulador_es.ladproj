@@ -1,0 +1,236 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Simulador de E/S e BCD",
+  "description": "Cada botoeira acende a lâmpada de mesmo número (I0.k -> Q0.k). O valor da thumbwheel chega em N0 em BCD: FRD converte para inteiro em N2 e TOD devolve em BCD para o display (N1). Troque o tipo das botoeiras (NA/NF, pulsador/chave) clicando na etiqueta ao lado.",
+  "version": "0.1.0",
+  "created": "2026-10-28T08:39:46",
+  "modified": "2026-10-28T08:39:46",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Thumbwheel_BCD",
+      "address": "N0",
+      "comment": "Chave thumbwheel (BCD)"
+    },
+    {
+      "name": "Display_BCD",
+      "address": "N1",
+      "comment": "Display (BCD)"
+    },
+    {
+      "name": "Valor",
+      "address": "N2",
+      "comment": "Valor inteiro da thumbwheel"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Botoeira 00 acende a lâmpada 00",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.0"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.0"
+        }
+      ]
+    },
+    {
+      "comment": "Botoeira 01 acende a lâmpada 01",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.1"
+        }
+      ]
+    },
+    {
+      "comment": "Botoeira 02 acende a lâmpada 02",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.2"
+        }
+      ]
+    },
+    {
+      "comment": "Botoeira 03 acende a lâmpada 03",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.3"
+        }
+      ]
+    },
+    {
+      "comment": "Botoeira 04 acende a lâmpada 04",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.4"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.4"
+        }
+      ]
+    },
+    {
+      "comment": "Botoeira 05 acende a lâmpada 05",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.5"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.5"
+        }
+      ]
+    },
+    {
+      "comment": "Botoeira 06 acende a lâmpada 06",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.6"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.6"
+        }
+      ]
+    },
+    {
+      "comment": "Botoeira 07 acende a lâmpada 07",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "I0.7"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Q0.7"
+        }
+      ]
+    },
+    {
+      "comment": "Thumbwheel (BCD em N0) -> inteiro em N2",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "FRD",
+          "operands": [
+            "N0",
+            "N2"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Inteiro N2 -> BCD no display (N1)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "TOD",
+          "operands": [
+            "N2",
+            "N1"
+          ]
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-28T08:39:46",
+      "action": "salvo",
+      "rungs": 10
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.0",
+    "build_id": "0x863d088c",
+    "size": 208,
+    "instructions": 42,
+    "date": "2026-10-28T08:39:46"
+  },
+  "environment": "simulador_es"
+}

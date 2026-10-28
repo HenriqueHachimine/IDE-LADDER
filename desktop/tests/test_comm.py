@@ -96,7 +96,7 @@ def wait_scans(client: DeviceClient, n: int = 5) -> Snapshot:
         if snap.scan_count >= first + n:
             return snap
         time.sleep(0.02)
-    raise AssertionError("dispositivo nao esta varrendo")
+    raise AssertionError("dispositivo não esta varrendo")
 
 
 def test_info_and_empty_device(device):

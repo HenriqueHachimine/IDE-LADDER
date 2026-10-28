@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from ..core.asm import assemble, format_operand
 from ..core.image import Instruction, Program, decode
+from ..core import isa
 from ..core.isa import Area, CounterType, Op, TimerType
 from ..model.project import (Coil, Contact, CounterBox, IOConfig, NotOp, Parallel, Project,
                              ResetBox, Rung, TimerBox)
@@ -25,7 +26,7 @@ def import_lil(text: str, name: str = "Importado") -> Project:
 
 
 def import_image(data: bytes, name: str = "Importado") -> Project:
-    return program_to_project(decode(data), name)
+    return program_to_project(decode(data, isa.IDE_MAX_INPUTS), name)
 
 
 def program_to_project(prog: Program, name: str) -> Project:
@@ -42,7 +43,7 @@ def program_to_project(prog: Program, name: str) -> Project:
             rungs.append(current)
             current = None
         elif current is None:
-            raise ImportError_("instrucao fora de rede")
+            raise ImportError_("instrução fora de rede")
         else:
             current.append(ins)
     if current is not None:
@@ -60,7 +61,7 @@ class _RungParser:
         self.body, self.prog, self.rung, self.pos = body, prog, rung, 0
 
     def fail(self, msg: str):
-        raise ImportError_(f"rede {self.rung}, instrucao {self.pos}: {msg}")
+        raise ImportError_(f"rede {self.rung}, instrução {self.pos}: {msg}")
 
     def peek(self, offset: int = 0) -> Instruction | None:
         k = self.pos + offset
@@ -70,7 +71,7 @@ class _RungParser:
         cond = self.series(top=True)
         outputs = self.outputs()
         if self.pos != len(self.body):
-            self.fail("estrutura nao suportada pelo editor grafico")
+            self.fail("estrutura não suportada pelo editor gráfico")
         return Rung(cond, outputs)
 
     def series(self, top: bool) -> list:
@@ -118,7 +119,7 @@ class _RungParser:
                 if sep is not None and sep.op == Op.BND:
                     self.pos += 1
                     break
-                self.fail("grupo de saidas mal formado")
+                self.fail("grupo de saídas mal formado")
         while (ins := self.peek()) is not None and Op(ins.op) in _OUTPUT_OPS:
             outs.append(self.output())
         return outs
@@ -126,7 +127,7 @@ class _RungParser:
     def output(self):
         ins = self.peek()
         if ins is None or Op(ins.op) not in _OUTPUT_OPS:
-            self.fail("saida esperada")
+            self.fail("saída esperada")
         self.pos += 1
         op = Op(ins.op)
         operand = format_operand(ins.area, ins.index)
@@ -139,5 +140,5 @@ class _RungParser:
             c = self.prog.counters[ins.index]
             return CounterBox("CTU" if c.type == CounterType.UP else "CTD", operand, c.preset)
         if ins.area not in (Area.TIMER, Area.COUNTER):
-            self.fail("RES com operando invalido")
+            self.fail("RES com operando inválido")
         return ResetBox(operand)

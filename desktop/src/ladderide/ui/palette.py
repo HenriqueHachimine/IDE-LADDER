@@ -12,29 +12,29 @@ from .symbols import tool_icon
 GROUPS = [
     ("Contatos", [("XIC", "NA", "Contato normalmente aberto (XIC): conduz quando o bit = 1"),
                   ("XIO", "NF", "Contato normalmente fechado (XIO): conduz quando o bit = 0"),
-                  ("NOT", "NOT", "Inverte o resultado logico ate este ponto")]),
-    ("Ramificacao", [("PAR", "Paralelo", "Ramificacao paralela (logica OU). Solte entre contatos")]),
+                  ("NOT", "NOT", "Inverte o resultado lógico até este ponto")]),
+    ("Ramificação", [("PAR", "Paralelo", "Ramificação paralela (lógica OU). Solte entre contatos")]),
     ("Bobinas", [("OTE", "Bobina", "Bobina comum: bit = resultado da rede"),
-                 ("OTL", "SET", "Bobina SET (OTL): liga e mantem"),
+                 ("OTL", "SET", "Bobina SET (OTL): liga e mantém"),
                  ("OTU", "RESET", "Bobina RESET (OTU): desliga")]),
-    ("Temporizadores", [("TON", "TON", "Retardo na energizacao"),
-                        ("TOF", "TOF", "Retardo na desenergizacao"),
+    ("Temporizadores", [("TON", "TON", "Retardo na energização"),
+                        ("TOF", "TOF", "Retardo na desenergização"),
                         ("RTO", "RTO", "Retardo retentivo (acumula; zera com RES)")]),
     ("Contadores", [("CTU", "CTU", "Contador crescente (borda de subida)"),
                     ("CTD", "CTD", "Contador decrescente (borda de subida)"),
                     ("RES", "RES", "Reset de temporizador ou contador")]),
-    ("Comparacao", [("EQU", "EQU", "Igual: conduz se A = B"),
+    ("Comparação", [("EQU", "EQU", "Igual: conduz se A = B"),
                     ("NEQ", "NEQ", "Diferente: conduz se A \u2260 B"),
                     ("LES", "LES", "Menor: conduz se A < B"),
                     ("GRT", "GRT", "Maior: conduz se A > B"),
                     ("LEQ", "LEQ", "Menor ou igual: conduz se A \u2264 B"),
                     ("GEQ", "GEQ", "Maior ou igual: conduz se A \u2265 B"),
                     ("LIM", "LIM", "Teste de limite: conduz se inferior \u2264 teste \u2264 superior"),
-                    ("MEQ", "MEQ", "Comparacao com mascara: (origem AND mascara) = (comparar AND mascara)")]),
-    ("Matematica", [("ADD", "ADD", "Soma: destino = A + B"),
-                    ("SUB", "SUB", "Subtracao: destino = A - B"),
-                    ("MUL", "MUL", "Multiplicacao: destino = A \u00d7 B"),
-                    ("DIV", "DIV", "Divisao inteira: destino = A \u00f7 B"),
+                    ("MEQ", "MEQ", "Comparação com máscara: (origem AND máscara) = (comparar AND máscara)")]),
+    ("Matemática", [("ADD", "ADD", "Soma: destino = A + B"),
+                    ("SUB", "SUB", "Subtração: destino = A - B"),
+                    ("MUL", "MUL", "Multiplicação: destino = A \u00d7 B"),
+                    ("DIV", "DIV", "Divisão inteira: destino = A \u00f7 B"),
                     ("SQR", "SQR", "Raiz quadrada (arredondada)"),
                     ("NEG", "NEG", "Troca o sinal: destino = -origem"),
                     ("TOD", "TOD", "Converte inteiro para BCD"),
@@ -47,7 +47,7 @@ class ToolButton(QToolButton):
         super().__init__(parent)
         self.tool = tool
         self.setText(text)
-        self.setToolTip(tip + "\n\nArraste para o diagrama ou clique para inserir apos a selecao.")
+        self.setToolTip(tip + "\n\nArraste para o diagrama ou clique para inserir após a seleção.")
         self.setIcon(tool_icon(tool))
         self.setIconSize(QSize(44, 27))
         self.setToolButtonStyle(Qt.ToolButtonTextUnderIcon)
@@ -97,7 +97,7 @@ class Palette(QScrollArea):
                 grid.addWidget(b, k // 3, k % 3)
                 self.buttons.append(b)
             layout.addWidget(box)
-        hint = QLabel("Arraste para o diagrama ou clique para inserir apos o elemento selecionado. "
+        hint = QLabel("Arraste para o diagrama ou clique para inserir após o elemento selecionado. "
                       "Nova rede: Ctrl+R.")
         hint.setWordWrap(True)
         hint.setObjectName("hint")

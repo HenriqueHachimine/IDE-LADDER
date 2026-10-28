@@ -30,7 +30,7 @@ def host_tool(name: str, rebuild: bool = False) -> Path:
     if getattr(sys, "frozen", False) or not FIRMWARE.exists():
         if exe.exists():
             return exe  # executavel empacotado com a IDE
-        raise BuildError("dispositivo virtual nao incluido nesta instalacao")
+        raise BuildError("dispositivo virtual não incluido nesta instalação")
     sources = (sorted((FIRMWARE / "lib" / "ladder_vm").glob("*.c"))
                + sorted((FIRMWARE / "lib" / "plc_core").glob("*.c"))
                + [FIRMWARE / "test" / "host" / f"{name}.c"])
@@ -41,7 +41,7 @@ def host_tool(name: str, rebuild: bool = False) -> Path:
             return exe
     cc = os.environ.get("CC", "gcc")
     if shutil.which(cc) is None:
-        raise BuildError(f"compilador C '{cc}' nao encontrado (instale o MinGW/gcc)")
+        raise BuildError(f"compilador C '{cc}' não encontrado (instale o MinGW/gcc)")
     BUILD.mkdir(parents=True, exist_ok=True)
     cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-O2",
            f"-I{FIRMWARE / 'lib' / 'ladder_vm'}", f"-I{FIRMWARE / 'lib' / 'plc_core'}",

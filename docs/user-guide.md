@@ -45,6 +45,74 @@ ou `/dev/ttyACM0`. Seu usuário precisa estar no grupo `dialout`: rode
 `sudo usermod -aG dialout $USER` e depois saia e entre de novo na sessão. Se
 a janela não abrir no Wayland, tente `QT_QPA_PLATFORM=xcb python -m ladderide`.
 
+### 1.1 Linux em detalhe
+
+Testado em Debian 12 e Ubuntu 24.04 (x86_64).
+
+**Pacote pronto.** Descompacte e execute; `install.sh` coloca a IDE no menu de
+aplicativos (atalho `.desktop`, ícone e associação de `.ladproj`) só para o seu
+usuário:
+
+```bash
+tar xzf LadderIDE-linux-x86_64.tar.gz
+cd LadderIDE
+./LadderIDE                 # ou: ./install.sh  (menu de aplicativos)
+```
+
+**Gerar o pacote** (no próprio Linux: o PyInstaller não gera executável de
+Linux a partir do Windows):
+
+```bash
+sudo apt install python3-venv build-essential libxcb-cursor0
+python3 -m venv .venv && . .venv/bin/activate
+python -m pip install -e "desktop[gui,comm,dev]" pyinstaller
+python scripts/build_app.py
+# saída: dist/LadderIDE/LadderIDE e dist/LadderIDE-linux-x86_64.tar.gz
+```
+
+O `gcc`/`g++` compila, no momento do pacote, o dispositivo virtual e os
+exemplos Arduino do simulador da placa. Com o PlatformIO instalado, o pacote
+também leva o firmware e o esptool (Dispositivo → Gravar firmware na placa).
+
+**Portas seriais das placas.**
+
+| Placa | Porta típica | Observação |
+|---|---|---|
+| ESP32 (CP210x ou CH340) | `/dev/ttyUSB0` | |
+| Arduino UNO / Mega original (ATmega16U2) | `/dev/ttyACM0` | |
+| Arduino UNO / Mega clone (CH340) | `/dev/ttyUSB0` | no Ubuntu 22.04+, o `brltty` pode tomar a porta: `sudo apt remove brltty` |
+
+Seu usuário precisa estar no grupo `dialout` (`sudo usermod -aG dialout $USER`,
+depois saia e entre de novo na sessão). Para conferir: `ls -l /dev/ttyUSB* /dev/ttyACM*`
+e `groups`.
+
+**Gravar C++ na placa (ESP32, UNO, Mega).** Precisa do PlatformIO:
+
+```bash
+sudo apt install pipx && pipx install platformio      # pio em ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/platformio/platformio-core/develop/platformio/assets/system/99-platformio-udev.rules \
+  | sudo tee /etc/udev/rules.d/99-platformio-udev.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+A IDE procura o `pio` no PATH, em `~/.local/bin` e em `~/.platformio/penv/bin`,
+então funciona também quando aberta pelo menu de aplicativos. Na primeira
+gravação de cada tipo de placa, o PlatformIO baixa o compilador (atmelavr ou
+espressif32) para `~/.platformio`. O projeto gerado fica em
+`~/.ladderide/gravar_cpp/<placa>`.
+
+**Factory IO.** O Factory IO só roda no Windows. No Linux, rode-o num PC (ou
+máquina virtual) Windows na mesma rede, escolha no driver o *Network adapter*
+dessa rede e use, no painel Factory IO da IDE, o IP que aparece em *Host*.
+Libere a porta TCP 502 no firewall do Windows e use **Testar** para conferir.
+Com uma máquina virtual, use rede em modo *bridge* (ou encaminhe a porta 502).
+
+**Problemas comuns.**
+- A janela não abre no Wayland: `QT_QPA_PLATFORM=xcb ./LadderIDE`.
+- Erro `xcb-cursor`: `sudo apt install libxcb-cursor0`.
+- "Permissão negada" na porta: falta o grupo `dialout` (ou a sessão não foi reiniciada).
+- "PlatformIO não encontrado": instale com `pipx install platformio` e abra a IDE de novo.
+
 ## 2. Tela
 
 ```
@@ -217,6 +285,17 @@ projeto** adiciona os nomes dos pontos de E/S, e **Abrir programa exemplo**
 carrega uma solução. Erros de lógica aparecem como alarmes vermelhos sobre o
 desenho. Para criar novos ambientes, veja `docs/simulation-environments.md`.
 
+### Factory IO (Modbus TCP)
+
+**Simulação → Factory IO (Modbus TCP)...** liga a simulação a uma cena do Factory IO
+pelo driver *Modbus TCP/IP Server*: os sensores da cena viram as entradas I e as saídas Q
+comandam os atuadores. Informe o endereço, o Slave ID e quantos sensores e atuadores
+trocar, e clique em **Conectar**. Enquanto conectado, a velocidade fica em 1× e o ambiente
+interno fica desligado. A tabela do painel mostra todas as portas do driver (Inputs, Input
+Regs, Coils e Holding Regs) com o endereço no CLP. Para trocar o endereço de um elemento
+do diagrama, dê duplo clique no endereço escrito embaixo dele: a lista mostra a porta do
+Factory IO de cada endereço. Configuração do Factory IO e diagnóstico: `docs/factory-io.md`.
+
 ### Blocos de instrução (F12)
 
 Mostra o diagrama convertido em lista de instruções (IL), um bloco por rede,
@@ -270,9 +349,9 @@ projeto, o firmware usado é a última compilação do PlatformIO
 Em caso de perda de comunicação, a IDE mostra o aviso e tenta reconectar a
 cada 2 s. O CLP continua executando sem a IDE.
 
-### Simulador da placa ESP32 (Ctrl+Shift+E)
+### Simulador da placa (Ctrl+Shift+E)
 
-O painel **Placa ESP32** (embaixo do diagrama) desenha a placa de 8 relés e
+A placa fica no painel **Processo** (embaixo do diagrama), opção **Placa ESP32 / Arduino**. Ela é desenhada e
 mostra como o firmware está configurado. **Ligar ESP32 virtual** inicia o
 dispositivo virtual: o mesmo código C do firmware (`plc_core` + `ladder_vm`)
 compilado para o PC, conversando com a IDE pelo protocolo LDP como a placa real
@@ -280,7 +359,30 @@ faz pela USB. Depois é o mesmo fluxo da placa: **Transferir programa**, **RUN**
 **STOP** e **Reiniciar placa** (o firmware inicia de novo, carrega o programa da
 "flash" e, com `AUTORUN_ON_BOOT = 0`, fica em STOP).
 
-- **Placa:** desenhada como a placa de referência (foto e etiqueta do repositório
+**Painel Processo:** Ambiente animado, Factory IO e Placa são alternativas, porque o programa
+comanda um processo de cada vez. O seletor no topo do painel escolhe qual mostrar, explica em uma
+frase para que ele serve e marca o que está ativo (por exemplo, "Factory IO ● conectado"). O botão
+**Processo** da barra de ferramentas abre o painel na opção escolhida.
+
+**Escolha da placa:** no topo do painel, **Placa** e **Relés** definem o que é simulado.
+A troca só é possível com a placa desligada, e a escolha fica salva entre sessões.
+
+| Placa | Relés | Entradas | Pinos | Placa real |
+|---|---|---|---|---|
+| ESP32 Relay (placa do projeto) | 1 a 8 (versões X1 a X8) | 8 | 74HC595 / 74HC165 | sim |
+| Arduino UNO | 1 a 8, em módulo de relés | 8 | relés D2–D9; entradas A0–A5, D10, D11 | não |
+| Arduino Mega 2560 | 1 a 16, em módulo de relés | 16 | relés D22–D37; entradas D38–D53 | não |
+
+O dispositivo virtual sobe com as entradas e os relés da placa escolhida. Se o projeto
+usar mais entradas ou saídas do que a placa tem, o painel avisa (a placa recusaria a
+transferência) e o botão **Ajustar projeto à placa** reduz as E/S do projeto; Ctrl+Z
+desfaz. Nas placas Arduino, o desenho mostra a placa com os pinos usados destacados
+(laranja = relé ligado, verde = entrada ativa), os fios até o módulo de relés e os
+botões das entradas, que podem ser clicados. As placas Arduino existem **somente na
+simulação**: o firmware do CLP não foi portado para o ATmega328P nem para o ATmega2560,
+e os exemplos de `firmware/examples/` só rodam com a ESP32.
+
+- **Placa ESP32:** desenhada como a placa de referência (foto e etiqueta do repositório
   `multigcs/esp32_relay_x8_modbus_303e32dc812`): relés OUT1–OUT8 com bornes NC/COM/NO,
   contato móvel e LED, LEDs PWR/RX/TX (RX/TX piscam com o tráfego LDP), entradas optoacopladas
   (clique nelas para ligar/desligar), GPIOs usados pelo ESP32 e os
@@ -312,6 +414,32 @@ firmware comanda e lê; nesse caso as entradas vêm dos bornes, não de cliques.
 O simulador não reproduz a eletrônica (tempos dos relés, ruído, alimentação):
 os níveis mostrados são os calculados a partir de `board_config.h`.
 
+### Guia do usuário na IDE (Ctrl+F1)
+
+**Ajuda → Guia do usuário** abre este guia dentro da IDE, com uma imagem de cada
+tela, sumário clicável e busca; clique numa imagem para vê-la em tamanho real. O
+conteúdo fica em `desktop/src/ladderide/help/` (`guia_usuario.html` e `img/`).
+
+### Como funciona a comunicação (Shift+F1)
+
+Em **Ajuda > Como funciona a comunicação** (ou no botão da janela **Sobre**)
+abre-se uma janela, que pode ficar aberta ao lado do editor, com o caminho do
+programa dentro da IDE:
+
+- **Visão geral:** mapa do editor ao compilador, dele ao simulador (ambiente
+  animado ou Factory IO) e ao CLP (cliente LDP, transporte, firmware, relés e
+  supervisório Modbus RTU). Os caminhos em uso acendem e mostram os quadros
+  andando; clicar num bloco ou numa seta explica o que ele faz, como se
+  comunica e onde está no código.
+- **Protocolo LDP:** o quadro desenhado campo a campo, um quadro real em
+  hexadecimal e as tabelas de comandos e de erros (lidas de `protocol.json`).
+- **Transferência:** diagrama de sequência da carga transacional (INFO … COMMIT).
+- **Factory IO (Modbus TCP):** funções Modbus usadas e o mapeamento atual
+  entre a cena e as entradas/saídas do CLP.
+- **Ao vivo:** estado do programa, da simulação, do processo e do dispositivo,
+  e o log de cada pedido e resposta LDP trocados com a placa (com opção de
+  ocultar as leituras periódicas).
+
 ## 8. Linha de comando
 
 ```powershell
@@ -325,6 +453,7 @@ python -m ladderide.cli --virtual status          # dispositivo virtual
 python -m ladderide.cli verify projeto.ladproj      # verificacao para o ESP32 (codigo de saida 1 se houver erro)
 python -m ladderide.cli il projeto.ladproj -o projeto.il   # blocos de instrucao
 python -m ladderide.cli cpp projeto.ladproj -o projeto.cpp # codigo C++ (nao precisa compilar)
+python -m ladderide.cli factoryio 127.0.0.1 --count 0      # testa a ligacao com o Factory IO
 ```
 
 ## 9. Segurança

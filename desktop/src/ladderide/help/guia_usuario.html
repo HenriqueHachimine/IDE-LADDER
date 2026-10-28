@@ -1,0 +1,234 @@
+<!-- Guia do usuario exibido em Ajuda > Guia do usuario.
+     Cada <h2>/<h3> com <a name> vira um item do sumario. {W} = largura das imagens (ajustada ao painel).
+     As imagens ficam em img/ e sao geradas a partir da IDE (mesma interface que o usuario ve). -->
+<h1>LadderIDE — Guia do usuário</h1>
+<p>A LadderIDE é um ambiente para programar um CLP em linguagem LADDER: você desenha o programa,
+testa na simulação (com processos animados ou com o Factory IO) e transfere para a placa
+ESP32. Este guia mostra cada tela e como usá-la. Use o sumário à esquerda ou a busca.</p>
+
+<h2><a name="janela"></a>1. A janela principal</h2>
+<p><img src="img/01_janela.png" width="{W}"></p>
+<ul>
+<li><b>Barra de ferramentas</b>, na ordem do trabalho: arquivo e edição (novo, abrir, salvar,
+desfazer, nova rede, zoom); <b>C++</b> e <b>Compilar</b>; simulação (executar, pausar, uma
+varredura, uma instrução, reiniciar, parar e velocidade); <b>Processo</b>; e verificar para o ESP32.</li>
+<li><b>Instruções</b> (esquerda): a paleta de contatos, bobinas, temporizadores, contadores,
+comparação e matemática. Arraste para o diagrama ou clique para inserir depois do elemento
+selecionado.</li>
+<li><b>Diagrama</b> (centro): as redes numeradas entre os trilhos de alimentação.</li>
+<li><b>Embaixo do diagrama</b>: Mensagens, Símbolos e Processo.</li>
+<li><b>Direita</b>: Simulador, Dispositivo, Blocos de instrução e Código C++.</li>
+<li><b>Barra de status</b>: o selo do modo (EDIÇÃO, SIMULAÇÃO ou ONLINE), o resultado da
+compilação, o estado do ESP32 e o cadeado que trava o layout.</li>
+</ul>
+<p>Os painéis podem ser arrastados, soltos como janelas ou fechados. <b>Exibir → Painéis</b> reabre um
+painel e <b>Exibir → Restaurar layout padrão</b> volta à organização original. <b>Exibir → Travar
+layout</b> (Ctrl+Alt+L) impede mudanças acidentais.</p>
+
+<h2><a name="projeto"></a>2. Criar um projeto</h2>
+<p><b>Arquivo → Novo</b> (Ctrl+N). Dê um nome e escolha o <b>tipo de processador</b> na lista,
+agrupada por família, como no RSLogix 500. Ele define quantas entradas e saídas o projeto tem,
+quantas memórias, temporizadores, contadores e registradores pode usar e o tamanho do programa
+(instruções e redes). Abaixo da lista aparecem os limites e as portas de comunicação.</p>
+<ul>
+<li><b>Placa do projeto e simulação</b>: <i>ESP32 Relay X8</i> (8 entradas e 8 relés, com firmware
+real), <i>Somente simulação</i> (16 E/S) e <i>Personalizado</i>.</li>
+<li><b>Arduino</b>: <i>UNO</i> (8 E/S, memória menor) e <i>Mega 2560</i> (16 E/S). A aba Placa
+passa a simular a placa escolhida.</li>
+<li><b>Allen-Bradley SLC 500 modular</b> (5/01 a 5/05), <b>MicroLogix 1000</b> e <b>SLC 500 fixo</b>
+(L20, L30, L40): a memória real (1K a 64K palavras) é escalada para a IDE, e cada família tem
+sua quantidade de E/S, inclusive os de 18, 20 e 24 entradas (L30, MicroLogix Analog, L40).
+Esses são somente de simulação: a placa vai até 16 entradas.</li>
+</ul>
+<p>Se o programa passar da memória do processador, o compilador acusa
+<i>memória de programa esgotada</i>. Para mudar depois: <b>Programa → Propriedades</b>.</p>
+<p><img src="img/02_novo_projeto.png"></p>
+<p>Projetos de exemplo ficam na pasta <code>examples</code> da instalação (<b>Arquivo → Abrir</b>); cada ambiente animado também tem o botão <b>Abrir exemplo</b>.</p>
+
+<h2><a name="editar"></a>3. Editar o diagrama</h2>
+<table border="1" cellspacing="0" cellpadding="5">
+<tr><th>Ação</th><th>Como fazer</th></tr>
+<tr><td>Inserir</td><td>Arraste da paleta até a área destacada em azul (entre contatos, num ramo, na coluna de
+saídas ou abaixo da última rede para criar outra)</td></tr>
+<tr><td>Mover</td><td>Arraste o elemento para outro ponto</td></tr>
+<tr><td>Editar tipo, operando e preset</td><td>Duplo clique no elemento (ou Enter)</td></tr>
+<tr><td>Trocar só o endereço</td><td>Duplo clique no nome escrito acima do elemento</td></tr>
+<tr><td>Ramo paralelo (OU)</td><td>Arraste "Paralelo" ou botão direito → Envolver em ramo paralelo</td></tr>
+<tr><td>Excluir</td><td>Delete</td></tr>
+<tr><td>Redes</td><td>Botão direito no número da rede: inserir, comentar, excluir; Ctrl+R cria uma rede</td></tr>
+<tr><td>Desfazer / refazer</td><td>Ctrl+Z / Ctrl+Y</td></tr>
+<tr><td>Zoom</td><td>Ctrl + roda do mouse, Ctrl++ / Ctrl+-, Ctrl+0</td></tr>
+</table>
+
+<h3><a name="elemento"></a>Propriedades do elemento</h3>
+<p>O duplo clique abre a janela do elemento: tipo (por exemplo, TON, TOF ou RTO), operando (endereço
+ou símbolo) e, nos temporizadores e contadores, o preset. Embaixo aparece um lembrete dos
+endereços válidos.</p>
+<p><img src="img/03_elemento.png"></p>
+
+<h3><a name="endereco"></a>Troca rápida de endereço</h3>
+<p>Duplo clique no nome acima do contato ou da bobina abre uma caixa sobre o diagrama. Digite
+o endereço ou escolha um símbolo da lista; <b>Enter</b> confirma e <b>Esc</b> cancela. Com o
+Factory IO configurado, a lista também mostra a porta da cena ligada a cada endereço.</p>
+<p><img src="img/04_endereco.png" width="{W}"></p>
+<p>Endereços: <code>I0.0</code>–<code>I1.7</code> entradas, <code>Q0.0</code>–<code>Q1.7</code> saídas,
+<code>M0.0</code>–<code>M31.7</code> memórias, <code>T0</code> temporizadores, <code>C0</code>
+contadores, <code>T0.DN</code>/<code>C0.DN</code> bit de concluído, <code>N0</code> registradores,
+<code>S0.0</code> primeira varredura e <code>S0.3</code> relógio de 1 s.</p>
+
+<h3><a name="simbolos"></a>Símbolos</h3>
+<p>Na aba <b>Símbolos</b> você dá nomes aos endereços (por exemplo, <code>Partida</code> =
+<code>I0.0</code>) e escreve um comentário. O diagrama, o C++ e a simulação passam a mostrar o
+nome. Renomear um símbolo atualiza todos os elementos que o usam.</p>
+<p><img src="img/05_simbolos.png" width="{W}"></p>
+
+<h2><a name="codigo"></a>4. Código C++ e blocos de instrução</h2>
+<h3><a name="cpp"></a>Código C++ (Ctrl+F7)</h3>
+<p>Mostra o diagrama traduzido para C++ antes mesmo de compilar, refeito a cada edição: contatos em
+série viram <code>&amp;&amp;</code>, ramos paralelos <code>||</code>, contato NF <code>!</code>.
+Clicar numa linha seleciona a rede no diagrama e vice-versa. Erros aparecem como comentários
+<code>// ERRO</code> na rede. <b>Copiar código</b> e <b>Salvar .cpp</b> exportam o arquivo.</p>
+<p><b>Gravar na placa...</b> (também em <b>Dispositivo → Gravar C++ na placa</b>) compila esse C++
+com o PlatformIO e grava direto no <b>ESP32</b>, no <b>Arduino UNO</b> ou no <b>Arduino Mega</b>
+pela USB. Escolha a placa e a porta; <b>Compilar</b> só confere se cabe, <b>Gravar</b> envia. No
+UNO e no Mega, os relés e as entradas usam os pinos da aba Placa. A placa passa a rodar o
+programa sozinha e o monitor serial (115200 bit/s) narra cada mudança. Atenção: isso substitui
+o firmware do CLP; para voltar a transferir pela IDE, grave o firmware de novo. Na primeira
+vez de cada tipo de placa, o PlatformIO baixa o compilador.</p>
+<p><img src="img/06_codigo_cpp.png" width="{W}"></p>
+
+<h3><a name="il"></a>Blocos de instrução (F12)</h3>
+<p>O programa como lista de instruções (IL), na ordem em que o CLP executa: mnemônico,
+operando, símbolo e o que cada instrução faz. Na simulação as linhas ficam verdes quando o
+resultado lógico é 1.</p>
+<p><img src="img/07_blocos_il.png" width="{W}"></p>
+
+<h3><a name="compilar"></a>Compilar (F7)</h3>
+<p>Erros e avisos aparecem em <b>Mensagens</b> com o número da rede; clique na mensagem para
+selecionar o elemento com problema. Programas com erro não são simulados nem transferidos.</p>
+
+<h2><a name="simular"></a>5. Simular</h2>
+<table border="1" cellspacing="0" cellpadding="5">
+<tr><th>Tecla</th><th>Ação</th></tr>
+<tr><td>F5</td><td>Executar continuamente</td></tr>
+<tr><td>F6</td><td>Pausar</td></tr>
+<tr><td>F10</td><td>Uma varredura</td></tr>
+<tr><td>F11</td><td>Uma instrução (a instrução atual fica destacada)</td></tr>
+<tr><td>Ctrl+F5</td><td>Reiniciar (partida a frio)</td></tr>
+<tr><td>Shift+F5</td><td>Parar e voltar à edição</td></tr>
+<tr><td>Ctrl+. / Ctrl+,</td><td>Acelerar / desacelerar</td></tr>
+<tr><td>Ctrl+;</td><td>Voltar ao tempo real (1×)</td></tr>
+</table>
+<p>Durante a simulação, o que conduz fica verde e as caixas mostram PRE, ACC e os bits. O painel
+<b>Simulador</b> mostra o estado, as varreduras, o tempo simulado e a velocidade real; as
+<b>Entradas</b> são botões (marque <i>Botões pulsadores</i> para que soltem sozinhos) e as
+<b>Saídas</b> acendem conforme o programa. O tempo é virtual: acelerar não muda o resultado.</p>
+
+<h3><a name="processo"></a>Painel Processo</h3>
+<p>O programa comanda um processo de cada vez, por isso Ambiente animado, Factory IO e Placa ficam
+num só painel, com um seletor no topo. O seletor marca o que está ativo (por exemplo,
+"Ambiente animado ● em uso"). O botão <b>Processo</b> da barra de ferramentas abre o painel.</p>
+
+<h3><a name="ambiente"></a>Ambiente animado (Ctrl+E)</h3>
+<p>Escolha um processo desenhado: semáforo, silo de envase, portão, elevador, linha de garrafas,
+compressores ou misturador. As saídas Q acionam motores, válvulas e lâmpadas, e os sensores do
+processo alimentam as entradas I (essas entradas aparecem marcadas no painel Simulador). Clique
+nos botões desenhados no próprio ambiente. <b>Criar símbolos</b> adiciona os nomes dos pontos
+de E/S ao projeto e <b>Abrir exemplo</b> carrega uma solução pronta.</p>
+<p><img src="img/08_simulacao_ambiente.png" width="{W}"></p>
+<p>O ambiente <b>Simulador de E/S</b> tem uma botoeira para cada entrada e uma lâmpada para cada
+saída <i>do controlador do projeto</i>: trocando o controlador, a quantidade muda. Clique na
+etiqueta ao lado da botoeira (<b>P NA</b>, <b>P NF</b>, <b>C NA</b>, <b>C NF</b>) para trocar o tipo:
+pulsador ou chave com trava, normalmente aberto ou fechado. O <b>Simulador BCD</b> tem uma
+thumbwheel de 4 dígitos, que escreve <code>N0</code> em BCD (converta com <b>FRD</b>), e um display
+que mostra <code>N1</code> em BCD (escreva com <b>TOD</b>).</p>
+
+<h3><a name="factoryio"></a>Factory IO (Modbus TCP)</h3>
+<p>Liga a simulação a uma cena 3D do Factory IO. No Factory IO, escolha o driver
+<i>Modbus TCP/IP Server</i> e inicie a cena. Na IDE, informe o IP (o <i>Host</i> do driver), a
+porta e o Slave ID; <b>Testar</b> confere se o Factory IO responde, sem escrever nada. Depois
+clique em <b>Conectar</b>. Os sensores da cena viram entradas I e
+as saídas Q comandam os atuadores. Enquanto conectado, a simulação roda em 1×.</p>
+<p><img src="img/09_factoryio.png" width="{W}"></p>
+<p>A tabela mostra cada porta do driver com o endereço no CLP e o valor atual. A coluna
+<b>Símbolo</b> é editável (duplo clique). <b>Configurar driver...</b> mostra as opções na
+mesma ordem da página <i>Configuration</i> do driver (Auto connect, Write/Read Digital,
+Write/Read Register, Scale, Offset e Count de cada tabela) e confere a configuração enquanto
+você edita:</p>
+<p><img src="img/10_portas_driver.png"></p>
+
+<h2><a name="placa"></a>6. Placa ESP32 / Arduino</h2>
+<p>A placa simulada roda no PC o mesmo firmware C do CLP e conversa com a IDE pelo mesmo
+protocolo da placa real. <b>Ligar ESP32 virtual</b> (ou <b>Ligar Arduino Mega virtual</b>) inicia o dispositivo virtual; depois o fluxo é o da placa
+real: <b>Transferir programa</b>, <b>RUN</b>, <b>STOP</b> e <b>Reiniciar placa</b>. Clique nas
+entradas desenhadas (IN1… IN8) para acioná-las; os relés mudam conforme o programa.</p>
+<p><img src="img/11_placa_esp32.png" width="{W}"></p>
+<p>No topo, <b>Placa</b> escolhe entre ESP32 Relay (1 a 8 relés), Arduino UNO (1 a 8) e Arduino
+Mega 2560 (1 a 16), e <b>Relés</b> define quantos relés o módulo tem. A troca só é possível com a
+placa desligada. Se o projeto usa mais E/S do que a placa tem, o painel avisa e oferece ajustar o
+projeto. No Arduino, os pinos usados pelos relés e pelas entradas ficam destacados.</p>
+<p><img src="img/12_placa_mega.png" width="{W}"></p>
+
+<h2><a name="dispositivo"></a>7. Dispositivo (placa real)</h2>
+<ol>
+<li><b>Primeira vez:</b> Dispositivo → <b>Gravar firmware na placa...</b>, escolha a porta COM e
+clique em Gravar. Se a placa não entrar no modo de gravação, segure BOOT, aperte e solte RST e
+solte BOOT.</li>
+<li>Aba <b>Dispositivo</b> (direita): em <i>Meio</i>, escolha Serial (e a COM) ou Dispositivo
+virtual, e clique em <b>Conectar</b>.</li>
+<li><b>Transferir programa</b> (F8): compila, pede confirmação se o CLP estiver em RUN, envia em
+blocos com CRC; o firmware valida e só então troca o programa. Se algo falhar, o programa
+anterior continua.</li>
+<li><b>RUN</b> e <b>STOP</b> colocam o CLP em execução ou parada.</li>
+<li><b>Monitor online</b> anima o diagrama com o estado lido da placa a cada 200 ms (só quando o
+programa na placa é igual ao projeto aberto).</li>
+</ol>
+<p><img src="img/13_dispositivo.png" width="{W}"></p>
+<p>Se a comunicação cair, a IDE avisa e tenta reconectar a cada 2 s. O CLP continua executando
+sem a IDE.</p>
+
+<h3><a name="verificar"></a>Verificar para o ESP32 (F9)</h3>
+<p>Antes de transferir, <b>Programa → Verificar para ESP32</b> gera um relatório: compilação e
+imagem, validação pelo código C do firmware, equivalência entre o simulador e o firmware (400
+varreduras), E/S da placa, memória e limites, temporização e, com a placa conectada, o tempo de
+varredura medido.</p>
+<p><img src="img/14_verificar_esp32.png" width="{W}"></p>
+
+<h2><a name="comunicacao"></a>8. Como funciona a comunicação</h2>
+<p><b>Ajuda → Como funciona a comunicação</b> (Shift+F1) mostra por onde o programa passa: do
+editor ao compilador, dele ao simulador (ambiente ou Factory IO) e à placa. Os caminhos em uso
+acendem; clique num bloco ou numa seta para ver a explicação. As outras abas detalham o quadro do
+protocolo LDP, a transferência passo a passo, o Modbus TCP do Factory IO e o tráfego ao vivo.</p>
+<p><img src="img/15_comunicacao.png" width="{W}"></p>
+<p>Na aba <b>Ao vivo</b>, cada pedido e resposta trocados com a placa aparece no log:</p>
+<p><img src="img/16_comunicacao_ao_vivo.png" width="{W}"></p>
+
+<h2><a name="aparencia"></a>9. Aparência</h2>
+<p><b>Exibir → Tema</b>: Claro, Escuro ou Seguir o Windows. <b>Ctrl+Shift+T</b> alterna entre claro
+e escuro. A escolha fica salva.</p>
+<p><img src="img/17_tema_escuro.png" width="{W}"></p>
+
+<h2><a name="atalhos"></a>10. Atalhos</h2>
+<table border="1" cellspacing="0" cellpadding="5">
+<tr><th>Atalho</th><th>Ação</th></tr>
+<tr><td>Ctrl+N / Ctrl+O / Ctrl+S</td><td>Novo, abrir, salvar</td></tr>
+<tr><td>Ctrl+R</td><td>Nova rede</td></tr>
+<tr><td>F7</td><td>Compilar</td></tr>
+<tr><td>Ctrl+F7</td><td>Código C++</td></tr>
+<tr><td>F12</td><td>Blocos de instrução</td></tr>
+<tr><td>F5 / F6 / Shift+F5</td><td>Executar, pausar, parar a simulação</td></tr>
+<tr><td>Ctrl+E</td><td>Ambiente animado</td></tr>
+<tr><td>Ctrl+Shift+E</td><td>Placa ESP32 / Arduino</td></tr>
+<tr><td>F8</td><td>Transferir programa</td></tr>
+<tr><td>F9</td><td>Verificar para o ESP32</td></tr>
+<tr><td>F1</td><td>Referência das instruções</td></tr>
+<tr><td>Ctrl+F1</td><td>Este guia</td></tr>
+<tr><td>Shift+F1</td><td>Como funciona a comunicação</td></tr>
+<tr><td>Ctrl+Shift+T</td><td>Alternar tema</td></tr>
+<tr><td>Ctrl+Alt+L</td><td>Travar layout</td></tr>
+</table>
+
+<h2><a name="seguranca"></a>11. Segurança</h2>
+<p>A LadderIDE é um trabalho acadêmico e <b>não é um CLP de segurança</b>. Não use para
+proteger pessoas ou equipamentos. Teste sempre na simulação antes de ligar cargas reais, e
+mantenha uma parada de emergência física, independente do CLP.</p>

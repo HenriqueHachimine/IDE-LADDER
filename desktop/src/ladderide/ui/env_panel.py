@@ -13,8 +13,9 @@ from .fonts import ui_font
 
 VIEW_BG = themed("#e2e8f0", "#0b1120")
 VIEW_TEXT = themed("#64748b", "#94a3b8")
+VALUE_ON = themed("#15803d", "#4ade80")
 
-KIND_TEXT = {BUTTON: "botao", SWITCH: "chave", "sensor": "sensor"}
+KIND_TEXT = {BUTTON: "botão", SWITCH: "chave", "sensor": "sensor"}
 
 
 class EnvironmentView(QWidget):
@@ -45,7 +46,7 @@ class EnvironmentView(QWidget):
         if self.env is None:
             p.setPen(VIEW_TEXT)
             p.setFont(ui_font(10))
-            p.drawText(self.rect(), Qt.AlignCenter, "Escolha um ambiente de simulacao acima")
+            p.drawText(self.rect(), Qt.AlignCenter, "Escolha um ambiente de simulação acima")
             return
         scale, ox, oy = self._transform()
         w, h = self.env.size
@@ -99,9 +100,11 @@ class EnvironmentPanel(QWidget):
     environmentChanged = Signal(str)      # id ("" = nenhum)
     symbolsRequested = Signal()
     exampleRequested = Signal(str)
+    plantChanged = Signal()               # o ambiente refez os pontos de E/S (troca de controlador)
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.io = (8, 8, 32)                # entradas, saidas e registradores N do projeto
         self.env: Environment | None = None
         self.plant: EnvironmentPlant | None = None
         layout = QVBoxLayout(self)
@@ -120,7 +123,7 @@ class EnvironmentPanel(QWidget):
         self.description.setWordWrap(True)
         self.description.setObjectName("muted")
         self.reset_btn = QPushButton("Reiniciar")
-        self.symbols_btn = QPushButton("Criar simbolos")
+        self.symbols_btn = QPushButton("Criar símbolos")
         self.example_btn = QPushButton("Abrir exemplo")
         self.reset_btn.setToolTip("Volta o processo ao estado inicial")
         self.symbols_btn.setToolTip("Adiciona ao projeto os nomes dos pontos de E/S do ambiente")
@@ -141,7 +144,7 @@ class EnvironmentPanel(QWidget):
         self.stats.setWordWrap(True)
         side.addWidget(self.stats)
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Endereco", "Nome", "Tipo", "Valor"])
+        self.table.setHorizontalHeaderLabels(["Endereço", "Nome", "Tipo", "Valor"])
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setShowGrid(False)
@@ -176,19 +179,28 @@ class EnvironmentPanel(QWidget):
         env_id = self.combo.currentData() or ""
         self._set(create(env_id) if env_id else None)
 
+    def set_io(self, n_inputs: int, n_outputs: int, n_words: int) -> None:
+        """Quantidades do projeto; ambientes que se adaptam ao controlador refazem os pontos."""
+        self.io = (n_inputs, n_outputs, n_words)
+        if self.env is not None and self.env.configure(*self.io):
+            self._set(self.env)
+            self.plantChanged.emit()
+
     def _set(self, env: Environment | None) -> None:
+        if env is not None:
+            env.configure(*self.io)
         self.env = env
         self.plant = EnvironmentPlant(env) if env is not None else None
         self.view.env = env
         self.description.setText(env.description if env else
-                                 "Escolha um processo animado (silo, semaforo, portao...) para testar a logica.")
+                                 "Escolha um processo animado (silo, semáforo, portão...) para testar a lógica.")
         for b in (self.reset_btn, self.symbols_btn):
             b.setEnabled(env is not None)
         self.example_btn.setEnabled(env is not None and bool(env.example))
         points = ([("in", p) for p in env.inputs] + [("out", p) for p in env.outputs]) if env else []
         self.table.setRowCount(len(points))
         for row, (direction, pt) in enumerate(points):
-            kind = KIND_TEXT.get(pt.kind, pt.kind) if direction == "in" else "saida"
+            kind = KIND_TEXT.get(pt.kind, pt.kind) if direction == "in" else "saída"
             if pt.normally_closed:
                 kind += " NF"
             for col, text in enumerate((pt.address, pt.label, kind, "-")):
@@ -223,8 +235,14 @@ class EnvironmentPanel(QWidget):
         if self.env is None:
             return
         values = self.plant.input_values()
+        current = {p.key: p for p in self.env.inputs}       # o tipo da botoeira pode mudar
         for row, (direction, pt) in enumerate(self._points):
+            if direction == "in" and pt.key in current and current[pt.key] != pt:
+                pt = current[pt.key]
+                self._points[row] = (direction, pt)
+                self.table.item(row, 2).setText(KIND_TEXT.get(pt.kind, pt.kind) + (" NF" if pt.normally_closed else ""))
+                self.table.item(row, 2).setToolTip(pt.description)
             v = values.get(pt.key) if direction == "in" else self.env.out.get(pt.key)
             item = self.table.item(row, 3)
             item.setText("1" if v else "0")
-            item.setForeground(QColor("#16a34a") if v else VIEW_TEXT)
+            item.setForeground(VALUE_ON if v else VIEW_TEXT)

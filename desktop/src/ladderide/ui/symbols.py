@@ -30,7 +30,7 @@ MATH_HEAD = (themed((243, 232, 255), (76, 29, 149)), themed((107, 33, 168), (233
 COMPARE_KINDS = ("EQU", "NEQ", "LES", "GRT", "LEQ", "GEQ", "LIM", "MEQ")
 MATH_KINDS = ("ADD", "SUB", "MUL", "DIV", "SQR", "NEG", "TOD", "FRD")
 BLOCK_TITLE = {"EQU": "A = B", "NEQ": "A \u2260 B", "LES": "A < B", "GRT": "A > B", "LEQ": "A \u2264 B",
-               "GEQ": "A \u2265 B", "LIM": "faixa", "MEQ": "mascara", "ADD": "A + B", "SUB": "A \u2212 B",
+               "GEQ": "A \u2265 B", "LIM": "faixa", "MEQ": "máscara", "ADD": "A + B", "SUB": "A \u2212 B",
                "MUL": "A \u00d7 B", "DIV": "A \u00f7 B", "SQR": "\u221a", "NEG": "\u2212x", "TOD": "\u2192 BCD",
                "FRD": "BCD \u2192"}
 
@@ -73,8 +73,16 @@ def _labels(p: QPainter, r: QRectF, st: SymbolState, top: float, bottom: float) 
             size -= 0.5
             p.setFont(_font(size, True))
         p.setPen(LABEL)
-        p.drawText(QRectF(r.left() + 3, r.top(), avail, top - r.top() - 2), Qt.AlignHCenter | Qt.AlignBottom,
-                   p.fontMetrics().elidedText(st.label, Qt.ElideRight, int(avail)))
+        area = QRectF(r.left() + 3, r.top(), avail, top - r.top() - 2)
+        fm = p.fontMetrics()
+        text = st.label
+        if fm.horizontalAdvance(text) > avail and "_" in text and area.height() >= 2 * fm.height():
+            cut = min((i for i, ch in enumerate(text) if ch == "_"), key=lambda i: abs(i - len(text) / 2))
+            text = text[:cut + 1] + "\n" + text[cut + 1:]           # quebra no "_" mais perto do meio
+            text = "\n".join(fm.elidedText(line, Qt.ElideRight, int(avail)) for line in text.split("\n"))
+        else:
+            text = fm.elidedText(text, Qt.ElideRight, int(avail))
+        p.drawText(area, Qt.AlignHCenter | Qt.AlignBottom, text)
     if st.sublabel:
         p.setFont(_font(7.5, False, "mono"))
         p.setPen(SUBLABEL)
