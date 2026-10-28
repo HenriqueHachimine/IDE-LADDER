@@ -95,7 +95,7 @@ def test_cpp_panel_shows_code_before_compiling(window):
     old = contact.operand
     contact.operand = "Nao_Existe"
     w.modified()
-    assert "// ERRO: variavel nao declarada: Nao_Existe" in panel.text
+    assert "// ERRO: variável não declarada: Nao_Existe" in panel.text
     contact.operand = old
     w.modified()
     assert "ERRO" not in panel.text
@@ -148,14 +148,14 @@ def test_layout_fits_laptop_screen_and_follows_work_mode(window):
     buttons = [tb.widgetForAction(act) for tb in w.toolbars for act in tb.actions() if not act.isSeparator()]
     texts = [b for b in buttons if isinstance(b, mw.QToolButton) and b.toolButtonStyle() == mw.Qt.ToolButtonTextBesideIcon]
     assert len(texts) == 6                                      # demais acoes: so icone (cabe em 1366 px)
-    assert w.env_dock.objectName() == "dock_env" and w.dockWidgetArea(w.env_dock) == mw.Qt.BottomDockWidgetArea
+    assert w.env_dock.objectName() == "dock_process" and w.dockWidgetArea(w.env_dock) == mw.Qt.BottomDockWidgetArea
     w.file_open(str(PORTAO))
-    assert w.status_mode.text() == "EDICAO" and w.palette_dock.isVisible()
+    assert w.status_mode.text() == "EDIÇÃO" and w.palette_dock.isVisible()
     w.sim_run()
-    assert w.status_mode.text() == "SIMULACAO" and not w.palette_dock.isVisible()
+    assert w.status_mode.text() == "SIMULAÇÃO" and not w.palette_dock.isVisible()
     w.sim_stop()
     w._update_actions()
-    assert w.status_mode.text() == "EDICAO" and w.palette_dock.isVisible()
+    assert w.status_mode.text() == "EDIÇÃO" and w.palette_dock.isVisible()
     menu = [a.text() for a in w.device_menu.actions()]
     assert "Verificar para ESP32" in menu and "Monitor online" in menu
     assert not w.actions_["dev_run"].isEnabled()                 # sem dispositivo conectado
@@ -237,3 +237,99 @@ def test_compare_and_math_blocks_from_palette_show_live_values(window, monkeypat
     values = [w.sim_panel.io.variables.item(r, 2).text() for r in range(w.sim_panel.io.variables.rowCount())]
     assert values[names.index("N0")] == "4"
     w.sim_stop()
+
+
+def test_process_panel_shows_one_process_at_a_time(window):
+    """Ambiente, Factory IO e Placa ficam num painel so, com seletor: um processo por vez."""
+    app, w = window
+    panel = w.process_panel
+    assert w.env_dock is w.fio_dock is w.esp32_dock is w.process_dock
+    for show, key in ((w.show_factoryio, "fio"), (w.show_esp32, "board"), (w.show_environment, "env")):
+        show()
+        assert panel.current == key and panel.buttons[key].isChecked()
+        assert panel.stack.currentIndex() == panel.pages[key]
+    w.file_open(str(PORTAO))                                     # projeto com ambiente: abre nele
+    w._update_process_status()
+    assert panel.current == "env" and "em uso" in panel.buttons["env"].text()
+    assert panel.buttons["fio"].text() == "Factory IO"           # nada conectado: sem selo
+
+
+def test_comm_guide_shows_live_paths_and_traffic(window):
+    """Ajuda > Como funciona a comunicação: mapa ao vivo, tabelas do protocol.json e tráfego LDP."""
+    from ladderide.comm.protocol import SPEC
+    app, w = window
+    menu = next(a.menu() for a in w.menuBar().actions() if a.menu() and "Aj" in a.text())
+    assert w.actions_["comm_guide"] in menu.actions()
+    w.file_open(str(PORTAO))
+    w.compile()
+    w.sim_run()
+    w.actions_["comm_guide"].trigger()
+    d = w.comm_guide
+    d.refresh()
+    assert {"compiler", "sim", "env", "e_plant"} <= d.map.active
+    assert not {"fio", "client", "e_ldp"} & d.map.active          # nada conectado
+    assert d.tabs.count() == 5
+    rows = sorted(t.rowCount() for t in d.tabs.widget(1).findChildren(mw.QTableWidget))
+    assert rows == sorted([len(SPEC["commands"]), len(SPEC["errors"])])   # comandos e erros
+    d.map.select("e_fio")
+    assert "Modbus TCP" in d.details.toPlainText()
+    w.session.traffic.emit("TX", "LOAD_BEGIN", 7, 18)
+    w.session.traffic.emit("TX", "STATUS", 8, 10)                 # leitura periódica: oculta no log
+    assert "LOAD_BEGIN" in d.log.toPlainText() and "STATUS" not in d.log.toPlainText()
+    assert d.counts["TX"] == 2
+    w.sim_stop()
+    d.close()
+
+
+def test_user_guide_has_screens_toc_and_search(window):
+    """Ajuda > Guia do usuário: sumário das seções, imagens das telas, busca e ampliação."""
+    import re
+    from PySide6.QtCore import QUrl
+    from ladderide.ui import user_guide as ug
+    app, w = window
+    menu = next(a.menu() for a in w.menuBar().actions() if a.menu() and "Aj" in a.text())
+    assert w.actions_["user_guide"] in menu.actions()
+    source = ug.load_guide()
+    images = re.findall(r'<img src="([^"]+)"', source)
+    assert len(images) >= 15
+    assert all((ug.HELP_DIR / img).is_file() for img in images)            # toda imagem citada existe
+    w.actions_["user_guide"].trigger()
+    d = w.user_guide
+    app.processEvents()
+    tops = [d.tree.topLevelItem(i).text(0) for i in range(d.tree.topLevelItemCount())]
+    assert tops[0] == "1. A janela principal" and any("Factory IO" in d.tree.topLevelItem(i).child(j).text(0)
+                                                     for i in range(len(tops))
+                                                     for j in range(d.tree.topLevelItem(i).childCount()))
+    d.search.setText("Modbus TCP")
+    assert d.found.text() == ""                                             # encontrado
+    d.search.setText("xyz-nao-existe")
+    assert d.found.text() == "nada encontrado"
+    d._link(QUrl("zoom:" + images[0]))
+    zoom = d.findChildren(ug.ImageDialog)
+    assert zoom and not zoom[0].findChild(mw.QLabel).pixmap().isNull()
+    d.close()
+
+
+def test_opening_project_adjusts_io_and_io_simulator_to_controller(tmp_path):
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtWidgets import QApplication
+    from ladderide.model.controllers import apply_controller, controller_by_id
+    from ladderide.model.project import Coil, Contact, Project, Rung
+    from ladderide.ui import main_window as mw
+    QApplication.instance() or QApplication([])
+    p = Project(name="Antigo")
+    apply_controller(p, controller_by_id("1747-l40a"))
+    p.io.n_inputs, p.io.n_outputs = 8, 8                                  # E/S diferentes do controlador
+    p.environment = "simulador_es"
+    p.rungs = [Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")])]
+    path = tmp_path / "antigo.ladproj"
+    p.save(path)
+    w = mw.MainWindow(persist_layout=False)
+    w.file_open(str(path))
+    env = w.env_panel.env
+    assert (w.project.io.n_inputs, w.project.io.n_outputs) == (24, 16) and w.dirty
+    assert (len(env.inputs), len(env.outputs)) == (24, 16)
+    assert "24 entradas" in w.statusBar().currentMessage()
+    w.dirty = False
+    w.close()

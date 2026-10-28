@@ -16,8 +16,14 @@ e cada ambiente fica em um arquivo independente.
 | **Linha de garrafas** (`garrafas`) | I0.0 Start, I0.1 Stop (NF), I0.2 garrafa no bico, I0.3 nível OK, I0.4 garrafa na inspeção, I0.5 chave garrafa grande, I0.6 garrafa caindo na caixa, I0.7 caixa posicionada | Q0.0 esteira de garrafas, Q0.1 válvula, Q0.2 rejeitor, Q0.3 esteira de caixas, Q0.4 RUN | `examples/ambientes/garrafas.ladproj` |
 | **Central de ar comprimido** (`compressores`) | I0.0 Start, I0.1 Stop (NF), I0.2 pressostato 1 (100/120 psi), I0.3 pressostato 2 (90/110 psi), I0.4/I0.5 relés térmicos (NF) | Q0.0 motor 1, Q0.1 motor 2, Q0.2 dreno, Q0.3 RUN, Q0.4 falha | `examples/ambientes/compressores.ladproj` |
 | **Misturador de batelada** (`misturador`) | I0.0 Start, I0.1 Stop (NF), I0.2 nível baixo, I0.3 nível alto, I0.4 termostato, I0.5/I0.6 fluxômetros (1 pulso/L) | Q0.0 bomba A, Q0.1 bomba B, Q0.2 misturador, Q0.3 bomba de saída, Q0.4 aquecedor, Q0.5 RUN, Q0.6 cheio | `examples/ambientes/misturador.ladproj` |
+| **Simulador de E/S e BCD** (`simulador_es`) | uma botoeira por entrada do controlador (I0.0–I1.7); tipo trocável: pulsador NA/NF ou chave NA/NF; thumbwheel BCD em N0 | uma lâmpada por saída do controlador (Q0.0–Q1.7); display BCD de N1 | `examples/ambientes/simulador_es.ladproj` |
 
-Todos usam no máximo 8 entradas e 8 saídas digitais, como a placa. Grandezas analógicas do processo (pressão, temperatura, nível, vazão) chegam ao CLP como em instalações reais com entradas digitais: pressostatos e termostatos com diferencial, chaves de nível e fluxômetros de pulso.
+Os processos usam no máximo 8 entradas e 8 saídas digitais, como a placa. O
+**Simulador de E/S** é a exceção: ele implementa `configure(n_inputs,
+n_outputs, n_words)` e refaz os pontos sempre que o controlador do projeto
+muda (ESP32: 8/8; SLC 5/05: 16/16; Arduino UNO: 8/8...). A thumbwheel e o
+display usam `input_words()` e `advance_words()`, que escrevem e leem
+registradores N; o BCD exige ao menos 2 registradores N. Grandezas analógicas do processo (pressão, temperatura, nível, vazão) chegam ao CLP como em instalações reais com entradas digitais: pressostatos e termostatos com diferencial, chaves de nível e fluxômetros de pulso.
 
 Cada ambiente também detecta erros de lógica e mostra **alarmes**, por exemplo:
 produto derramado, verdes simultâneos, colisão no cruzamento, motor comandado

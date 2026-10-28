@@ -7,11 +7,66 @@ ensaios na placa real.
 ## [Não lançado]
 
 ### Corrigido
+- Trocar o controlador em Programa → Propriedades só reduzia as E/S: ao passar de um de 8 E/S
+  para um de 16, o projeto (e o Simulador de E/S) ficava com 8. Agora as E/S do projeto são sempre
+  as do controlador: campos travados em Propriedades (menos no Personalizado) e projetos salvos com
+  outras quantidades ajustados ao abrir; o Simulador de E/S mostra as quantidades no título.
+- Painel Factory IO: a partir do 9º sensor/atuador o endereço aparecia como `I0.8`, `Q0.9`; agora
+  `I1.0`, `Q1.1`.
+- Revisão visual (auditoria de UX/UI): textos da interface, ambientes e mensagens com acentuação;
+  botões padrão do Qt em português; setas das caixas numéricas e das listas desenhadas pelo tema;
+  velocidade "1x (tempo real)" inteira na barra; selos de estado com cores do tema (o selo
+  EXECUTANDO ofuscava no tema escuro); verde de sucesso e texto desabilitado com mais contraste;
+  entradas comandadas por ambiente/Factory IO legíveis e com dica de quem comanda; grade de
+  entradas que se adapta à largura do painel; nomes longos no diagrama quebram em duas linhas
+  quando cabem, e a dica mostra nome e endereço.
 - C++ gerado: numa rede com várias saídas, quando uma saída alterava um bit lido pela condição
   (ex.: `XIC Q0.0` → `OTU Q0.0` e `OTE Q0.1`), a condição era recalculada depois da alteração e o
   resultado divergia do CLP. Agora a condição é guardada antes, como no interpretador.
+- Renomear um símbolo na tabela de símbolos deixava o diagrama com o nome antigo. Agora os
+  operandos acompanham o novo nome (inclusive `Nome.DN`, `Nome.ACC`).
 
 ### Adicionado
+- **Gravar C++ na placa** (Dispositivo, e botão na aba Código C++): compila o C++ do diagrama com
+  o PlatformIO e grava no ESP32, Arduino UNO ou Mega pela USB. No UNO/Mega, um `io_board` gerado
+  usa os pinos da aba Placa; o monitor serial usa `PLC_PRINTF`/`PLC_TEXT`, com os textos na flash
+  no AVR (o UNO compila com 541 de 2048 bytes de RAM no exemplo do Simulador de E/S).
+- **Factory IO: configuração do driver** espelhando a página do Modbus TCP/IP Server: Auto
+  connect, Write/Read Digital, Write Register (Input ou Holding Registers, FC04/FC03), Read
+  Register, Scale (valor bruto e de engenharia na tabela), Offset/Count até 256 pontos digitais e
+  64 registradores, conferência ao editar, botão Padrão e **Testar** (lê uma vez sem escrever).
+- **Controladores com mais de 16 entradas na simulação** (1747-L30 com 18, L40 com 24, MicroLogix
+  Analog com 20): a IDE aceita até 32 entradas; a placa e o protocolo continuam em 16.
+- **Novo projeto com lista de processadores** agrupada por família, como no RSLogix 500:
+  placa do projeto e simulação, Arduino UNO e Mega 2560, Allen-Bradley SLC 500 modular
+  (1747-L511 a L553, 5/01 a 5/05), MicroLogix 1000 e SLC 500 fixo (L20, L30, L40). Cada um
+  limita E/S, variáveis e a memória de programa (instruções e redes); o compilador acusa
+  "memória de programa esgotada". Os controladores Arduino/ESP32 ajustam a aba Placa.
+- **Ambiente Simulador de E/S e BCD** (como o I/O Simulator e o BCD Simulator do LogixPro): uma
+  botoeira por entrada e uma lâmpada por saída do controlador do projeto, botoeiras com tipo
+  trocável (pulsador NA/NF, chave NA/NF), thumbwheel BCD em N0 e display BCD de N1. Ambientes
+  podem se adaptar ao controlador (`configure`) e trocar registradores N com o simulador.
+- **Ajuda > Guia do usuário** (Ctrl+F1, também no Sobre): guia ilustrado com as telas da IDE
+  (janela, novo projeto, edição, símbolos, C++, blocos IL, simulação com ambiente, Factory IO,
+  placa ESP32 e Arduino Mega, dispositivo, verificação, comunicação, tema escuro), sumário,
+  busca e clique na imagem para ver em tamanho real. Conteúdo em `ladderide/help/`, incluído no
+  instalador.
+- **Ajuda > Como funciona a comunicação** (Shift+F1, também no Sobre): mapa clicável e ao vivo
+  do caminho do programa (editor, compilador, simulador, ambiente, Factory IO, cliente LDP,
+  transporte, firmware, relés, Modbus RTU), quadro LDP desenhado com exemplo real, tabelas de
+  comandos e erros do `protocol.json`, sequência da transferência, mapeamento Modbus TCP do
+  Factory IO e log do tráfego LDP.
+- Arduino Mega no simulador da placa redesenhado: proporção da placa real, conectores na ordem
+  da serigrafia com corpo plástico, ATmega2560 a 45°, 16U2, ICSP, regulador, e pinos dos relés
+  (D22…) e das entradas (D38–D53) destacados; os fios saem pela borda sem cruzar o conector.
+- Painel **Processo**: Ambiente animado, Factory IO e Placa ESP32/Arduino num só painel, com
+  seletor e selo do que está ativo (antes eram três abas, embora só um seja usado por vez).
+- Simulador da placa: escolha entre ESP32 Relay (1 a 8 relés), Arduino UNO (1 a 8) e Arduino
+  Mega 2560 (1 a 16), cada uma desenhada (placa, pinos, módulo de relés, fios e botões de
+  entrada). O dispositivo virtual aceita `--inputs`, `--outputs` e `--hardware`; o painel avisa
+  quando o projeto tem mais E/S que a placa e oferece ajustar o projeto. Arduino só na simulação.
+- Factory IO: a coluna Simbolo do painel é editável (duplo clique). Cria, renomeia ou remove o
+  símbolo do endereço, atualizando o diagrama; a porta do driver vai no comentário.
 - Relatório reestruturado segundo a ABNT (NBR 14724, 6024, 6028, 6023): capa, folha de rosto,
   resumo/abstract, listas, sumário, seções numeradas, quadros com fonte e referências;
   conteúdo atualizado (blocos numéricos, ambientes, Factory IO, padrões de projeto, 338 testes).

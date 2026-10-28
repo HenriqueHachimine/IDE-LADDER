@@ -306,6 +306,40 @@ def test_batch_mixer_detects_dry_heating_unstirred_and_overflow():
     naive = Project(environment="misturador", rungs=[
         Rung([Contact("XIC", "I0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.4")])])
     env, alarms, _ = closed_loop(naive, (), 40000)
-    assert any("abaixo do nivel" in a for a in alarms)
+    assert any("abaixo do nível" in a for a in alarms)
     assert any("sem o misturador" in a for a in alarms)
     assert any("transbordou" in a for a in alarms)
+
+
+def test_io_simulator_follows_the_controller_and_switch_types():
+    from ladderide.envs.builtin.simulador_es import bcd_digits, bcd_encode
+    env = create("simulador_es")
+    assert env.configure(16, 12, 64) and (len(env.inputs), len(env.outputs)) == (16, 12)
+    assert env.inputs[15].address == "I1.7" and env.outputs[11].address == "Q1.3"
+    assert not env.configure(16, 12, 64)                       # nada mudou
+    plant = EnvironmentPlant(env)
+    assert plant.owned_inputs == 0xFFFF
+    assert env.types[3] == "pb_nc" and plant.input_values()["I3"]       # pulsador NF solto le 1
+    env.press("I0", True)
+    assert plant.input_values()["I0"]
+    env.press("I0", False)
+    assert not plant.input_values()["I0"]                     # pulsador volta sozinho
+    env.press("T0", True)
+    env.press("T0", False)                                    # etiqueta: pulsador NA -> pulsador NF
+    assert env.types[0] == "pb_nc" and env.inputs[0].normally_closed
+    env.press("T0", True)                                     # -> chave NA (com trava)
+    env.press("I0", True)
+    env.press("I0", False)
+    assert plant.input_values()["I0"]
+    env.configure(4, 2, 1)                                    # controlador menor: menos pontos, sem BCD
+    assert (len(env.inputs), len(env.outputs), env.has_bcd, env.input_words()) == (4, 2, False, {})
+    assert bcd_encode(1234) == 0x1234 and bcd_digits(0x0A07) == [0, 10, 0, 7]
+
+
+def test_io_simulator_example_runs_bcd_through_frd_and_tod():
+    project = Project.load(EXAMPLES / "simulador_es.ladproj")
+    actions = [(0, "D0+", True), (0, "D3-", True), (100, "I2", True)]   # thumbwheel 1009 e botoeira 02
+    env, alarms, sim = closed_loop(project, actions, total_ms=300)
+    assert not alarms and env.thumbwheel == 1009
+    assert sim.vm.n[0] == 0x1009 and sim.vm.n[2] == 1009 and env.display_word == 0x1009
+    assert env.out["Q2"] and not env.out["Q0"]

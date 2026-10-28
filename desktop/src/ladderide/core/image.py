@@ -133,7 +133,7 @@ def _operand_ok(cls: str, op: Op, area: int, index: int, p: Program) -> bool:
     return area in allowed and index < area_size(area, p)
 
 
-def decode(data: bytes) -> Program:
+def decode(data: bytes, max_inputs: int = isa.MAX_INPUTS) -> Program:
     """Valida e decodifica uma imagem. Lanca ImageValidationError no primeiro erro."""
     E = ImageError
     n = len(data)
@@ -156,7 +156,7 @@ def decode(data: bytes) -> Program:
         raise ImageValidationError(E.BAD_CRC)
     if flags != 0:
         raise ImageValidationError(E.RESERVED_NONZERO, detail="flags")
-    if (n_in > isa.MAX_INPUTS or n_out > isa.MAX_OUTPUTS or n_mark > isa.MAX_MARKERS
+    if (n_in > max_inputs or n_out > isa.MAX_OUTPUTS or n_mark > isa.MAX_MARKERS
             or n_tim > isa.MAX_TIMERS or n_cnt > isa.MAX_COUNTERS
             or n_rungs > isa.MAX_RUNGS or n_instr > isa.MAX_INSTRUCTIONS
             or n_words > isa.MAX_WORDS or n_const > isa.MAX_CONSTANTS):

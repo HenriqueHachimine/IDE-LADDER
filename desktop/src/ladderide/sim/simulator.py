@@ -45,7 +45,7 @@ class Simulator:
 
     def __init__(self, result: CompileResult, period_ms: int = 10):
         if not result.ok:
-            raise ValueError("programa com erros nao pode ser simulado")
+            raise ValueError("programa com erros não pode ser simulado")
         self.result = result
         self.program = result.program
         self.vm = LadderVM(self.program)

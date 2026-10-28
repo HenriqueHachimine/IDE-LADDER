@@ -53,6 +53,10 @@ CRC_SIZE: int = FMT["crc_size"]
 
 LIM = SPEC["limits"]
 MAX_INPUTS: int = LIM["max_inputs"]
+# Entradas aceitas pela IDE (compilador, simulador, ambientes): controladores
+# somente de simulacao com mais entradas (ex.: SLC 500 fixo 1747-L40, 24
+# entradas). A placa, o protocolo e o firmware continuam com MAX_INPUTS.
+IDE_MAX_INPUTS: int = SPEC.get("ide_limits", {}).get("max_inputs", MAX_INPUTS)
 MAX_OUTPUTS: int = LIM["max_outputs"]
 MAX_MARKERS: int = LIM["max_markers"]
 MAX_TIMERS: int = LIM["max_timers"]

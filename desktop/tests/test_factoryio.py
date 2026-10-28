@@ -67,11 +67,12 @@ class FakeFactoryIO:
                 return bytes([fc | 0x80, 2])
             data = pack_bits(table[addr:addr + count])
             return bytes([fc, len(data)]) + data
-        if fc == 4:
+        if fc in (3, 4):
             addr, count = struct.unpack(">HH", pdu[1:5])
-            if addr + count > len(self.input_regs):
+            regs = self.input_regs if fc == 4 else self.holding
+            if addr + count > len(regs):
                 return bytes([fc | 0x80, 2])
-            return bytes([fc, 2 * count]) + struct.pack(f">{count}H", *self.input_regs[addr:addr + count])
+            return bytes([fc, 2 * count]) + struct.pack(f">{count}H", *regs[addr:addr + count])
         if fc == 16:
             addr, count, _ = struct.unpack(">HHB", pdu[1:6])
             if addr + count > len(self.holding):
@@ -166,20 +167,25 @@ def test_client_connection_refused():
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
-    with pytest.raises(ModbusError, match="sem conexao"):
+    with pytest.raises(ModbusError, match="sem conexão"):
         ModbusTcpClient("127.0.0.1", port, timeout=0.5).connect()
 
 
 # ------------------------------------------------------------------- ponte
 def test_config_validation_and_roundtrip():
     assert FactoryIOConfig().validate() == []
-    bad = FactoryIOConfig(host="", n_sensors=20, sensor_table="coils", sensor_offset=0, actuator_offset=4,
-                          poll_ms=1)
+    bad = FactoryIOConfig(host="", n_sensors=300, sensor_table="coils", sensor_offset=0, actuator_offset=4,
+                          poll_ms=1, scale=0)
     errors = " | ".join(bad.validate(max_inputs=16))
-    assert "endereco do PC" in errors and "16 entradas" in errors and "sobrepostos" in errors
+    assert "endereço do PC" in errors and "256 pontos" in errors and "sobrepostos" in errors
+    assert "escala" in errors
     assert "intervalo" in errors
-    cfg = FactoryIOConfig.from_dict({"host": "10.0.0.5", "port": "5020", "n_sensors": 4, "lixo": 1})
+    cfg = FactoryIOConfig.from_dict({"host": "10.0.0.5", "port": "5020", "n_sensors": 4, "lixo": 1,
+                                     "register_table": "holding", "scale": 100, "auto_connect": True})
     assert (cfg.host, cfg.port, cfg.n_sensors) == ("10.0.0.5", 5020, 4)
+    assert (cfg.register_table, cfg.scale, cfg.auto_connect) == ("holding", 100.0, True)
+    assert FactoryIOConfig(n_sensors=256, n_actuators=256, n_input_regs=64, n_holding_regs=64,
+                           holding_from=0, input_reg_to=0, register_table="input").validate(max_words=64) != []
     assert FactoryIOConfig.from_dict(cfg.to_dict()) == cfg
 
 
@@ -198,7 +204,7 @@ def test_client_registers(fio):
 def test_registers_validation():
     cfg = FactoryIOConfig(n_input_regs=1, input_reg_to=31, n_holding_regs=3, holding_from=30)
     errors = " | ".join(cfg.validate(max_words=32))
-    assert "holding registers nao cabem" in errors and "sobrepostos" in errors
+    assert "holding registers não cabem" in errors and "sobrepostos" in errors
     assert FactoryIOConfig(n_sensors=9, n_input_regs=1, n_holding_regs=3).validate(max_inputs=8) == []
 
 
@@ -411,3 +417,34 @@ def test_example_conveyor_batch_and_jam_over_modbus(fio):
         assert scans(5, lambda: not fio.coils[START_LIGHT])
     finally:
         link.stop()
+
+
+def test_analog_sensors_from_holding_registers(fio):
+    """Write Register = Holding Registers: sensores analogicos lidos com FC03."""
+    fio.holding[5] = 314
+    cfg = FactoryIOConfig(port=fio.port, n_sensors=0, n_actuators=0, register_table="holding",
+                          input_reg_offset=5, n_input_regs=1, input_reg_to=2, poll_ms=5)
+    assert cfg.validate() == []
+    link = FactoryIOLink(cfg)
+    link.start()
+    try:
+        assert wait_for(lambda: link.input_regs == [314])
+        assert link.input_words() == {2: 314} and 3 in fio.requests and 4 not in fio.requests
+    finally:
+        link.stop()
+    clash = FactoryIOConfig(register_table="holding", input_reg_offset=0, n_input_regs=2,
+                            holding_offset=1, n_holding_regs=2, holding_from=10)
+    assert any("Holding Registers" in e for e in clash.validate())
+
+
+def test_probe_reports_success_and_failure(fio):
+    from ladderide.sim.factoryio import probe
+    ok, text = probe(FactoryIOConfig(port=fio.port, n_sensors=4))
+    assert ok and "respondeu" in text and "4 sensor" in text and fio.coils == [False] * len(fio.coils)
+    ok, text = probe(FactoryIOConfig(port=fio.port, unit=7, n_sensors=4), timeout=0.3)
+    assert not ok
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        free = s.getsockname()[1]
+    ok, text = probe(FactoryIOConfig(port=free))
+    assert not ok and text

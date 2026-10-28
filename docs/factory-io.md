@@ -19,6 +19,12 @@ E/S do controlador do projeto aparecem como "sem endereço no projeto": por exem
 `Input 8` num projeto ESP32 de 8 entradas. Para usá-las, escolha um controlador com mais
 E/S (*Somente simulação*, 16 E/S).
 
+A coluna **Simbolo** é editável. Dê duplo clique (ou F2) e digite o nome do ponto, por
+exemplo `Sensor_Saida`. O endereço sem símbolo ganha um novo símbolo, com a porta do Factory
+IO no comentário. Renomear troca o nome em todo o diagrama, inclusive em `Caixas.DN`. Apagar o
+nome remove o símbolo e devolve o endereço aos elementos. Nomes inválidos ou repetidos são
+recusados. A edição fica bloqueada durante a simulação e pode ser desfeita com Ctrl+Z.
+
 Os registradores analógicos são inteiros de 0 a 65535 e vão para os registradores `N` do
 programa, usados com os blocos de comparação e matemática. Por padrão, `Input Reg 0 → N0`
 e `N8 → Holding Reg 0`; os dois pontos de partida são ajustáveis na aba *Registradores*. O
@@ -52,10 +58,16 @@ diálogo completo, que traz as mesmas sugestões.
 2. Em **Configuration**:
    - **Network adapter:** a placa de rede que a IDE vai usar (*loopback* se for o mesmo PC).
    - **Port:** 502. **Slave ID:** o mesmo da IDE (padrão da IDE: 1).
-   - **Write Digital = Inputs** (os sensores vão para as entradas discretas).
+   - **Write Digital = Inputs** (os sensores vão para as entradas discretas) ou Coils.
    - **Read Digital = Coils** (os atuadores são lidos das coils, que a IDE escreve).
-   - **Digital Inputs:** endereço inicial 0 e quantidade ≥ número de sensores.
-   - **Digital Outputs:** endereço inicial 0 e quantidade ≥ número de atuadores.
+   - **Write Register = Input Registers** ou Holding Registers (valores analógicos dos sensores).
+   - **Read Register = Holding Registers** (valores analógicos dos atuadores).
+   - **Scale:** o Factory IO multiplica o valor analógico pela escala (3,14 com escala 100 vira 314).
+   - **Digital Inputs / Digital Outputs:** Offset e Count (até 256 de cada lado).
+   - **Register Inputs / Register Outputs:** Offset e Count (até 64 de cada lado).
+
+   *Read Digital* e *Read Register* precisam ser Coils e Holding Registers: um cliente
+   Modbus (a IDE) não consegue escrever em Inputs nem em Input Registers.
 3. Arraste cada **sensor** da cena para `Input k`. Ele vira `I0.k` no programa.
 4. Arraste cada **atuador** para `Coil k`. Ele é comandado por `Q0.k`.
 5. Coloque a cena em **RUN** (F5 no Factory IO).
@@ -66,15 +78,23 @@ inicial configurado nos dois lados.
 ## 2. Conectar a IDE
 
 1. **Simulação → Factory IO (Modbus TCP)...** abre o painel *Factory IO*.
-2. Preencha o **endereço** do PC (`127.0.0.1` no mesmo PC), a porta, o **Slave ID**, onde
-   ficam os sensores (*Inputs* ou *Coils*), os endereços iniciais e as quantidades de
-   sensores e atuadores (no máximo as E/S do controlador do projeto).
-3. Clique em **Conectar**. O painel mostra o estado, o tempo de cada troca e os bits de
-   sensores e atuadores.
-4. Execute a simulação (F5). As entradas que vêm da cena ficam travadas no painel de E/S;
+2. Na barra do painel, preencha o **IP** (o *Host* mostrado no topo do driver;
+   `127.0.0.1` com o adaptador *loopback*), a **Porta** e o **Slave ID**. **Testar** abre a
+   conexão, lê os sensores uma vez e fecha, sem escrever nada na cena.
+3. **Configurar driver...** abre as opções na mesma ordem e com os mesmos nomes da página
+   *Configuration* do driver: *Auto connect*, *Write/Read Digital*, *Write/Read Register*,
+   *Scale* e, para cada tabela, *Offset* e *Count*, com o endereço do CLP correspondente
+   (I0.0..., Q0.0..., N...). O diálogo confere a configuração enquanto você edita, e
+   **Padrão** volta aos valores padrão da IDE. Portas além das E/S do controlador do projeto
+   aparecem na tabela "sem endereço no projeto".
+4. Clique em **Conectar**. O painel mostra o estado, o tempo de cada troca e os valores de
+   sensores e atuadores. Com *Scale* diferente de 1, os registradores aparecem como
+   `314 (3.14)`: o valor bruto, que o programa usa, e o dividido pela escala.
+5. Execute a simulação (F5). As entradas que vêm da cena ficam travadas no painel de E/S;
    as demais continuam manuais.
 
-As configurações ficam salvas entre sessões.
+As configurações ficam salvas entre sessões. Com **Auto connect** marcado, a IDE conecta
+sozinha ao abrir e, conectada, tenta de novo a cada 1 s se o Factory IO fechar.
 
 ## Exemplo: esteira com lote (`examples/factoryio/esteira_lote.ladproj`)
 

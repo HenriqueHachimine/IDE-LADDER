@@ -3,7 +3,7 @@
 O Factory IO e o servidor (escravo Modbus); a IDE e o cliente:
 
     sensores da cena   -> Inputs (ou Coils)  -> FC02/FC01 -> entradas I0.0...
-    valores analogicos -> Input Registers    -> FC04      -> registradores N (a partir de input_reg_to)
+    valores analogicos -> Input Registers (ou Holding) -> FC04/FC03 -> registradores N (a partir de input_reg_to)
     saidas Q0.0...     -> FC15 -> Coils                    -> atuadores da cena
     registradores N (a partir de holding_from) -> FC16 -> Holding Registers -> atuadores analogicos
 
@@ -15,6 +15,15 @@ ligada a ele deve rodar a 1x (a interface trava a velocidade).
 Seguranca: ao desconectar, a ponte escreve 0 em todas as coils e holding
 registers; se a conexao cair, as entradas e os registradores lidos voltam a 0
 ate reconectar.
+
+Opcoes do driver (docs.factoryio.com/manual/drivers/modbus-server): Write Digital
+(Inputs ou Coils) e Write Register (Input ou Holding Registers) dizem onde o
+Factory IO escreve os sensores; a IDE le de la. Read Digital e Read Register
+precisam ser Coils e Holding Registers: um cliente Modbus nao consegue escrever
+em Inputs nem em Input Registers. Scale: o Factory IO multiplica o valor
+analogico pela escala antes de enviar (3,14 com escala 100 vira 314); a IDE
+mostra o valor bruto e o dividido pela escala. O driver aceita ate 256 pontos
+digitais e 64 registradores de cada lado.
 """
 from __future__ import annotations
 
@@ -25,10 +34,11 @@ from typing import Callable
 
 from ..comm.modbus_tcp import ModbusError, ModbusTcpClient
 
-SENSOR_TABLES = {"inputs": "Inputs (FC02)", "coils": "Coils (FC01)"}
+SENSOR_TABLES = {"inputs": "Inputs (FC02)", "coils": "Coils (FC01)"}            # Write Digital
+REGISTER_TABLES = {"input": "Input Registers (FC04)", "holding": "Holding Registers (FC03)"}   # Write Register
 RETRY_S = 1.0
-MAX_BITS = 16           # entradas/saidas digitais da ISA
-MAX_REGS = 16
+MAX_BITS = 256          # Digital Inputs/Outputs do driver (maximo do Factory IO)
+MAX_REGS = 64           # Register Inputs/Outputs do driver
 
 
 @dataclass
@@ -48,41 +58,52 @@ class FactoryIOConfig:
     holding_offset: int = 0       # N(holding_from + k) -> Holding Reg k
     n_holding_regs: int = 0
     holding_from: int = 8
+    register_table: str = "input"  # onde o Factory IO escreve os valores analogicos ("Write Register")
+    scale: float = 1.0             # "Scale" do driver (so para exibir o valor de engenharia)
+    auto_connect: bool = False     # conectar ao abrir a IDE ("Auto connect")
 
     def validate(self, max_inputs: int = 16, max_outputs: int = 16, max_words: int = 32) -> list[str]:
         """max_*: E/S e registradores N do projeto (pontos alem disso ficam sem endereco no CLP)."""
         errors = []
         if not self.host.strip():
-            errors.append("informe o endereco do PC com o Factory IO")
+            errors.append("informe o endereço do PC com o Factory IO")
         if not 1 <= self.port <= 65535:
             errors.append("porta TCP invalida")
         if not 0 <= self.unit <= 255:
             errors.append("Slave ID deve estar entre 0 e 255")
         if self.sensor_table not in SENSOR_TABLES:
             errors.append("tabela de sensores invalida")
+        if self.register_table not in REGISTER_TABLES:
+            errors.append("tabela de registradores invalida")
         if not 0 <= self.n_sensors <= MAX_BITS or not 0 <= self.n_actuators <= MAX_BITS:
-            errors.append(f"use no maximo {MAX_BITS} entradas e {MAX_BITS} coils")
+            errors.append(f"o driver do Factory IO vai até {MAX_BITS} pontos digitais de cada lado")
         if not 0 <= self.n_input_regs <= MAX_REGS or not 0 <= self.n_holding_regs <= MAX_REGS:
-            errors.append(f"use no maximo {MAX_REGS} registradores de cada tipo")
+            errors.append(f"o driver do Factory IO vai até {MAX_REGS} registradores de cada lado")
+        if not self.scale > 0:
+            errors.append("a escala deve ser maior que zero")
         if not (self.n_sensors or self.n_actuators or self.n_input_regs or self.n_holding_regs):
             errors.append("nada a trocar: informe entradas, coils ou registradores")
         for offset, n in ((self.sensor_offset, self.n_sensors), (self.actuator_offset, self.n_actuators),
                           (self.input_reg_offset, self.n_input_regs), (self.holding_offset, self.n_holding_regs)):
             if not 0 <= offset <= 65535 - n:
-                errors.append("endereco inicial invalido")
+                errors.append("endereço inicial inválido")
                 break
         if (self.sensor_table == "coils" and self.n_sensors and self.n_actuators
                 and self.sensor_offset < self.actuator_offset + self.n_actuators
                 and self.actuator_offset < self.sensor_offset + self.n_sensors):
-            errors.append("sensores e atuadores nas Coils com enderecos sobrepostos")
+            errors.append("sensores e atuadores nas Coils com endereços sobrepostos")
+        if (self.register_table == "holding" and self.n_input_regs and self.n_holding_regs
+                and self.input_reg_offset < self.holding_offset + self.n_holding_regs
+                and self.holding_offset < self.input_reg_offset + self.n_input_regs):
+            errors.append("registradores de sensores e de atuadores nos Holding Registers com endereços sobrepostos")
         if self.n_input_regs and not 0 <= self.input_reg_to <= max_words - self.n_input_regs:
-            errors.append(f"os registradores de entrada nao cabem em N0..N{max_words - 1}")
+            errors.append(f"os registradores de entrada não cabem em N0..N{max_words - 1}")
         if self.n_holding_regs and not 0 <= self.holding_from <= max_words - self.n_holding_regs:
-            errors.append(f"os holding registers nao cabem em N0..N{max_words - 1}")
+            errors.append(f"os holding registers não cabem em N0..N{max_words - 1}")
         if (self.n_input_regs and self.n_holding_regs
                 and self.input_reg_to < self.holding_from + self.n_holding_regs
                 and self.holding_from < self.input_reg_to + self.n_input_regs):
-            errors.append("registradores N de entrada e de saida sobrepostos")
+            errors.append("registradores N de entrada e de saída sobrepostos")
         if not 5 <= self.poll_ms <= 1000:
             errors.append("intervalo de troca deve ficar entre 5 e 1000 ms")
         return errors
@@ -213,7 +234,8 @@ class FactoryIOLink:
             read = client.read_discrete_inputs if c.sensor_table == "inputs" else client.read_coils
             for k, v in enumerate(read(c.sensor_offset, c.n_sensors)):
                 sensors |= int(v) << k
-        in_regs = client.read_input_registers(c.input_reg_offset, c.n_input_regs) if c.n_input_regs else []
+        read_regs = client.read_input_registers if c.register_table == "input" else client.read_holding_registers
+        in_regs = read_regs(c.input_reg_offset, c.n_input_regs) if c.n_input_regs else []
         with self._lock:
             self._sensors = sensors
             self._in_regs = in_regs
@@ -270,3 +292,27 @@ class FactoryIOLink:
                     pass
             client.close()
             self.connected = False
+
+
+def probe(config: FactoryIOConfig, client_factory: Callable[[FactoryIOConfig], ModbusTcpClient] | None = None,
+          timeout: float = 1.5) -> tuple[bool, str]:
+    """Testar conexao: conecta, le o primeiro sensor (ou registrador) e fecha. Nao escreve nada."""
+    client = (client_factory or (lambda c: ModbusTcpClient(c.host, c.port, c.unit, timeout=timeout)))(config)
+    c = config
+    try:
+        client.connect()
+        if c.n_sensors:
+            read = client.read_discrete_inputs if c.sensor_table == "inputs" else client.read_coils
+            read(c.sensor_offset, c.n_sensors)
+            what = f"{c.n_sensors} sensor(es) lidos"
+        elif c.n_input_regs:
+            read = client.read_input_registers if c.register_table == "input" else client.read_holding_registers
+            read(c.input_reg_offset, c.n_input_regs)
+            what = f"{c.n_input_regs} registrador(es) lidos"
+        else:
+            what = "conexão aberta"
+        return True, f"O Factory IO respondeu em {c.host}:{c.port} (Slave ID {c.unit}): {what}."
+    except ModbusError as exc:
+        return False, str(exc)
+    finally:
+        client.close()

@@ -19,13 +19,13 @@ from ..core.crc import crc32
 from ..core.image import (CounterDef, ImageValidationError, Instruction, Program, TimerDef, decode,
                           encode)
 from ..core.isa import Area, CounterType, Op, TimerType
+from ..model.project import ADDRESS_LIKE as _ADDRESS_LIKE
+from ..model.project import SYMBOL_NAME as _SYMBOL_NAME
 from ..model.project import (Coil, CompareBox, Contact, CounterBox, MathBox, NotOp, Parallel, Project,
                              ResetBox, Rung, TimerBox)
 
 COMPILER_VERSION = "1.0.0"
 TARGET_FORMAT = f"LDRB {isa.FORMAT_MAJOR}.{isa.FORMAT_MINOR}"
-_SYMBOL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,31}$")
-_ADDRESS_LIKE = re.compile(r"^([IQMS]\d+\.\d+|[TC]\d+(\.\w+)?|N\d+|[IQ]W\d+|K\d+)$", re.IGNORECASE)
 _WORD_NAMES = {"N": "registrador", "K": "constante", "T_ACC": "ACC de temporizador", "T_PRE": "PRE de temporizador",
                "C_ACC": "ACC de contador", "C_PRE": "PRE de contador", "IW": "entradas", "QW": "saidas"}
 
@@ -108,7 +108,7 @@ class _Compiler:
         self.max_timers, self.max_counters = ctrl.timers, ctrl.counters
         io = self.p.io
         for what, used, limit in (("entradas", io.n_inputs, ctrl.inputs), ("saidas", io.n_outputs, ctrl.outputs),
-                                  ("memorias M", io.n_markers, ctrl.markers),
+                                  ("memórias M", io.n_markers, ctrl.markers),
                                   ("registradores N", io.n_words, ctrl.words)):
             if used > limit:
                 self.error(f"o controlador {ctrl.name} tem {limit} {what}; o projeto esta configurado com "
@@ -119,16 +119,16 @@ class _Compiler:
         for s in self.p.symbols:
             name = s.name.strip()
             if not _SYMBOL_NAME.match(name) or _ADDRESS_LIKE.match(name):
-                self.error(f"nome de simbolo invalido: {s.name!r} (use letras, numeros e _; "
-                           f"nao pode parecer um endereco)", rung=None)
+                self.error(f"nome de símbolo inválido: {s.name!r} (use letras, números e _; "
+                           f"não pode parecer um endereço)", rung=None)
                 continue
             if name.upper() in self.symbols:
-                self.error(f"simbolo duplicado: {name}", rung=None)
+                self.error(f"símbolo duplicado: {name}", rung=None)
                 continue
             try:
                 self.symbols[name.upper()] = parse_operand(s.address)
             except ValueError:
-                self.error(f"simbolo {name}: endereco invalido {s.address!r}", rung=None)
+                self.error(f"símbolo {name}: endereço inválido {s.address!r}", rung=None)
 
     def resolve(self, text: str, element) -> tuple[int, int] | None:
         t = text.strip()
@@ -151,9 +151,9 @@ class _Compiler:
             return parse_operand(t)
         except ValueError:
             if _SYMBOL_NAME.match(t):
-                self.error(f"variavel nao declarada: {t}", element)
+                self.error(f"variável não declarada: {t}", element)
             else:
-                self.error(f"operando invalido: {t}", element)
+                self.error(f"operando inválido: {t}", element)
             return None
 
     def resolve_word(self, text: str, element, write: bool) -> tuple[int, int] | None:
@@ -166,11 +166,11 @@ class _Compiler:
             return None
         if value is not None:
             if write:
-                self.error(f"o destino nao pode ser uma constante ({t})", element)
+                self.error(f"o destino não pode ser uma constante ({t})", element)
                 return None
             if value not in self.constants:
                 if len(self.constants) >= isa.MAX_CONSTANTS:
-                    self.error(f"constantes diferentes demais (maximo {isa.MAX_CONSTANTS})", element)
+                    self.error(f"constantes diferentes demais (máximo {isa.MAX_CONSTANTS})", element)
                     return None
                 self.constants.append(value)
             return Area.K, self.constants.index(value)
@@ -187,13 +187,13 @@ class _Compiler:
             self.error(f"{t}: registrador fora da faixa configurada (N0 a N{self.p.io.n_words - 1})", element)
             return None
         if area in (Area.IW, Area.QW) and index != 0:
-            self.error(f"{t}: so existe {Area(area).name}0", element)
+            self.error(f"{t}: só existe {Area(area).name}0", element)
             return None
         if area in (Area.T_ACC, Area.T_PRE) and index not in self.timers:
-            self.error(f"T{index} e usado mas nenhuma instrucao TON/TOF/RTO o aciona", element)
+            self.error(f"T{index} e usado mas nenhuma instrução TON/TOF/RTO o aciona", element)
             return None
         if area in (Area.C_ACC, Area.C_PRE) and index not in self.counters:
-            self.error(f"C{index} e usado mas nenhuma instrucao CTU/CTD o aciona", element)
+            self.error(f"C{index} e usado mas nenhuma instrução CTU/CTD o aciona", element)
             return None
         return area, index
 
@@ -223,7 +223,7 @@ class _Compiler:
             timer = area in (Area.TIMER, Area.T_EN, Area.T_TT, Area.T_DN, Area.T_ACC, Area.T_PRE)
             limit = self.max_timers if timer else self.max_counters
         if index >= limit:
-            self.error(f"{text}: endereco fora da faixa configurada (limite {limit})", element)
+            self.error(f"{text}: endereço fora da faixa configurada (limite {limit})", element)
             return False
         return True
 
@@ -252,15 +252,15 @@ class _Compiler:
             self.error(f"preset fora da faixa (0 a {isa.MAX_PRESET})", box)
             return
         if index in table:
-            self.error(f"{box.operand} ja e acionado por outra instrucao "
-                       f"(cada {what} admite uma unica instrucao)", box)
+            self.error(f"{box.operand} já e acionado por outra instrução "
+                       f"(cada {what} admite uma única instrução)", box)
             return
         table[index] = (type_code, box.preset, box.id)
         self.box_index[box.id] = index
         if area == Area.TIMER:
             self.r.timer_names[index] = self.p.symbol_for(f"T{index}") or f"T{index}"
             if 0 < box.preset < self.p.io.scan_period_ms:
-                self.warn(f"preset de {box.preset} ms menor que o periodo de varredura "
+                self.warn(f"preset de {box.preset} ms menor que o período de varredura "
                           f"({self.p.io.scan_period_ms} ms)", box)
         else:
             self.r.counter_names[index] = self.p.symbol_for(f"C{index}") or f"C{index}"
@@ -283,7 +283,7 @@ class _Compiler:
 
     def compile_rung(self, rung: Rung) -> None:
         if not rung.outputs:
-            self.error("rede sem saida (adicione bobina, temporizador, contador, RES ou bloco matematico)")
+            self.error("rede sem saída (adicione bobina, temporizador, contador, RES ou bloco matematico)")
         sor = self.emit(Op.SOR, Area.NONE, self.rung)
         self.series(rung.condition, depth=0)
         outs = rung.outputs
@@ -302,7 +302,7 @@ class _Compiler:
 
     def check_depth(self, depth: int, element) -> bool:
         if depth > isa.MAX_BRANCH_DEPTH:
-            self.error(f"ramificacoes aninhadas demais (maximo {isa.MAX_BRANCH_DEPTH})", element)
+            self.error(f"ramificações aninhadas demais (máximo {isa.MAX_BRANCH_DEPTH})", element)
             return False
         return True
 
@@ -335,7 +335,7 @@ class _Compiler:
                     self.series(branch, depth + 1)
                 self.r.branch_end_pc[node.id] = self.emit(Op.BND, element=node)
             else:  # pragma: no cover - o modelo impede
-                self.error("elemento de saida dentro da condicao", node)
+                self.error("elemento de saída dentro da condição", node)
 
     def check_bit_read(self, ref: tuple[int, int], node) -> bool:
         area, index = ref
@@ -346,10 +346,10 @@ class _Compiler:
         if not self.check_range(area, index, node, node.operand):
             return False
         if area in (Area.T_EN, Area.T_TT, Area.T_DN) and index not in self.timers:
-            self.error(f"T{index} e usado mas nenhuma instrucao TON/TOF/RTO o aciona", node)
+            self.error(f"T{index} e usado mas nenhuma instrução TON/TOF/RTO o aciona", node)
             return False
         if area in (Area.C_DN, Area.C_OV, Area.C_UN) and index not in self.counters:
-            self.error(f"C{index} e usado mas nenhuma instrucao CTU/CTD o aciona", node)
+            self.error(f"C{index} e usado mas nenhuma instrução CTU/CTD o aciona", node)
             return False
         return True
 
@@ -359,7 +359,7 @@ class _Compiler:
             if ref is None:
                 return
             if ref[0] not in isa.BIT_WRITE_AREAS:
-                self.error(f"bobina so pode escrever em Q ou M, recebeu {out.operand}", out)
+                self.error(f"bobina só pode escrever em Q ou M, recebeu {out.operand}", out)
                 return
             if self.check_range(ref[0], ref[1], out, out.operand):
                 self.r.element_operand[out.id] = ref
@@ -385,7 +385,7 @@ class _Compiler:
                 return
             table = self.timers if area == Area.TIMER else self.counters
             if index not in table:
-                self.error(f"RES em {format_operand(area, index)}, que nao e acionado por nenhuma instrucao", out)
+                self.error(f"RES em {format_operand(area, index)}, que não e acionado por nenhuma instrução", out)
                 return
             self.emit(Op.RES, area, index, out)
 
@@ -401,25 +401,30 @@ class _Compiler:
             ote = [x for x in items if x[1].kind == "OTE"]
             if len(ote) > 1:
                 for r_index, coil in ote[1:]:
-                    self.warn(f"bobina {name} duplicada: vale a ultima escrita da varredura", coil, r_index)
+                    self.warn(f"bobina {name} duplicada: vale a última escrita da varredura", coil, r_index)
             if "OTE" in kinds and kinds & {"OTL", "OTU"}:
                 r_index, coil = ote[0]
                 self.warn(f"{name} usado em bobina comum e em SET/RESET", coil, r_index)
         coils_q = any(ref[0] == Area.Q for ref in writers)
         if self.qw_writers and coils_q:
             r_index, box = self.qw_writers[0]
-            self.warn("QW0 grava todas as saidas Q de uma vez e tambem ha bobinas em Q: "
-                      "vale a ultima escrita da varredura", box, r_index)
+            self.warn("QW0 grava todas as saídas Q de uma vez e também há bobinas em Q: "
+                      "vale a última escrita da varredura", box, r_index)
 
     # ------------------------------------------------------------- imagem
     def build(self) -> None:
         if self.r.errors:
             return
-        if len(self.code) > isa.MAX_INSTRUCTIONS:
-            self.error(f"programa grande demais: {len(self.code)} instrucoes (maximo {isa.MAX_INSTRUCTIONS})", rung=None)
+        ctrl = self.controller
+        max_instr = ctrl.instructions if ctrl else isa.MAX_INSTRUCTIONS
+        max_rungs = ctrl.rungs if ctrl else isa.MAX_RUNGS
+        where = f" no {ctrl.label}" if ctrl else ""
+        if len(self.code) > max_instr:
+            self.error(f"memória de programa esgotada{where}: {len(self.code)} instruções "
+                       f"(máximo {max_instr})", rung=None)
             return
-        if len(self.p.rungs) > isa.MAX_RUNGS:
-            self.error(f"redes demais (maximo {isa.MAX_RUNGS})", rung=None)
+        if len(self.p.rungs) > max_rungs:
+            self.error(f"redes demais{where}: {len(self.p.rungs)} (máximo {max_rungs})", rung=None)
             return
         io = self.p.io
         n_t = max(self.timers) + 1 if self.timers else 0
@@ -438,7 +443,7 @@ class _Compiler:
                               + struct.pack("<HHHH", io.n_inputs, io.n_outputs, io.n_markers, io.n_words))
         image = encode(prog)
         try:
-            self.r.program = decode(image)
+            self.r.program = decode(image, isa.IDE_MAX_INPUTS)
         except ImageValidationError as exc:  # pragma: no cover - indica bug do compilador
             self.error(f"erro interno do compilador: imagem rejeitada ({exc})", rung=None)
             return
@@ -451,9 +456,9 @@ class _Compiler:
 def compile_project(project: Project) -> CompileResult:
     c = _Compiler(project)
     io = project.io
-    if not (1 <= io.n_inputs <= isa.MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
+    if not (1 <= io.n_inputs <= isa.IDE_MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
             and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS):
-        c.error("configuracao de E/S fora dos limites", rung=None)
+        c.error("configuração de E/S fora dos limites", rung=None)
         return c.r
     c.check_controller()
     c.load_symbols()

@@ -4,6 +4,10 @@
  * Usado pelos testes de comunicacao do Desktop e para demonstrar a IDE sem placa.
  *
  *   virtual_device <arquivo_programa> [--autorun] [--watchdog-us N]
+ *                  [--inputs N] [--outputs N] [--hardware ID]
+ *
+ * --inputs/--outputs (1..16) e --hardware simulam outras placas no simulador da
+ * IDE (ESP32 com menos reles, Arduino UNO, Arduino Mega). Padrao: ESP32 Relay X8.
  */
 #ifndef _WIN32
 #define _POSIX_C_SOURCE 200809L /* clock_gettime/nanosleep com -std=c99 no Linux */
@@ -12,6 +16,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "ladder_isa.h"
 #include "plc_runtime.h"
 
 #ifdef _WIN32
@@ -27,6 +32,13 @@
 static const char *storage_path;
 static uint16_t outputs;
 static plc_t plc;
+
+/* Quantidade de E/S passada na linha de comando, limitada a 1..max. */
+static uint8_t io_count(const char *arg, unsigned max)
+{
+    unsigned long n = strtoul(arg, NULL, 10);
+    return (uint8_t)(n < 1u ? 1u : (n > max ? max : n));
+}
 
 static uint64_t host_micros(void *ctx)
 {
@@ -131,7 +143,8 @@ static void sleep_ms(unsigned ms)
 int main(int argc, char **argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "uso: %s <arquivo_programa> [--autorun] [--watchdog-us N]\n", argv[0]);
+        fprintf(stderr, "uso: %s <arquivo_programa> [--autorun] [--watchdog-us N] [--inputs N] [--outputs N] "
+                        "[--hardware ID]\n", argv[0]);
         return 1;
     }
     storage_path = argv[1];
@@ -141,6 +154,12 @@ int main(int argc, char **argv)
             cfg.autorun = 1;
         else if (strcmp(argv[k], "--watchdog-us") == 0 && k + 1 < argc)
             cfg.watchdog_us = (uint32_t)strtoul(argv[++k], NULL, 10);
+        else if (strcmp(argv[k], "--inputs") == 0 && k + 1 < argc)
+            cfg.n_inputs = io_count(argv[++k], LV_MAX_INPUTS);
+        else if (strcmp(argv[k], "--outputs") == 0 && k + 1 < argc)
+            cfg.n_outputs = io_count(argv[++k], LV_MAX_OUTPUTS);
+        else if (strcmp(argv[k], "--hardware") == 0 && k + 1 < argc)
+            cfg.hw_id = argv[++k];
     }
 #ifdef _WIN32
     _setmode(0, _O_BINARY); /* stdin */

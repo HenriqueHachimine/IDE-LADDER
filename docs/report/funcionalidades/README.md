@@ -22,6 +22,26 @@ Os prints foram tirados da própria IDE, com os exemplos do repositório: `estei
 | Transferência e monitor | Painel Dispositivo, F8 |
 | Verificar para ESP32 | F9 |
 
+## Arquitetura da aplicação
+
+A aplicação tem duas partes que executam o mesmo programa: a IDE no PC, em Python, e o firmware na placa ESP32, em C. As duas seguem um contrato único, guardado em `shared/`.
+
+![Arquitetura da LadderIDE: camadas da IDE, firmware do ESP32, Factory IO e contrato comum em shared/](img/00_arquitetura.png)
+
+**Como as partes se ligam:**
+
+- **Interface (`ui`):** é a única camada que usa Qt. Os painéis só chamam as camadas abaixo, por isso as regras do LADDER podem ser testadas sem abrir janelas.
+- **Domínio:**
+    - `model` guarda o projeto e as redes;
+    - `compiler` valida o diagrama e gera a imagem LDRB;
+    - `sim` executa essa imagem com tempo virtual;
+    - `envs` contém os ambientes animados;
+    - `codegen` e `verify` produzem o C++ e conferem o programa contra o código do firmware.
+- **Base (`core` e `comm`):** `core` define as instruções e contém a máquina virtual de referência. `comm` fala com a placa pelo protocolo LDP e com o Factory IO por Modbus TCP.
+- **Processos externos:** o simulador conhece uma única interface, `Plant`. Os ambientes internos e o Factory IO (`FactoryIOLink`) são adaptadores dela, então trocar um pelo outro não muda o simulador.
+- **Firmware:** `plc_core` controla os estados, a carga do programa e a varredura de 10 ms, e chama a `ladder_vm`. Só a camada `src/` conhece o hardware do ESP32. Por isso o mesmo código também roda no PC como dispositivo virtual.
+- **Contrato comum:** `isa.json` e `protocol.json` geram as tabelas do Python e os headers do C. A VM da IDE e a do firmware são comparadas varredura a varredura nos testes.
+
 ## 1. Editor de diagrama LADDER
 
 O programa é montado arrastando instruções da paleta para as redes, sem digitar código. Cada rede tem uma condição (contatos em série e em paralelo) e uma ou mais saídas à direita.

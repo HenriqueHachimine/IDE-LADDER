@@ -32,7 +32,7 @@ class DeviceError(Exception):
         if code == ProtoError.IMAGE_INVALID and len(detail) >= 5:
             img_code, index = struct.unpack_from("<Bi", detail)
             img = ImageError(img_code).name if img_code in ImageError._value2member_map_ else img_code
-            extra = f" ({img}, instrucao {index})"
+            extra = f" ({img}, instrução {index})"
         super().__init__(f"{Cmd(cmd).name if cmd in Cmd._value2member_map_ else cmd}: {name} - {text}{extra}")
 
 
@@ -143,10 +143,10 @@ class DeviceClient:
             raise CommError(f"firmware suporta LDRB {info.fmt_major}.{info.fmt_minor}; "
                             f"a IDE gera {isa.FORMAT_MAJOR}.{isa.FORMAT_MINOR}. Atualize o firmware.")
         if prog.n_inputs > info.n_inputs or prog.n_outputs > info.n_outputs:
-            raise CommError(f"o programa usa {prog.n_inputs} entradas/{prog.n_outputs} saidas; "
+            raise CommError(f"o programa usa {prog.n_inputs} entradas/{prog.n_outputs} saídas; "
                             f"o dispositivo tem {info.n_inputs}/{info.n_outputs}")
         if len(image) > info.max_image:
-            raise CommError("programa maior que a memoria do dispositivo")
+            raise CommError("programa maior que a memória do dispositivo")
         return info
 
     def download(self, image: bytes, progress: Callable[[int, int], None] | None = None,
@@ -169,7 +169,7 @@ class DeviceClient:
                 part = image[sent:sent + chunk]
                 (received,) = struct.unpack("<I", self.request(Cmd.LOAD_CHUNK, struct.pack("<I", sent) + part))
                 if received != sent + len(part):
-                    raise CommError(f"confirmacao inesperada: dispositivo recebeu {received} bytes")
+                    raise CommError(f"confirmação inesperada: dispositivo recebeu {received} bytes")
                 sent = received
                 chunks += 1
                 if progress:
@@ -184,8 +184,8 @@ class DeviceClient:
             raise
         expected = decode(image)
         if build_id != expected.build_id or crc != crc32(image[:-4]):
-            raise CommError("o programa ativo no dispositivo nao corresponde ao enviado")
+            raise CommError("o programa ativo no dispositivo não corresponde ao enviado")
         final = self.status()
         if final.build_id != build_id or not final.has_program:
-            raise CommError("verificacao final falhou: STATUS nao confirma o novo programa")
+            raise CommError("verificação final falhou: STATUS não confirma o novo programa")
         return DownloadResult(build_id, crc, sent, chunks, self.retry_count - retries_before)

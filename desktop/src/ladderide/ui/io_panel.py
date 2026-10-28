@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox, QHeaderView, QLabel, QPushButton, QSplitter,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox, QHeaderView, QLabel, QPushButton, QSizePolicy,
+                               QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from ..core.asm import format_operand, parse_operand
 from ..core.isa import WORD_READ_AREAS, Area
@@ -13,14 +13,18 @@ from ..model.project import Project
 
 from . import theme
 
-LED_ON = "background:#16a34a; border:1px solid #14532d;"
-
-
 def _led_style(value: bool | None) -> str:
     c = theme.colors
     if value is None:
         return f"background:{c['LED_UNKNOWN']}; border:1px dashed {c['LED_OFF_BORDER']};"
-    return LED_ON if value else f"background:{c['LED_OFF']}; border:1px solid {c['LED_OFF_BORDER']};"
+    if value:
+        return f"background:{c['LED_ON']}; border:1px solid {c['LED_ON_BORDER']};"
+    return f"background:{c['LED_OFF']}; border:1px solid {c['LED_OFF_BORDER']};"
+
+
+def _short(name: str, limit: int = 14) -> str:
+    """Nome de simbolo curto para caber no botao (o nome inteiro vai na dica)."""
+    return name if len(name) <= limit else name[:limit - 1] + "…"
 
 
 class Led(QLabel):
@@ -44,13 +48,13 @@ class IOPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.inputs_box = QGroupBox("Entradas")
         self.inputs_grid = QGridLayout(self.inputs_box)
-        self.momentary = QCheckBox("Botoes pulsadores (soltar desliga)")
-        self.outputs_box = QGroupBox("Saidas")
+        self.momentary = QCheckBox("Botões pulsadores (soltar desliga)")
+        self.outputs_box = QGroupBox("Saídas")
         self.outputs_grid = QGridLayout(self.outputs_box)
         self.elements = QTableWidget(0, 4)
         self.elements.setHorizontalHeaderLabels(["Elemento", "PRE", "ACC", "Bits"])
         self.variables = QTableWidget(0, 3)
-        self.variables.setHorizontalHeaderLabels(["Variavel", "Endereco", "Valor"])
+        self.variables.setHorizontalHeaderLabels(["Variável", "Endereço", "Valor"])
         for t in (self.elements, self.variables):
             t.verticalHeader().hide()
             t.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -63,7 +67,7 @@ class IOPanel(QWidget):
         layout.addWidget(self.outputs_box)
         split = QSplitter(Qt.Vertical)      # o usuario ajusta a divisao entre as duas tabelas
         split.setChildrenCollapsible(False)
-        for text, table in (("Temporizadores e contadores", self.elements), ("Monitor de variaveis", self.variables)):
+        for text, table in (("Temporizadores e contadores", self.elements), ("Monitor de variáveis", self.variables)):
             box = QWidget()
             box_l = QVBoxLayout(box)
             box_l.setContentsMargins(0, 0, 0, 0)
@@ -84,6 +88,25 @@ class IOPanel(QWidget):
         self.editable = True
         self.owned = 0
 
+    def _reflow_inputs(self) -> None:
+        """Colunas de entradas conforme a largura (4, 3, 2 ou 1): nada fica cortado no painel estreito."""
+        width = self.inputs_box.width() or self.width() or 480
+        cols = max(1, min(4, (width - 24) // 110))
+        if cols == self._input_cols:
+            return
+        self._input_cols = cols
+        for b in self.input_buttons:
+            self.inputs_grid.removeWidget(b)
+        for k, b in enumerate(self.input_buttons):
+            self.inputs_grid.addWidget(b, k // cols, k % cols)
+        for c in range(4):
+            self.inputs_grid.setColumnStretch(c, 1 if c < cols else 0)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if self.input_buttons:
+            self._reflow_inputs()
+
     @staticmethod
     def _clear(grid: QGridLayout) -> None:
         while grid.count():
@@ -101,17 +124,21 @@ class IOPanel(QWidget):
         for k in range(io.n_inputs):
             addr = f"I{k // 8}.{k % 8}"
             name = project.symbol_for(addr)
-            b = QPushButton(f"{addr}\n{name}" if name else addr)
+            b = QPushButton(f"{addr}\n{_short(name)}" if name else addr)
+            b.setProperty("fullName", f"{addr} {name}" if name else addr)
+            b.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)   # a grade decide a largura
+            b.setMinimumWidth(64)
             b.setCheckable(True)
             b.setMinimumHeight(42 if self.editable else 28)
             b.pressed.connect(lambda k=k: self._pressed(k))
             b.released.connect(lambda k=k: self._released(k))
             b.toggled.connect(lambda v, k=k: self._toggled(k, v))
-            self.inputs_grid.addWidget(b, k // 4, k % 4)
             self.input_buttons.append(b)
+        self._input_cols = 0
+        self._reflow_inputs()
         self._apply_owned()
         if self.show_commanded:
-            self.outputs_grid.addWidget(QLabel("Logico"), 0, 1)
+            self.outputs_grid.addWidget(QLabel("Lógico"), 0, 1)
             self.outputs_grid.addWidget(QLabel("Comandado"), 0, 2)
         for k in range(io.n_outputs):
             addr = f"Q{k // 8}.{k % 8}"
@@ -176,16 +203,23 @@ class IOPanel(QWidget):
         for led in self.out_leds + self.cmd_leds:
             led.set(led.value)
 
-    def set_owned(self, mask: int) -> None:
-        """Entradas controladas por um ambiente de simulacao (ficam somente leitura)."""
+    def set_owned(self, mask: int, source: str = "ambiente de simulação") -> None:
+        """Entradas comandadas por um ambiente ou pelo Factory IO (ficam somente leitura)."""
         self.owned = mask
+        self.owner = source
         self._apply_owned()
 
     def _apply_owned(self) -> None:
         for k, b in enumerate(self.input_buttons):
             owned = bool(self.owned >> k & 1)
             b.setEnabled(self.editable and not owned)
-            b.setToolTip("Controlada pelo ambiente de simulacao" if owned else "")
+            if b.property("owned") != owned:            # estilo proprio: legivel, com borda tracejada
+                b.setProperty("owned", owned)
+                b.style().unpolish(b)
+                b.style().polish(b)
+            full = b.property("fullName") or ""
+            b.setToolTip(f"{full}\nComandada pelo {getattr(self, 'owner', 'ambiente de simulação')}: "
+                         "muda sozinha conforme o processo" if owned else full)
 
     def _pressed(self, k: int) -> None:
         if self.momentary.isChecked() and self.editable:

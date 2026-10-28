@@ -24,19 +24,19 @@ STRAIN_MS = 300
 @register
 class GarageDoorEnvironment(Environment):
     id = "portao"
-    name = "Portao de garagem"
-    description = ("ABRIR e FECHAR acionam o motor (sobe/desce) ate os fins de curso LS1 (aberto) e LS2 "
+    name = "Portão de garagem"
+    description = ("ABRIR e FECHAR acionam o motor (sobe/desce) até os fins de curso LS1 (aberto) e LS2 "
                    "(fechado), que tem histerese. A folha tem inercia: o motor leva ~0,3 s para acelerar e o "
-                   "freio deixa ~1,5% de deslocamento. Inverter com o portao em movimento e uma falha. PARAR e "
-                   "um botao NF. A fotocelula detecta o veiculo ('Veiculo' coloca ou retira o carro).")
+                   "freio deixa ~1,5% de deslocamento. Inverter com o portão em movimento e uma falha. PARAR e "
+                   "um botão NF. A fotocelula detecta o veículo ('Veículo' coloca ou retira o carro).")
     example = "ambientes/portao.ladproj"
     inputs = [
-        IOPoint("OPEN", "I0.0", "Abrir", "Botao ABRIR (NA)", BUTTON),
-        IOPoint("CLOSE", "I0.1", "Fechar", "Botao FECHAR (NA)", BUTTON),
-        IOPoint("STOP", "I0.2", "Parar", "Botao PARAR (NF: le 1 quando solto)", BUTTON, normally_closed=True),
-        IOPoint("LS1", "I0.3", "Fim_Curso_Aberto", "LS1: portao totalmente aberto"),
-        IOPoint("LS2", "I0.4", "Fim_Curso_Fechado", "LS2: portao totalmente fechado"),
-        IOPoint("PHOTO", "I0.5", "Fotocelula", "Veiculo/obstaculo sob o portao"),
+        IOPoint("OPEN", "I0.0", "Abrir", "Botão ABRIR (NA)", BUTTON),
+        IOPoint("CLOSE", "I0.1", "Fechar", "Botão FECHAR (NA)", BUTTON),
+        IOPoint("STOP", "I0.2", "Parar", "Botão PARAR (NF: lê 1 quando solto)", BUTTON, normally_closed=True),
+        IOPoint("LS1", "I0.3", "Fim_Curso_Aberto", "LS1: portão totalmente aberto"),
+        IOPoint("LS2", "I0.4", "Fim_Curso_Fechado", "LS2: portão totalmente fechado"),
+        IOPoint("PHOTO", "I0.5", "Fotocelula", "Veículo/obstaculo sob o portão"),
     ]
     outputs = [
         IOPoint("UP", "Q0.0", "Motor_Sobe", "Motor no sentido de abrir"),
@@ -118,10 +118,10 @@ class GarageDoorEnvironment(Environment):
         if self.both_ms > 0:
             out.append("PERIGO: motor comandado para subir e descer ao mesmo tempo (falta intertravamento)")
         if self.hit_vehicle:
-            out.append(f"O portao bateu no veiculo a {self.hit_speed / 100 * 2.6:.2f} m/s! "
+            out.append(f"O portão bateu no veículo a {self.hit_speed / 100 * 2.6:.2f} m/s! "
                        "Use a fotocelula (I0.5) para impedir")
         if self.reversals:
-            out.append(f"{self.reversals} reversao(oes) com o portao em movimento: pare o motor antes de inverter")
+            out.append(f"{self.reversals} reversao(oes) com o portão em movimento: pare o motor antes de inverter")
         if self.strain_ms > STRAIN_MS and not self.hit_vehicle:
             end = "superior" if self.pos >= 99.5 else "inferior"
             out.append(f"Motor forcando contra o fim de curso {end}: desligue o motor no fim de curso")

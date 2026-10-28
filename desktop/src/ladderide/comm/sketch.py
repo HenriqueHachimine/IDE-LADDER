@@ -37,7 +37,7 @@ def _cxx() -> str:
     for name in (os.environ.get("CXX"), "g++", "c++", "clang++"):
         if name and shutil.which(name):
             return name
-    raise BuildError("compilador C++ nao encontrado (instale o MinGW/g++)")
+    raise BuildError("compilador C++ não encontrado (instale o MinGW/g++)")
 
 
 def _builds(name: str) -> list[Path]:
@@ -59,7 +59,7 @@ def build_sketch(name: str, rebuild: bool = False) -> Path:
         found = sorted(_builds(name), key=lambda p: p.stat().st_mtime)
         if found:
             return found[-1]
-        raise BuildError(f"exemplo '{name}' nao encontrado")
+        raise BuildError(f"exemplo '{name}' não encontrado")
     sources = sorted(folder.glob("*.cpp")) + [FIRMWARE / "src" / "io_board.cpp", SIM_DIR / "arduino_sim.cpp"]
     deps = sources + sorted(folder.glob("*.h")) + [SIM_DIR / "Arduino.h", FIRMWARE / "src" / "board_config.h",
                                                    FIRMWARE / "src" / "io_board.h"]

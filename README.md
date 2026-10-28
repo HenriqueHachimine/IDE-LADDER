@@ -42,9 +42,9 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   compara com o simulador varredura a varredura e confere memória, E/S e limites da placa
 - **Blocos de instrução** (F12): o diagrama convertido em lista de instruções por
   rede, ligada ao diagrama e animada na simulação
-- **Simulador da placa ESP32** (Ctrl+Shift+E): a placa de 8 relés com o firmware real rodando
-  no PC, níveis dos registradores 74HC595/74HC165, pinos e configuração de `board_config.h`
-  e monitor dos quadros LDP
+- **Simulador da placa** (Ctrl+Shift+E): ESP32 (1 a 8 relés), Arduino UNO (1 a 8) ou
+  Arduino Mega (1 a 16), desenhadas com o firmware do CLP rodando no PC; na ESP32, níveis dos
+  registradores 74HC595/74HC165, pinos e configuração de `board_config.h`, e monitor dos quadros LDP
 - **Código C++** (Ctrl+F7): o diagrama traduzido para C++ legível enquanto se
   edita, antes de compilar; um teste compila o C++ e confere que ele reproduz o simulador
 - **Equivalência garantida por testes**: simulador e firmware executam o mesmo
@@ -97,8 +97,14 @@ sudo apt install python3-venv build-essential libxcb-cursor0   # Debian/Ubuntu
 python3 -m venv .venv && . .venv/bin/activate
 python -m pip install -e "desktop[gui,comm,dev]"
 python -m ladderide examples/demo/demonstracao.ladproj
-sudo usermod -aG dialout $USER     # acesso a /dev/ttyUSB0 do ESP32 (saia e entre na sessao)
+sudo usermod -aG dialout $USER     # acesso a /dev/ttyUSB0 e /dev/ttyACM0 (saia e entre na sessão)
 ```
+
+No Linux, **Gravar C++ na placa** precisa do PlatformIO (`pipx install platformio`
+e as regras udev do PlatformIO). O Factory IO só roda no Windows: use-o em outro
+PC ou máquina virtual na rede, pelo IP do driver. Detalhes, portas das placas
+(UNO/Mega original em `/dev/ttyACM0`, clones CH340 em `/dev/ttyUSB0`) e problemas
+comuns: [manual, seção 1.1](docs/user-guide.md#11-linux-em-detalhe).
 
 **Gerar o instalador do Windows:** `python scripts/build_installer.py` gera
 `dist\LadderIDE-Setup-<versão>.exe`, um único arquivo que instala a IDE para o

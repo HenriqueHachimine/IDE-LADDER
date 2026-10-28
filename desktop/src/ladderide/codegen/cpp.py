@@ -303,7 +303,7 @@ class _Gen:
         self.p = project
         c = _Compiler(project)
         io = project.io
-        self.io_ok = (1 <= io.n_inputs <= isa.MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
+        self.io_ok = (1 <= io.n_inputs <= isa.IDE_MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
                       and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS)
         if self.io_ok:
             c.check_controller()
@@ -599,7 +599,7 @@ class _Gen:
         out += ["    FIRST_SCAN = true;", "    clock_phase = 0;", "}", "",
                 "// Uma varredura: le as entradas, executa as redes em ordem e devolve as saidas.",
                 "// dt_ms = tempo desde a varredura anterior (ignorado na primeira).",
-                "uint16_t plc_scan(uint16_t inputs, uint32_t dt_ms) {",
+                f"uint16_t plc_scan({'uint32_t' if io.n_inputs > 16 else 'uint16_t'} inputs, uint32_t dt_ms) {{",
                 "    uint32_t dt = FIRST_SCAN ? 0 : dt_ms;",
                 "    if (!FIRST_SCAN) clock_phase = (clock_phase + dt % 1000u) % 1000u;",
                 "    CLOCK_1S = clock_phase < 500u;",
@@ -669,12 +669,31 @@ class _Gen:
 
         s: list[str] = [
             "#ifdef ARDUINO",
-            "// Uso como sketch para a placa (compile junto com firmware/src/io_board.cpp, que",
-            "// faz a leitura das entradas e o acionamento dos reles). Exemplo nao validado",
-            "// na placa: o caminho oficial e transferir o programa pela IDE.",
+            "// Uso como sketch para a placa: Dispositivo > Gravar C++ na placa (ESP32, Arduino UNO ou",
+            "// Mega) compila com o io_board da placa escolhida e grava pela USB. Substitui o",
+            "// firmware do CLP: para voltar a transferir pela IDE, grave o firmware de novo.",
             "// Monitor serial a 115200 bit/s: mostra cada entrada, saida, temporizador e",
             "// contador que muda. Comandos: s = estado completo, h = ajuda.",
             '#include "io_board.h"',
+            "",
+            "// Impressao no monitor serial. No Arduino UNO/Mega (AVR) o Serial nao tem printf e a",
+            "// RAM e pequena (2 KB no UNO): os textos ficam na flash (PSTR/F) e sao formatados aqui.",
+            "#if defined(ARDUINO_ARCH_AVR)",
+            "#include <stdarg.h>",
+            "static void plc_printf_P(const char *fmt, ...) {",
+            "    char buf[96];",
+            "    va_list ap;",
+            "    va_start(ap, fmt);",
+            "    vsnprintf_P(buf, sizeof buf, fmt, ap);",
+            "    va_end(ap);",
+            "    Serial.print(buf);",
+            "}",
+            "#define PLC_PRINTF(fmt, ...) plc_printf_P(PSTR(fmt), ##__VA_ARGS__)",
+            "#define PLC_TEXT(s) F(s)",
+            "#else",
+            "#define PLC_PRINTF(...) Serial.printf(__VA_ARGS__)",
+            "#define PLC_TEXT(s) (s)",
+            "#endif",
             "",
             f"static const uint32_t SCAN_PERIOD_MS = {io.scan_period_ms};",
             "",
@@ -790,7 +809,10 @@ class _Gen:
               "    started = true;",
               "}",
               "#endif"]
-        return s
+        portable = re.compile(r'Serial\.println\(("(?:[^"\\]|\\.)*")\);')
+        return [line if line.startswith("#define") else
+                portable.sub(r"Serial.println(PLC_TEXT(\1));", line.replace("Serial.printf(", "PLC_PRINTF("))
+                for line in s]
 
 
 def _ascii(text: str) -> str:

@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QFrame, QGridLayout,
-                               QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QVBoxLayout, QWidget)
+                               QGroupBox, QLabel, QLineEdit, QPlainTextEdit, QSpinBox, QTreeWidget, QTreeWidgetItem,
+                               QVBoxLayout, QWidget)
 
 from ..core import isa
 from ..model.controllers import apply_controller, controller_by_id, default_controller, load_controllers
@@ -12,16 +13,16 @@ from ..model.project import (COMPARE_KINDS, MATH_KINDS, Coil, CompareBox, Contac
 
 KIND_CHOICES = {
     Contact: [("XIC", "Normalmente aberto (NA / XIC)"), ("XIO", "Normalmente fechado (NF / XIO)")],
-    Coil: [("OTE", "Bobina comum (OTE)"), ("OTL", "SET / liga e mantem (OTL)"), ("OTU", "RESET / desliga (OTU)")],
-    TimerBox: [("TON", "TON - retardo na energizacao"), ("TOF", "TOF - retardo na desenergizacao"),
+    Coil: [("OTE", "Bobina comum (OTE)"), ("OTL", "SET / liga e mantém (OTL)"), ("OTU", "RESET / desliga (OTU)")],
+    TimerBox: [("TON", "TON - retardo na energização"), ("TOF", "TOF - retardo na desenergização"),
                ("RTO", "RTO - retentivo")],
     CounterBox: [("CTU", "CTU - crescente"), ("CTD", "CTD - decrescente")],
     CompareBox: [("EQU", "EQU - igual (A = B)"), ("NEQ", "NEQ - diferente (A \u2260 B)"), ("LES", "LES - menor (A < B)"),
                  ("GRT", "GRT - maior (A > B)"), ("LEQ", "LEQ - menor ou igual (A \u2264 B)"),
                  ("GEQ", "GEQ - maior ou igual (A \u2265 B)"), ("LIM", "LIM - teste de limite (faixa)"),
-                 ("MEQ", "MEQ - comparacao com mascara")],
-    MathBox: [("ADD", "ADD - soma"), ("SUB", "SUB - subtracao"), ("MUL", "MUL - multiplicacao"),
-              ("DIV", "DIV - divisao inteira"), ("SQR", "SQR - raiz quadrada"), ("NEG", "NEG - troca o sinal"),
+                 ("MEQ", "MEQ - comparação com máscara")],
+    MathBox: [("ADD", "ADD - soma"), ("SUB", "SUB - subtração"), ("MUL", "MUL - multiplicação"),
+              ("DIV", "DIV - divisão inteira"), ("SQR", "SQR - raiz quadrada"), ("NEG", "NEG - troca o sinal"),
               ("TOD", "TOD - inteiro para BCD"), ("FRD", "FRD - BCD para inteiro")],
 }
 
@@ -99,7 +100,7 @@ class AddressPopup(QFrame):
         self.on_accept = on_accept
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 6, 8, 8)
-        title = QLabel("Endereco (ou simbolo) - Enter confirma, Esc cancela")
+        title = QLabel("Endereço (ou símbolo) - Enter confirma, Esc cancela")
         title.setObjectName("muted")
         layout.addWidget(title)
         self.combo = QComboBox()
@@ -142,7 +143,7 @@ class ElementDialog(QDialog):
         self.operand.setEditable(True)
         self.operand.setInsertPolicy(QComboBox.NoInsert)
         fill_operand_combo(self.operand, node, project, ports)
-        form.addRow("Operando (endereco ou simbolo):", self.operand)
+        form.addRow("Operando (endereço ou símbolo):", self.operand)
         self.preset = None
         if isinstance(node, (TimerBox, CounterBox)):
             self.preset = QSpinBox()
@@ -158,9 +159,9 @@ class ElementDialog(QDialog):
                 form.addRow("", self.seconds)
             else:
                 form.addRow("Preset (contagens):", self.preset)
-        help_text = QLabel("Enderecos: I0.0-I1.7 entradas, Q0.0-Q1.7 saidas, M0.0-M31.7 memorias,\n"
-                           "Tn / Cn temporizador e contador, Tn.DN / Cn.DN bit de conclusao,\n"
-                           "S0.0 primeira varredura, S0.3 relogio de 1 s.")
+        help_text = QLabel("Endereços: I0.0-I1.7 entradas, Q0.0-Q1.7 saídas, M0.0-M31.7 memórias,\n"
+                           "Tn / Cn temporizador e contador, Tn.DN / Cn.DN bit de conclusão,\n"
+                           "S0.0 primeira varredura, S0.3 relógio de 1 s.")
         help_text.setObjectName("muted")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -177,7 +178,7 @@ class ElementDialog(QDialog):
         for code, text in KIND_CHOICES[type(node)]:
             self.kind.addItem(text, code)
         self.kind.setCurrentIndex(max(0, self.kind.findData(node.kind)))
-        form.addRow("Instrucao:", self.kind)
+        form.addRow("Instrução:", self.kind)
         self.fields_box = QWidget()
         self.fields_form = QFormLayout(self.fields_box)
         self.fields_form.setContentsMargins(0, 0, 0, 0)
@@ -187,8 +188,8 @@ class ElementDialog(QDialog):
         self.kind.currentIndexChanged.connect(self._kind_changed)
         help_text = QLabel(
             "Operandos: constante (123, -5, 0x1F), registrador N0-N{last}, Tn.ACC / Tn.PRE, Cn.ACC / Cn.PRE,\n"
-            "IW0 (entradas como numero) ou QW0 (saidas). Destino: N ou QW0. Valores inteiros de 32 bits;\n"
-            "S0.4 liga em estouro/operacao invalida, S0.5 com resultado zero, S0.6 com resultado negativo."
+            "IW0 (entradas como número) ou QW0 (saídas). Destino: N ou QW0. Valores inteiros de 32 bits;\n"
+            "S0.4 liga em estouro/operação inválida, S0.5 com resultado zero, S0.6 com resultado negativo."
             .replace("{last}", str(max(0, self.project.io.n_words - 1))))
         help_text.setObjectName("muted")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -253,47 +254,96 @@ def _controller_combo(selected: str) -> QComboBox:
 
 def _controller_text(ctrl) -> str:
     if ctrl is None:
-        return "Controlador desconhecido nesta instalacao: valem os limites gerais da IDE."
-    kind = "Placa real com firmware do projeto." if ctrl.hardware else "Sem placa: somente simulacao."
-    return f"{ctrl.description}\n\nLimites: {ctrl.summary()}.\n{kind}"
+        return "Controlador desconhecido nesta instalação: valem os limites gerais da IDE."
+    kind = "Placa real com firmware do projeto." if ctrl.hardware else "Sem placa: somente simulação."
+    ports = f"\nPortas de comunicação: {ctrl.ports}." if ctrl.ports else ""
+    return f"{ctrl.description}\n\nLimites: {ctrl.summary()}.{ports}\n{kind}"
 
 
 class NewProjectDialog(QDialog):
-    """Novo projeto: nome e controlador do CLP (define as quantidades de E/S e de variaveis)."""
+    """Novo projeto: nome e controlador do CLP, escolhido numa lista por familia (como o
+    "Select Processor Type" do RSLogix 500). O controlador define as E/S e a memoria."""
+
+    COLUMNS = ("Processador", "Tipo", "E/S na IDE", "Programa")
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Novo projeto")
-        self.setMinimumWidth(480)
+        self.resize(820, 620)
         form = QFormLayout()
         self.name = QLineEdit("Novo projeto")
-        self.controller = _controller_combo(default_controller().id)
         form.addRow("Nome:", self.name)
-        form.addRow("Controlador:", self.controller)
+        self.list = QTreeWidget()
+        self.list.setHeaderLabels(self.COLUMNS)
+        self.list.setRootIsDecorated(False)
+        self.list.setUniformRowHeights(True)
+        self.list.setAlternatingRowColors(True)
+        groups: dict[str, QTreeWidgetItem] = {}
+        for c in load_controllers():
+            group = groups.get(c.family)
+            if group is None:
+                group = groups[c.family] = QTreeWidgetItem(self.list, [c.family])
+                group.setFirstColumnSpanned(True)
+                group.setFlags(Qt.ItemIsEnabled)
+                font = group.font(0)
+                font.setBold(True)
+                group.setFont(0, font)
+            row = QTreeWidgetItem(group, [c.label, c.spec, f"{c.inputs}E / {c.outputs}S",
+                                          f"{c.instructions} instr. / {c.rungs} redes"])
+            row.setData(0, Qt.UserRole, c.id)
+            row.setToolTip(0, c.name)
+        self.list.expandAll()
+        for col in range(len(self.COLUMNS)):
+            self.list.resizeColumnToContents(col)
+        self.list.setColumnWidth(0, max(self.list.columnWidth(0), 150))
+        self.list.currentItemChanged.connect(lambda *_: self._update())
+        self.list.itemDoubleClicked.connect(lambda item, _c: item.data(0, Qt.UserRole) and self.accept())
         self.details = QLabel()
         self.details.setWordWrap(True)
         self.details.setObjectName("muted")
-        self.controller.currentIndexChanged.connect(self._update)
-        self._update()
-        hint = QLabel("O controlador limita as entradas, as saidas e a quantidade de memorias, temporizadores, "
-                      "contadores e registradores. Pode ser trocado depois em Programa > Propriedades.")
+        self.details.setMinimumHeight(96)
+        self.details.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        hint = QLabel("O controlador limita as entradas e saídas, a quantidade de memórias, temporizadores, "
+                      "contadores e registradores e o tamanho do programa. Pode ser trocado depois em "
+                      "Programa > Propriedades.")
         hint.setWordWrap(True)
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.buttons.accepted.connect(self.accept)
+        self.buttons.rejected.connect(self.reject)
         box = QVBoxLayout(self)
         box.addLayout(form)
+        box.addWidget(QLabel("<b>Tipo de processador</b>"))
+        box.addWidget(self.list, 1)
         box.addWidget(self.details)
         box.addWidget(hint)
-        box.addWidget(buttons)
-        self.adjustSize()
+        box.addWidget(self.buttons)
+        self.select(default_controller().id)
+
+    def _rows(self):
+        for g in range(self.list.topLevelItemCount()):
+            group = self.list.topLevelItem(g)
+            for k in range(group.childCount()):
+                yield group.child(k)
+
+    def select(self, controller_id: str) -> bool:
+        for row in self._rows():
+            if row.data(0, Qt.UserRole) == controller_id:
+                self.list.setCurrentItem(row)
+                return True
+        return False
+
+    def selected_id(self) -> str | None:
+        item = self.list.currentItem()
+        return item.data(0, Qt.UserRole) if item is not None else None
 
     def _update(self) -> None:
-        self.details.setText(_controller_text(controller_by_id(self.controller.currentData())))
+        cid = self.selected_id()
+        self.buttons.button(QDialogButtonBox.Ok).setEnabled(bool(cid))
+        self.details.setText(_controller_text(controller_by_id(cid)) if cid else "Escolha um processador na lista.")
 
     def project(self) -> Project:
         p = Project(name=self.name.text().strip() or "Novo projeto")
-        ctrl = controller_by_id(self.controller.currentData())
+        ctrl = controller_by_id(self.selected_id() or "")
         if ctrl is not None:
             apply_controller(p, ctrl)
         return p
@@ -311,25 +361,25 @@ class ProjectDialog(QDialog):
         self.description = QPlainTextEdit(project.description)
         self.description.setFixedHeight(70)
         form.addRow("Nome:", self.name)
-        form.addRow("Versao:", self.version)
-        form.addRow("Descricao:", self.description)
+        form.addRow("Versão:", self.version)
+        form.addRow("Descrição:", self.description)
         self.controller = _controller_combo(project.target.device)
         self.controller_info = QLabel()
         self.controller_info.setWordWrap(True)
         self.controller_info.setObjectName("muted")
         form.addRow("Controlador:", self.controller)
-        self.n_inputs = self._spin(1, isa.MAX_INPUTS, io.n_inputs)
+        self.n_inputs = self._spin(1, isa.IDE_MAX_INPUTS, io.n_inputs)
         self.n_outputs = self._spin(1, isa.MAX_OUTPUTS, io.n_outputs)
         self.n_markers = self._spin(0, isa.MAX_MARKERS, io.n_markers)
         self.n_words = self._spin(0, isa.MAX_WORDS, io.n_words)
         self.period = self._spin(1, 1000, io.scan_period_ms)
         self.period.setSuffix(" ms")
         form.addRow("Entradas digitais:", self.n_inputs)
-        form.addRow("Saidas (reles):", self.n_outputs)
-        form.addRow("Memorias M:", self.n_markers)
+        form.addRow("Saídas (relés):", self.n_outputs)
+        form.addRow("Memórias M:", self.n_markers)
         form.addRow("Registradores N (inteiros):", self.n_words)
-        form.addRow("Periodo de varredura:", self.period)
-        safe = QGroupBox("Estado seguro das saidas em STOP/FAULT (marcado = energizado)")
+        form.addRow("Período de varredura:", self.period)
+        safe = QGroupBox("Estado seguro das saídas em STOP/FAULT (marcado = energizado)")
         grid = QGridLayout(safe)
         self.safe: list[QCheckBox] = []
         for k in range(isa.MAX_OUTPUTS):
@@ -339,8 +389,8 @@ class ProjectDialog(QDialog):
             self.safe.append(cb)
         self.controller.currentIndexChanged.connect(self._controller_changed)
         self._controller_changed()
-        warn = QLabel("Atencao: desenergizar nem sempre e o estado seguro da carga. "
-                      "Defina conforme a aplicacao.")
+        warn = QLabel("Atenção: desenergizar nem sempre e o estado seguro da carga. "
+                      "Defina conforme a aplicação.")
         warn.setWordWrap(True)
         warn.setObjectName("warn")
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -355,11 +405,22 @@ class ProjectDialog(QDialog):
         self.setMinimumWidth(560)
         self.adjustSize()
 
-    def _controller_changed(self) -> None:
-        """Os maximos dos campos passam a ser os do controlador; valores acima sao reduzidos."""
+    def _controller_changed(self, *_args) -> None:
+        """Os maximos dos campos passam a ser os do controlador; valores acima sao reduzidos.
+        Entradas e saidas sao exatamente as do controlador, como num CLP real, em que a
+        quantidade de E/S e da CPU/modulo: os campos ficam travados (menos no Personalizado)."""
         ctrl = controller_by_id(self.controller.currentData())
         self.controller_info.setText(_controller_text(ctrl))
-        limits = ((self.n_inputs, ctrl.inputs if ctrl else isa.MAX_INPUTS),
+        fixed = ctrl is not None and not ctrl.custom
+        if fixed:
+            self.n_inputs.setMaximum(ctrl.inputs)
+            self.n_outputs.setMaximum(ctrl.outputs)
+            self.n_inputs.setValue(ctrl.inputs)
+            self.n_outputs.setValue(ctrl.outputs)
+        for spin in (self.n_inputs, self.n_outputs):
+            spin.setEnabled(not fixed)
+            spin.setToolTip("Definido pelo controlador (escolha Personalizado para mudar)" if fixed else "")
+        limits = ((self.n_inputs, ctrl.inputs if ctrl else isa.IDE_MAX_INPUTS),
                   (self.n_outputs, ctrl.outputs if ctrl else isa.MAX_OUTPUTS),
                   (self.n_markers, ctrl.markers if ctrl else isa.MAX_MARKERS),
                   (self.n_words, ctrl.words if ctrl else isa.MAX_WORDS))

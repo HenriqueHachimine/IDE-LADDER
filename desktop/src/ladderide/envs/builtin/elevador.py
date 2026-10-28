@@ -35,22 +35,22 @@ def floor_y(k: int) -> float:
 class ElevatorEnvironment(Environment):
     id = "elevador"
     name = "Elevador de 4 andares"
-    description = ("Botoes 1 a 4 (cabine ou pavimento) chamam o elevador. O motor tem uma velocidade "
+    description = ("Botões 1 a 4 (cabine ou pavimento) chamam o elevador. O motor tem uma velocidade "
                    "(0,5 m/s) e freio: ao desligar, a cabine anda ~6 cm, por isso o sensor de andar atua "
-                   "10 cm antes do nivel. O operador abre a porta enquanto a saida estiver ligada; desligada, "
-                   "o fechador leva 2,5 s para fechar (nao ha sensor de porta: use um temporizador). "
-                   "Andar com a porta aberta, abrir fora do andar ou passar do ultimo andar sao falhas.")
+                   "10 cm antes do nível. O operador abre a porta enquanto a saída estiver ligada; desligada, "
+                   "o fechador leva 2,5 s para fechar (não há sensor de porta: use um temporizador). "
+                   "Andar com a porta aberta, abrir fora do andar ou passar do último andar são falhas.")
     example = "ambientes/elevador.ladproj"
     size = (640, 420)
     inputs = [
-        IOPoint("CALL1", "I0.0", "Chamada_1", "Botao do 1o andar (cabine ou pavimento)", BUTTON),
-        IOPoint("CALL2", "I0.1", "Chamada_2", "Botao do 2o andar", BUTTON),
-        IOPoint("CALL3", "I0.2", "Chamada_3", "Botao do 3o andar", BUTTON),
-        IOPoint("CALL4", "I0.3", "Chamada_4", "Botao do 4o andar", BUTTON),
-        IOPoint("FLOOR1", "I0.4", "Andar_1", "Cabine no nivel do 1o andar (+-10 cm)"),
-        IOPoint("FLOOR2", "I0.5", "Andar_2", "Cabine no nivel do 2o andar"),
-        IOPoint("FLOOR3", "I0.6", "Andar_3", "Cabine no nivel do 3o andar"),
-        IOPoint("FLOOR4", "I0.7", "Andar_4", "Cabine no nivel do 4o andar"),
+        IOPoint("CALL1", "I0.0", "Chamada_1", "Botão do 1o andar (cabine ou pavimento)", BUTTON),
+        IOPoint("CALL2", "I0.1", "Chamada_2", "Botão do 2o andar", BUTTON),
+        IOPoint("CALL3", "I0.2", "Chamada_3", "Botão do 3o andar", BUTTON),
+        IOPoint("CALL4", "I0.3", "Chamada_4", "Botão do 4o andar", BUTTON),
+        IOPoint("FLOOR1", "I0.4", "Andar_1", "Cabine no nível do 1o andar (+-10 cm)"),
+        IOPoint("FLOOR2", "I0.5", "Andar_2", "Cabine no nível do 2o andar"),
+        IOPoint("FLOOR3", "I0.6", "Andar_3", "Cabine no nível do 3o andar"),
+        IOPoint("FLOOR4", "I0.7", "Andar_4", "Cabine no nível do 4o andar"),
     ]
     outputs = [
         IOPoint("UP", "Q0.0", "Motor_Sobe", "Motor no sentido de subir"),
@@ -138,12 +138,12 @@ class ElevatorEnvironment(Environment):
             out.append(f"O elevador andou com a porta aberta ({self.moved_open}x): espere o fechador "
                        f"fechar a porta (2,5 s) antes de ligar o motor")
         if self.opened_outside:
-            out.append("A porta abriu com a cabine fora do andar (desnivel perigoso)")
+            out.append("A porta abriu com a cabine fora do andar (desnível perigoso)")
         if self.buffer_hit:
-            out.append("A cabine passou do ultimo andar e bateu no para-choque do poco")
+            out.append("A cabine passou do último andar e bateu no para-choque do poco")
         late = [k + 1 for k, t in self.pending.items() if self.time_ms - t > WAIT_ALARM_S * 1000]
         if late:
-            out.append(f"Chamada do andar {', '.join(map(str, late))} esperando ha mais de {WAIT_ALARM_S} s")
+            out.append(f"Chamada do andar {', '.join(map(str, late))} esperando há mais de {WAIT_ALARM_S} s")
         return out
 
     def stats(self) -> list[str]:
@@ -152,7 +152,7 @@ class ElevatorEnvironment(Environment):
         mean = f"{sum(self.waits) / len(self.waits):.1f} s" if self.waits else "-"
         last = f"{self.last_level_cm:+.1f} cm" if self.last_level_cm is not None else "-"
         return [f"Andar {k + 1} ({level}) | {self.v:+.2f} m/s | porta {self.door * 100:.0f}% aberta",
-                f"Chamadas atendidas: {len(self.waits)} | espera media {mean} | ultimo nivelamento {last}"]
+                f"Chamadas atendidas: {len(self.waits)} | espera media {mean} | último nivelamento {last}"]
 
     # ------------------------------------------------------------ desenho
     def _buttons(self) -> list[tuple[str, QRectF]]:
@@ -232,7 +232,7 @@ class ElevatorEnvironment(Environment):
                       Qt.AlignHCenter | Qt.AlignVCenter, 30)
             draw.tag(p, r.left(), r.bottom() + 3, f"I0.{k - 1}", pressed)
         draw.text(p, 14, 326, "Lampadas Q0.3..Q0.6", 7, False, draw.MUTED)
-        draw.text(p, 14, 342, "Clique nos botoes da", 7, False, draw.MUTED)
+        draw.text(p, 14, 342, "Clique nos botões da", 7, False, draw.MUTED)
         draw.text(p, 14, 356, "cabine ou de cada andar.", 7, False, draw.MUTED)
         # visao frontal da porta da cabine
         k, off = self.floor_offset()

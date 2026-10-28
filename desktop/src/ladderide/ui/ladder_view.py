@@ -45,10 +45,10 @@ BLOCK_TIPS = {
     "LEQ": "LEQ - menor ou igual: conduz se A \u2264 B", "GEQ": "GEQ - maior ou igual: conduz se A \u2265 B",
     "LIM": "LIM - teste de limite: conduz se inferior \u2264 teste \u2264 superior\n"
            "(com inferior > superior conduz fora da faixa)",
-    "MEQ": "MEQ - comparacao com mascara: (origem AND mascara) = (comparar AND mascara)",
-    "ADD": "ADD - soma: destino = A + B", "SUB": "SUB - subtracao: destino = A - B",
-    "MUL": "MUL - multiplicacao: destino = A \u00d7 B",
-    "DIV": "DIV - divisao inteira: destino = A \u00f7 B (truncada; divisao por zero liga S0.4)",
+    "MEQ": "MEQ - comparação com máscara: (origem AND máscara) = (comparar AND máscara)",
+    "ADD": "ADD - soma: destino = A + B", "SUB": "SUB - subtração: destino = A - B",
+    "MUL": "MUL - multiplicação: destino = A \u00d7 B",
+    "DIV": "DIV - divisão inteira: destino = A \u00f7 B (truncada; divisão por zero liga S0.4)",
     "SQR": "SQR - raiz quadrada (arredondada)", "NEG": "NEG - troca o sinal: destino = -origem",
     "TOD": "TOD - converte inteiro para BCD", "FRD": "FRD - converte BCD para inteiro",
 }
@@ -126,14 +126,17 @@ class ElementItem(QGraphicsItem):
             self.set_rows(None)
         tip = {"XIC": "Contato normalmente aberto (NA / XIC)", "XIO": "Contato normalmente fechado (NF / XIO)",
                "NOT": "Inversor (NOT)", "OTE": "Bobina", "OTL": "Bobina SET (OTL)", "OTU": "Bobina RESET (OTU)",
-               "RES": "Reset de temporizador/contador", "PAR": "Ramificacao paralela (OR)"}.get(self.kind, self.kind)
+               "RES": "Reset de temporizador/contador", "PAR": "Ramificação paralela (OR)"}.get(self.kind, self.kind)
         if isinstance(node, (CompareBox, MathBox)):
             roles = (COMPARE_KINDS if isinstance(node, CompareBox) else MATH_KINDS)[node.kind]
             tip = BLOCK_TIPS.get(node.kind, node.kind) + "\n" + "\n".join(
                 f"{role}: {text}" for role, text in zip(roles, node.operands))
             self.setToolTip(tip)
             return
-        self.setToolTip(f"{tip}\n{operand}" if operand else tip)
+        if st.sublabel and st.label != st.sublabel:                 # nome inteiro e endereco
+            self.setToolTip(f"{tip}\n{st.label}  ({st.sublabel})")
+        else:
+            self.setToolTip(f"{tip}\n{operand}" if operand else tip)
 
     def set_rows(self, values: list[int | None] | None) -> None:
         """Linhas do bloco: operando (simbolo ou endereco) e, na simulacao, o valor atual."""
@@ -142,7 +145,7 @@ class ElementItem(QGraphicsItem):
         rows = []
         for k, (role, text) in enumerate(zip(roles, node.operands)):
             short = {"Limite inferior": "Min", "Limite superior": "Max", "Destino": "\u2192", "Origem": "Orig",
-                     "Mascara": "Masc", "Comparar": "Comp"}.get(role, role)
+                     "Máscara": "Masc", "Comparar": "Comp"}.get(role, role)
             shown = text.strip() or "?"
             name = project.symbol_for(shown) if project is not None else None
             if name:
@@ -272,7 +275,7 @@ class LadderView(QGraphicsView):
         hint = scene.addRect(QRectF(left, new_y, right - left, 0.6 * SY),
                              QPen(HINT_BORDER, 1.2, Qt.DashLine), QColor(0, 0, 0, 0))
         hint.setZValue(-5)
-        text = scene.addText("+  Solte uma instrucao aqui para criar uma nova rede", ui_font(8))
+        text = scene.addText("+  Solte uma instrução aqui para criar uma nova rede", ui_font(8))
         text.setDefaultTextColor(COMMENT_TEXT)
         text.setPos(left + 12, new_y + 0.3 * SY - text.boundingRect().height() / 2)
         for w in lay.wires:
@@ -466,7 +469,7 @@ class LadderView(QGraphicsView):
             if item.kind != "PAR":
                 add("Editar...", "edit", eid)
             if has_address(item.node):
-                add("Alterar endereco...", "address", eid)
+                add("Alterar endereço...", "address", eid)
             if item.kind in WRAPPABLE:
                 add("Envolver em ramo paralelo", "wrap", eid)
             if item.kind == "PAR" or in_branch:
@@ -481,7 +484,7 @@ class LadderView(QGraphicsView):
                 self.select(("rung", rung))
                 add("Inserir rede acima", "rung_above", rung)
                 add("Inserir rede abaixo", "rung_below", rung)
-                add("Comentario da rede...", "rung_comment", rung)
+                add("Comentário da rede...", "rung_comment", rung)
                 menu.addSeparator()
                 add("Excluir rede", "rung_delete", rung)
             else:

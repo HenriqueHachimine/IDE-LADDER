@@ -16,6 +16,7 @@ import struct
 
 READ_COILS = 0x01
 READ_DISCRETE_INPUTS = 0x02
+READ_HOLDING_REGISTERS = 0x03
 READ_INPUT_REGISTERS = 0x04
 WRITE_MULTIPLE_COILS = 0x0F
 WRITE_MULTIPLE_REGISTERS = 0x10
@@ -25,13 +26,13 @@ MAX_READ_REGS = 125
 MAX_WRITE_REGS = 123
 
 EXCEPTION_TEXT = {
-    1: "funcao nao suportada pelo servidor",
-    2: "endereco fora da faixa configurada no servidor",
-    3: "valor invalido",
+    1: "função não suportada pelo servidor",
+    2: "endereço fora da faixa configurada no servidor",
+    3: "valor inválido",
     4: "falha no servidor",
     6: "servidor ocupado",
-    10: "caminho de gateway indisponivel",
-    11: "dispositivo de destino nao respondeu (confira o Slave ID)",
+    10: "caminho de gateway indisponível",
+    11: "dispositivo de destino não respondeu (confira o Slave ID)",
 }
 
 
@@ -73,7 +74,7 @@ class ModbusTcpClient:
         try:
             sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
         except OSError as exc:
-            raise ModbusError(f"sem conexao com {self.host}:{self.port} ({exc.strerror or exc})") from exc
+            raise ModbusError(f"sem conexão com {self.host}:{self.port} ({exc.strerror or exc})") from exc
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.settimeout(self.timeout)
         self._sock = sock
@@ -103,11 +104,18 @@ class ModbusTcpClient:
 
     def read_input_registers(self, address: int, count: int) -> list[int]:
         """FC04: registradores de entrada (0..65535)."""
+        return self._read_regs(READ_INPUT_REGISTERS, address, count)
+
+    def read_holding_registers(self, address: int, count: int) -> list[int]:
+        """FC03: holding registers (0..65535)."""
+        return self._read_regs(READ_HOLDING_REGISTERS, address, count)
+
+    def _read_regs(self, function: int, address: int, count: int) -> list[int]:
         if not 1 <= count <= MAX_READ_REGS:
             raise ValueError(f"quantidade de registradores invalida: {count}")
-        reply = self._request(struct.pack(">BHH", READ_INPUT_REGISTERS, address, count))
+        reply = self._request(struct.pack(">BHH", function, address, count))
         if len(reply) != 2 + 2 * count or reply[1] != 2 * count:
-            raise ModbusError("resposta FC04 com tamanho inesperado")
+            raise ModbusError(f"resposta FC{function:02d} com tamanho inesperado")
         return list(struct.unpack(f">{count}H", reply[2:]))
 
     def write_registers(self, address: int, values: list[int]) -> None:
@@ -132,7 +140,7 @@ class ModbusTcpClient:
     # ---------------------------------------------------------- transporte
     def _request(self, pdu: bytes) -> bytes:
         if self._sock is None:
-            raise ModbusError("nao conectado")
+            raise ModbusError("não conectado")
         self._tid = (self._tid + 1) & 0xFFFF
         frame = struct.pack(">HHHB", self._tid, 0, len(pdu) + 1, self.unit) + pdu
         try:
@@ -140,26 +148,26 @@ class ModbusTcpClient:
             header = self._recv(7)
             tid, proto, length, unit = struct.unpack(">HHHB", header)
             if proto != 0 or not 2 <= length <= 254:
-                raise ModbusError("cabecalho Modbus TCP invalido")
+                raise ModbusError("cabecalho Modbus TCP inválido")
             reply = self._recv(length - 1)
         except socket.timeout as exc:
             self.close()
-            raise ModbusError("o servidor nao respondeu (tempo esgotado)") from exc
+            raise ModbusError("o servidor não respondeu (tempo esgotado)") from exc
         except ModbusError:
             self.close()
             raise
         except OSError as exc:
             self.close()
-            raise ModbusError(f"conexao perdida ({exc.strerror or exc})") from exc
+            raise ModbusError(f"conexão perdida ({exc.strerror or exc})") from exc
         if tid != self._tid or unit != self.unit:
             self.close()
-            raise ModbusError("resposta fora de sequencia")
+            raise ModbusError("resposta fora de sequência")
         if reply[0] == pdu[0] | 0x80:
             code = reply[1] if len(reply) > 1 else 0
-            raise ModbusError(f"excecao {code}: {EXCEPTION_TEXT.get(code, 'desconhecida')}", code)
+            raise ModbusError(f"exceção {code}: {EXCEPTION_TEXT.get(code, 'desconhecida')}", code)
         if reply[0] != pdu[0]:
             self.close()
-            raise ModbusError("resposta de outra funcao")
+            raise ModbusError("resposta de outra função")
         return reply
 
     def _recv(self, n: int) -> bytes:
@@ -167,6 +175,6 @@ class ModbusTcpClient:
         while len(buf) < n:
             chunk = self._sock.recv(n - len(buf))
             if not chunk:
-                raise ModbusError("o servidor fechou a conexao")
+                raise ModbusError("o servidor fechou a conexão")
             buf += chunk
         return buf

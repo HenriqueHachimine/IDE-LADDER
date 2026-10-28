@@ -69,6 +69,18 @@ class Environment(ABC):
     def sensors(self) -> dict[str, bool]:
         """Estado fisico dos sensores (por nome), antes da logica NA/NF."""
 
+    def configure(self, n_inputs: int, n_outputs: int, n_words: int) -> bool:
+        """Quantidades de E/S e de registradores N do projeto. Ambientes que se adaptam ao
+        controlador (ex.: simulador de E/S) refazem os pontos e devolvem True."""
+        return False
+
+    def input_words(self) -> dict[int, int]:
+        """Registradores N escritos pelo processo antes de cada varredura (indice -> valor)."""
+        return {}
+
+    def advance_words(self, n: list[int]) -> None:
+        """Registradores N depois de cada varredura (ex.: um display)."""
+
     def alarms(self) -> list[str]:
         """Situacoes perigosas ou erradas provocadas pela logica do usuario."""
         return []
@@ -116,7 +128,7 @@ class Environment(ABC):
 def _bit(address: str, area: Area) -> int:
     a, index = parse_operand(address)
     if a != area:
-        raise ValueError(f"{address}: esperado endereco {area.name}")
+        raise ValueError(f"{address}: esperado endereço {area.name}")
     return index
 
 
@@ -160,6 +172,12 @@ class EnvironmentPlant:
         self.env.out = out
         self.env.time_ms += dt_ms
         self.env.step(dt_ms, out)
+
+    def input_words(self) -> dict[int, int]:
+        return self.env.input_words()
+
+    def advance_words(self, n: list[int]) -> None:
+        self.env.advance_words(n)
 
     def reset(self) -> None:
         self.env.operator.clear()

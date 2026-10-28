@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -17,6 +18,9 @@ from typing import Iterator, Union
 
 PROJECT_FORMAT = "ladderide-project"
 PROJECT_FORMAT_VERSION = 2
+# Nome de simbolo valido e o que se parece com endereco (o compilador usa os mesmos).
+SYMBOL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,31}$")
+ADDRESS_LIKE = re.compile(r"^([IQMS]\d+\.\d+|[TC]\d+(\.\w+)?|N\d+|[IQ]W\d+|K\d+)$", re.IGNORECASE)
 
 # Blocos de comparacao (vao na condicao, como contatos) e de matematica (vao nas
 # saidas). Cada tipo tem uma lista fixa de operandos; o nome aparece no editor.
@@ -204,6 +208,55 @@ class Project:
             if s.address.strip().upper() == address.strip().upper():
                 return s.name
         return None
+
+    def rename_operands(self, old: str, new: str) -> int:
+        """Troca o nome `old` por `new` nos operandos (inclusive `old.DN`, `old.ACC`...).
+
+        Sem diferenca de maiusculas, como o compilador. Retorna quantos operandos mudaram."""
+        key = old.strip().upper()
+        if not key:
+            return 0
+
+        def swap(op: str) -> str:
+            base, dot, rest = op.partition(".")
+            return new + dot + rest if base.strip().upper() == key else op
+
+        changed = 0
+        for _, node, _ in self.walk():
+            if hasattr(node, "operand"):
+                value = swap(node.operand)
+                changed += value != node.operand
+                node.operand = value
+            elif hasattr(node, "operands"):
+                values = [swap(op) for op in node.operands]
+                changed += sum(a != b for a, b in zip(values, node.operands))
+                node.operands = values
+        return changed
+
+    def set_symbol_name(self, address: str, name: str, comment: str = "") -> None:
+        """Da (ou tira, com `name` vazio) o nome do endereco e atualiza o programa.
+
+        Renomear troca o nome em todos os operandos; apagar o nome volta os operandos ao
+        endereco. Um endereco sem simbolo ganha um novo, com `comment`. ValueError se o nome
+        for invalido ou ja usado por outro endereco."""
+        address, name = address.strip().upper(), name.strip()
+        current = next((s for s in self.symbols if s.address.strip().upper() == address), None)
+        if name:
+            if not SYMBOL_NAME.match(name) or ADDRESS_LIKE.match(name):
+                raise ValueError(f"'{name}' nao e um nome valido (letras, numeros e _, sem parecer endereco)")
+            other = next((s for s in self.symbols if s.name.upper() == name.upper() and s is not current), None)
+            if other is not None:
+                raise ValueError(f"O nome '{name}' ja e usado em {other.address}")
+        if current is None:
+            if name:
+                self.symbols.append(Symbol(name, address, comment))
+            return
+        if name:
+            self.rename_operands(current.name, name)
+            current.name = name
+        else:
+            self.rename_operands(current.name, address)
+            self.symbols.remove(current)
 
     # ------------------------------------------------------- persistencia
     def to_dict(self) -> dict:

@@ -11,6 +11,10 @@
     "instruction_size": 4,
     "crc_size": 4
   },
+  "ide_limits": {
+    "$comment": "Somente na IDE (compilador, simulador, ambientes), para controladores de simulacao com mais entradas (ex.: SLC 500 fixo 1747-L40, 24 entradas). A placa, o protocolo e o firmware usam limits.max_inputs.",
+    "max_inputs": 32
+  },
   "limits": {
     "max_inputs": 16,
     "max_outputs": 16,

@@ -66,17 +66,17 @@ class BottleLineEnvironment(Environment):
     id = "garrafas"
     name = "Linha de garrafas"
     description = ("A esteira para com a garrafa sob o bico (fotocelula I0.2) e enche por tempo: 0,25 L/s, "
-                   "garrafa pequena 0,5 L e grande 1 L (chave I0.5). A inspecao (I0.4/I0.3) aceita 92% a "
-                   "103% do volume; garrafa fora do nivel deve ser empurrada para o refugo pelo rejeitor. No fim, "
+                   "garrafa pequena 0,5 L e grande 1 L (chave I0.5). A inspeção (I0.4/I0.3) aceita 92% a "
+                   "103% do volume; garrafa fora do nível deve ser empurrada para o refugo pelo rejeitor. No fim, "
                    "as garrafas caem na caixa (sensor I0.6 conta cada uma); com 6 garrafas a esteira de caixas "
-                   "leva a caixa e traz a proxima (I0.7 = caixa posicionada).")
+                   "leva a caixa e traz a próxima (I0.7 = caixa posicionada).")
     example = "ambientes/garrafas.ladproj"
     inputs = [
-        IOPoint("START", "I0.0", "Start", "Botao de partida (NA)", BUTTON),
-        IOPoint("STOP", "I0.1", "Stop", "Botao de parada (NF: le 1 quando solto)", BUTTON, normally_closed=True),
+        IOPoint("START", "I0.0", "Start", "Botão de partida (NA)", BUTTON),
+        IOPoint("STOP", "I0.1", "Stop", "Botão de parada (NF: lê 1 quando solto)", BUTTON, normally_closed=True),
         IOPoint("AT_FILL", "I0.2", "Garrafa_No_Bico", "Fotocelula: garrafa sob o bico de enchimento"),
-        IOPoint("LEVEL_OK", "I0.3", "Nivel_OK", "Inspecao: garrafa no ponto com nivel entre 92% e 103%"),
-        IOPoint("AT_INSP", "I0.4", "Garrafa_Inspecao", "Fotocelula: garrafa no ponto de inspecao/rejeitor"),
+        IOPoint("LEVEL_OK", "I0.3", "Nivel_OK", "Inspeção: garrafa no ponto com nível entre 92% e 103%"),
+        IOPoint("AT_INSP", "I0.4", "Garrafa_Inspecao", "Fotocelula: garrafa no ponto de inspeção/rejeitor"),
         IOPoint("LARGE", "I0.5", "Seletor_Grande", "Chave: 1 = garrafas grandes (1 L), 0 = pequenas (0,5 L)",
                 SWITCH),
         IOPoint("DROP", "I0.6", "Garrafa_Na_Caixa", "Sensor na boca da caixa: pulso a cada garrafa que cai"),
@@ -84,7 +84,7 @@ class BottleLineEnvironment(Environment):
     ]
     outputs = [
         IOPoint("BELT", "Q0.0", "Esteira_Garrafas", "Motor da esteira de garrafas"),
-        IOPoint("VALVE", "Q0.1", "Valvula_Enchimento", "Valvula do bico de enchimento"),
+        IOPoint("VALVE", "Q0.1", "Valvula_Enchimento", "Válvula do bico de enchimento"),
         IOPoint("PUSH", "Q0.2", "Rejeitor", "Cilindro que empurra a garrafa para o refugo"),
         IOPoint("BOXBELT", "Q0.3", "Esteira_Caixas", "Motor da esteira de caixas"),
         IOPoint("RUN", "Q0.4", "Lampada_Run", "Lampada RUN"),
@@ -202,13 +202,13 @@ class BottleLineEnvironment(Environment):
     def alarms(self) -> list[str]:
         out = []
         if self.spilled > 0.02:
-            out.append(f"{self.spilled:.2f} L derramados: valvula aberta sem garrafa sob o bico")
+            out.append(f"{self.spilled:.2f} L derramados: válvula aberta sem garrafa sob o bico")
         if self.overflowed:
             out.append(f"{self.overflowed} garrafa(s) transbordaram: tempo de enchimento grande demais")
         if self.broken:
             out.append(f"{self.broken} garrafa(s) quebraram: cairam sem caixa posicionada")
         if self.bad_packed:
-            out.append(f"{self.bad_packed} garrafa(s) fora do nivel foram encaixotadas: use o rejeitor")
+            out.append(f"{self.bad_packed} garrafa(s) fora do nível foram encaixotadas: use o rejeitor")
         if self.box_overfull:
             out.append("Caixa com mais de 6 garrafas")
         if self.boxes_incomplete:
@@ -243,7 +243,7 @@ class BottleLineEnvironment(Environment):
         p.fillRect(QRectF(FILL_X - 3, tank.bottom(), 6, 40), QColor("#475569"))
         p.setBrush(QColor("#2563eb") if self.valve > 0.5 else QColor("#64748b"))
         p.drawRect(QRectF(FILL_X - 10, tank.bottom() + 12, 20, 14))
-        draw.tag(p, FILL_X - 98, tank.bottom() + 19, "Q0.1 valvula", out["VALVE"])
+        draw.tag(p, FILL_X - 98, tank.bottom() + 19, "Q0.1 válvula", out["VALVE"])
         nozzle_y = tank.bottom() + 40
         if self.valve > 0.05:
             p.fillRect(QRectF(FILL_X - 1.5 * self.valve, nozzle_y, 3 * self.valve, BELT_Y - nozzle_y - 30),
@@ -262,7 +262,7 @@ class BottleLineEnvironment(Environment):
         draw.sensor(p, QRectF(INSP_X - 5, BELT_Y - 100, 10, 18), sens["AT_INSP"])
         draw.beam(p, QPointF(INSP_X, BELT_Y - 82), QPointF(INSP_X, BELT_Y - 2), sens["AT_INSP"])
         draw.tag(p, INSP_X + 8, BELT_Y - 100, "I0.4 garrafa", sens["AT_INSP"])
-        draw.tag(p, INSP_X + 8, BELT_Y - 82, "I0.3 nivel OK", sens["LEVEL_OK"])
+        draw.tag(p, INSP_X + 8, BELT_Y - 82, "I0.3 nível OK", sens["LEVEL_OK"])
         rod = 30 * self.push
         p.setPen(QPen(QColor("#0f172a"), 1))
         p.setBrush(QColor("#7c3aed"))

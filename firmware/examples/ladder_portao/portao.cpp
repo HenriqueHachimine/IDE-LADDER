@@ -166,12 +166,31 @@ uint16_t plc_scan(uint16_t inputs, uint32_t dt_ms) {
 }
 
 #ifdef ARDUINO
-// Uso como sketch para a placa (compile junto com firmware/src/io_board.cpp, que
-// faz a leitura das entradas e o acionamento dos reles). Exemplo nao validado
-// na placa: o caminho oficial e transferir o programa pela IDE.
+// Uso como sketch para a placa: Dispositivo > Gravar C++ na placa (ESP32, Arduino UNO ou
+// Mega) compila com o io_board da placa escolhida e grava pela USB. Substitui o
+// firmware do CLP: para voltar a transferir pela IDE, grave o firmware de novo.
 // Monitor serial a 115200 bit/s: mostra cada entrada, saida, temporizador e
 // contador que muda. Comandos: s = estado completo, h = ajuda.
 #include "io_board.h"
+
+// Impressao no monitor serial. No Arduino UNO/Mega (AVR) o Serial nao tem printf e a
+// RAM e pequena (2 KB no UNO): os textos ficam na flash (PSTR/F) e sao formatados aqui.
+#if defined(ARDUINO_ARCH_AVR)
+#include <stdarg.h>
+static void plc_printf_P(const char *fmt, ...) {
+    char buf[96];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf_P(buf, sizeof buf, fmt, ap);
+    va_end(ap);
+    Serial.print(buf);
+}
+#define PLC_PRINTF(fmt, ...) plc_printf_P(PSTR(fmt), ##__VA_ARGS__)
+#define PLC_TEXT(s) F(s)
+#else
+#define PLC_PRINTF(...) Serial.printf(__VA_ARGS__)
+#define PLC_TEXT(s) (s)
+#endif
 
 static const uint32_t SCAN_PERIOD_MS = 10;
 
@@ -180,35 +199,35 @@ static const char *const IN_LABEL[8] = {"I0.0 Abrir", "I0.1 Fechar", "I0.2 Parar
 static const char *const OUT_LABEL[8] = {"Q0.0 Motor_Sobe", "Q0.1 Motor_Desce", "Q0.2 Lampada_Entreaberto", "Q0.3 Lampada_Aberto", "Q0.4 Lampada_Fechado", "Q0.5", "Q0.6", "Q0.7"};
 static const char *const TIMER_LABEL[1] = {"T0 Espera_Reversao"};
 
-static void stamp() { Serial.printf("[%8lu ms] ", (unsigned long)millis()); }
+static void stamp() { PLC_PRINTF("[%8lu ms] ", (unsigned long)millis()); }
 
 static void print_help() {
     Serial.println();
-    Serial.println("=== Portao de garagem: programa LADDER rodando no ESP32 ===");
-    Serial.println("6 rede(s), varredura a cada 10 ms. Entradas, saidas e temporizadores:");
-    Serial.println("  I0.0 Abrir                Botao ABRIR (NA)");
-    Serial.println("  I0.1 Fechar               Botao FECHAR (NA)");
-    Serial.println("  I0.2 Parar                Botao PARAR (NF: le 1 quando solto)");
-    Serial.println("  I0.3 Fim_Curso_Aberto     LS1: portao totalmente aberto");
-    Serial.println("  I0.4 Fim_Curso_Fechado    LS2: portao totalmente fechado");
-    Serial.println("  I0.5 Fotocelula           Veiculo/obstaculo sob o portao");
-    Serial.println("  Q0.0 Motor_Sobe           Motor no sentido de abrir");
-    Serial.println("  Q0.1 Motor_Desce          Motor no sentido de fechar");
-    Serial.println("  Q0.2 Lampada_Entreaberto  Lampada ENTREABERTO");
-    Serial.println("  Q0.3 Lampada_Aberto       Lampada ABERTO");
-    Serial.println("  Q0.4 Lampada_Fechado      Lampada FECHADO");
-    Serial.println("  T0 Espera_Reversao        TON 600 ms");
-    Serial.println("Cada mudanca aparece aqui. Comandos: s = estado completo | h = ajuda");
+    Serial.println(PLC_TEXT("=== Portao de garagem: programa LADDER rodando no ESP32 ==="));
+    Serial.println(PLC_TEXT("6 rede(s), varredura a cada 10 ms. Entradas, saidas e temporizadores:"));
+    Serial.println(PLC_TEXT("  I0.0 Abrir                Botao ABRIR (NA)"));
+    Serial.println(PLC_TEXT("  I0.1 Fechar               Botao FECHAR (NA)"));
+    Serial.println(PLC_TEXT("  I0.2 Parar                Botao PARAR (NF: le 1 quando solto)"));
+    Serial.println(PLC_TEXT("  I0.3 Fim_Curso_Aberto     LS1: portao totalmente aberto"));
+    Serial.println(PLC_TEXT("  I0.4 Fim_Curso_Fechado    LS2: portao totalmente fechado"));
+    Serial.println(PLC_TEXT("  I0.5 Fotocelula           Veiculo/obstaculo sob o portao"));
+    Serial.println(PLC_TEXT("  Q0.0 Motor_Sobe           Motor no sentido de abrir"));
+    Serial.println(PLC_TEXT("  Q0.1 Motor_Desce          Motor no sentido de fechar"));
+    Serial.println(PLC_TEXT("  Q0.2 Lampada_Entreaberto  Lampada ENTREABERTO"));
+    Serial.println(PLC_TEXT("  Q0.3 Lampada_Aberto       Lampada ABERTO"));
+    Serial.println(PLC_TEXT("  Q0.4 Lampada_Fechado      Lampada FECHADO"));
+    Serial.println(PLC_TEXT("  T0 Espera_Reversao        TON 600 ms"));
+    Serial.println(PLC_TEXT("Cada mudanca aparece aqui. Comandos: s = estado completo | h = ajuda"));
 }
 
 static void print_state(uint16_t inputs, uint16_t outputs) {
     stamp();
-    Serial.println("estado atual:");
+    Serial.println(PLC_TEXT("estado atual:"));
     for (int k = 0; k < 8; k++)
-        Serial.printf("  %-24s  %s\n", IN_LABEL[k], (inputs >> k) & 1u ? "1" : "0");
+        PLC_PRINTF("  %-24s  %s\n", IN_LABEL[k], (inputs >> k) & 1u ? "1" : "0");
     for (int k = 0; k < 8; k++)
-        Serial.printf("  %-24s  %s\n", OUT_LABEL[k], (outputs >> k) & 1u ? "1 (rele ligado)" : "0");
-    Serial.printf("  %-24s  %lu/%lu ms%s\n", TIMER_LABEL[0], (unsigned long)T[0].acc, (unsigned long)T[0].pre, T[0].dn ? " DN" : "");
+        PLC_PRINTF("  %-24s  %s\n", OUT_LABEL[k], (outputs >> k) & 1u ? "1 (rele ligado)" : "0");
+    PLC_PRINTF("  %-24s  %lu/%lu ms%s\n", TIMER_LABEL[0], (unsigned long)T[0].acc, (unsigned long)T[0].pre, T[0].dn ? " DN" : "");
 }
 
 // Compara com a varredura anterior e escreve o que mudou: entradas (causa),
@@ -220,16 +239,16 @@ static void report_changes(uint16_t inputs, uint16_t outputs, bool quiet) {
         bool on = (inputs >> k) & 1u;
         if (!quiet && on != (bool)((last_in >> k) & 1u)) {
             stamp();
-            Serial.printf("entrada %s %s\n", IN_LABEL[k], on ? "LIGOU" : "desligou");
+            PLC_PRINTF("entrada %s %s\n", IN_LABEL[k], on ? "LIGOU" : "desligou");
         }
     }
     if (!quiet && T[0].tt && !last_tt[0]) {
         stamp();
-        Serial.printf("temporizador %s comecou a contar (%lu ms)\n", TIMER_LABEL[0], (unsigned long)T[0].pre);
+        PLC_PRINTF("temporizador %s comecou a contar (%lu ms)\n", TIMER_LABEL[0], (unsigned long)T[0].pre);
     }
     if (!quiet && T[0].dn != last_dn[0]) {
         stamp();
-        Serial.printf("temporizador %s: DN %s\n", TIMER_LABEL[0], T[0].dn ? "LIGOU" : "desligou");
+        PLC_PRINTF("temporizador %s: DN %s\n", TIMER_LABEL[0], T[0].dn ? "LIGOU" : "desligou");
     }
     last_tt[0] = T[0].tt;
     last_dn[0] = T[0].dn;
@@ -237,7 +256,7 @@ static void report_changes(uint16_t inputs, uint16_t outputs, bool quiet) {
         bool on = (outputs >> k) & 1u;
         if (!quiet && on != (bool)((last_out >> k) & 1u)) {
             stamp();
-            Serial.printf("saida   %s %s\n", OUT_LABEL[k], on ? "LIGOU (rele energizado)" : "desligou");
+            PLC_PRINTF("saida   %s %s\n", OUT_LABEL[k], on ? "LIGOU (rele energizado)" : "desligou");
         }
     }
     last_in = inputs;

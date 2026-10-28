@@ -71,13 +71,13 @@ def find_firmware() -> FirmwareBundle:
         files = [(int(off), BUNDLE_DIR / name) for off, name in data["parts"]]
         missing = [p.name for _, p in files if not p.exists()]
         if missing:
-            raise FlashError(f"instalacao incompleta: faltam {', '.join(missing)}")
-        return FirmwareBundle(files, data.get("version", "?"), data.get("hardware", "?"), "incluido na instalacao",
+            raise FlashError(f"instalação incompleta: faltam {', '.join(missing)}")
+        return FirmwareBundle(files, data.get("version", "?"), data.get("hardware", "?"), "incluído na instalação",
                               data.get("sha256", {}))
     files = [(off, BOOT_APP0 if name == "boot_app0.bin" else PIO_BUILD / name) for off, name in LAYOUT]
     missing = [str(p) for _, p in files if not p.exists()]
     if missing:
-        raise FlashError("firmware nao compilado. Na pasta firmware/, rode:  pio run -e esp32dev\n"
+        raise FlashError("firmware não compilado. Na pasta firmware/, rode:  pio run -e esp32dev\n"
                          "Faltam: " + ", ".join(missing))
     version, hardware = _board_defines()
     return FirmwareBundle(files, version, hardware, "compilado pelo PlatformIO")
@@ -89,7 +89,7 @@ def esptool_command() -> list[str]:
     if bundled.exists():
         return [str(bundled)]
     if getattr(sys, "frozen", False):
-        raise FlashError("esptool nao incluido nesta instalacao")
+        raise FlashError("esptool não incluido nesta instalação")
     try:
         import esptool  # noqa: F401
         return [sys.executable, "-m", "esptool"]
@@ -99,7 +99,7 @@ def esptool_command() -> list[str]:
         return [sys.executable, str(PIO_ESPTOOL)]
     if shutil.which("esptool"):
         return ["esptool"]
-    raise FlashError("esptool nao encontrado (instale com:  python -m pip install esptool)")
+    raise FlashError("esptool não encontrado (instale com:  python -m pip install esptool)")
 
 
 def flash_command(port: str, bundle: FirmwareBundle, baud: int | None = None) -> list[str]:

@@ -17,23 +17,24 @@ class VerifyDialog(QDialog):
     def __init__(self, report: VerifyReport, parent=None):
         super().__init__(parent)
         self.report = report
-        self.setWindowTitle("Verificacao para o ESP32")
+        self.setWindowTitle("Verificação para o ESP32")
         self.resize(760, 520)
         layout = QVBoxLayout(self)
         banner = QLabel(report.summary())
-        bg, fg = (("#fee2e2", "#991b1b") if report.errors else
-                  ("#fef3c7", "#92400e") if report.warnings else ("#dcfce7", "#166534"))
+        c = theme.colors
+        bg, fg = ((c["ERR_BG"], c["ERR_FG"]) if report.errors else
+                  (c["WARN_BG"], c["WARN_FG"]) if report.warnings else (c["OK_BG"], c["OK_FG"]))
         banner.setStyleSheet(f"background:{bg}; color:{fg}; font-weight:600; font-size:11pt; "
                              "padding:10px; border-radius:8px;")
         layout.addWidget(banner)
         sub = QLabel(f"Placa: {report.board.hardware}, firmware {report.board.firmware} "
-                     f"({report.board.inputs} entradas, {report.board.outputs} reles, varredura "
+                     f"({report.board.inputs} entradas, {report.board.outputs} relés, varredura "
                      f"{report.board.scan_period_ms} ms, watchdog {report.board.watchdog_us // 1000} ms).")
         sub.setWordWrap(True)
         sub.setObjectName("muted")
         layout.addWidget(sub)
         self.table = QTableWidget(len(report.checks), 3)
-        self.table.setHorizontalHeaderLabels(["", "Verificacao", "Resultado"])
+        self.table.setHorizontalHeaderLabels(["", "Verificação", "Resultado"])
         self.table.verticalHeader().hide()
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionMode(QTableWidget.NoSelection)
@@ -58,7 +59,7 @@ class VerifyDialog(QDialog):
                 self.table.setItem(row, col, cell)
         layout.addWidget(self.table, 1)
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
-        copy = QPushButton("Copiar relatorio")
+        copy = QPushButton("Copiar relatório")
         copy.clicked.connect(lambda: QGuiApplication.clipboard().setText(report.as_text()))
         buttons.addButton(copy, QDialogButtonBox.ActionRole)
         buttons.rejected.connect(self.reject)

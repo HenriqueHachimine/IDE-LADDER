@@ -28,8 +28,8 @@ def test_valid_program_passes_all_offline_checks(c_vm):  # c_vm: pula sem gcc
     rep = verify_for_esp32(p, compile_project(p))
     st = statuses(rep)
     assert rep.ok and not rep.errors
-    assert st["Validacao pelo codigo C do firmware"] == OK
-    assert st["Equivalencia simulador x firmware"] == OK and rep.scans_compared == 400
+    assert st["Validação pelo código C do firmware"] == OK
+    assert st["Equivalência simulador x firmware"] == OK and rep.scans_compared == 400
     assert st["Dispositivo conectado"] == SKIP          # nada medido sem placa
 
 
@@ -38,7 +38,7 @@ def test_addresses_beyond_the_board_are_errors():
     p.target.device = "simulacao-16"                      # projeto feito para o simulador
     p.io.n_inputs = p.io.n_outputs = 16
     rep = verify_for_esp32(p, compile_project(p))
-    assert statuses(rep)["Entradas e saidas da placa"] == ERROR
+    assert statuses(rep)["Entradas e saídas da placa"] == ERROR
     assert statuses(rep)["Controlador do projeto"] == WARN
     assert "I1.0" in rep.as_text() and "Q1.1" in rep.as_text()
     assert not rep.ok
@@ -49,7 +49,7 @@ def test_timing_warnings():
     p.io.scan_period_ms = 20
     rep = verify_for_esp32(p, compile_project(p))
     st = statuses(rep)
-    assert st["Periodo de varredura"] == WARN and st["Resolucao dos temporizadores"] == WARN
+    assert st["Período de varredura"] == WARN and st["Resolução dos temporizadores"] == WARN
     assert rep.ok                                        # avisos nao bloqueiam
 
 
@@ -63,17 +63,17 @@ def test_divergence_between_vms_is_reported(monkeypatch):
         return status, lines
     monkeypatch.setattr(esp32, "firmware_trace", corrupted)
     rep = verify_for_esp32(p, compile_project(p))
-    assert statuses(rep)["Equivalencia simulador x firmware"] == ERROR
+    assert statuses(rep)["Equivalência simulador x firmware"] == ERROR
     assert "varredura 37" in rep.as_text()
 
 
 def test_missing_c_compiler_is_reported_as_not_verified(monkeypatch):
     def no_gcc(image, seq):
-        raise BuildError("compilador C 'gcc' nao encontrado")
+        raise BuildError("compilador C 'gcc' não encontrado")
     monkeypatch.setattr(esp32, "firmware_trace", no_gcc)
     p = Project.load(DEMO)
     rep = verify_for_esp32(p, compile_project(p))
-    assert statuses(rep)["Validacao pelo codigo C do firmware"] == SKIP and rep.ok
+    assert statuses(rep)["Validação pelo código C do firmware"] == SKIP and rep.ok
 
 
 def test_device_measurements_are_checked_against_watchdog():
