@@ -6,6 +6,7 @@ from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QHeaderView, QLabel, QPushButton, QSizePolicy,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
+from ..core.asm import parse_operand
 from ..envs import BUTTON, SWITCH, Environment, EnvironmentPlant, available, create
 from ..envs.registry import load_errors
 from .theme import themed
@@ -113,8 +114,10 @@ class EnvironmentPanel(QWidget):
         row.addWidget(QLabel("Ambiente:"))
         self.combo = QComboBox()
         self.combo.addItem("(nenhum - usar apenas o painel de E/S)", "")
+        self._needs: dict[tuple, tuple[int, int]] = {}      # (id, E/S do projeto) -> entradas e saidas usadas
         for cls in available():
             self.combo.addItem(cls.name, cls.id)
+            self.combo.setItemData(self.combo.count() - 1, cls.name, Qt.UserRole + 1)
         self.combo.currentIndexChanged.connect(self._combo_changed)
         row.addWidget(self.combo, 1)
         layout.addLayout(row)
@@ -138,6 +141,11 @@ class EnvironmentPanel(QWidget):
         body = QHBoxLayout()                # cena (paisagem) ao lado da tabela de E/S
         body.addWidget(self.view, 3)
         side = QVBoxLayout()
+        self.fit_warning = QLabel()         # ambiente usa mais E/S que o controlador do projeto
+        self.fit_warning.setWordWrap(True)
+        self.fit_warning.setObjectName("danger")
+        self.fit_warning.hide()
+        side.addWidget(self.fit_warning)
         side.addWidget(self.description)
         self.stats = QLabel()
         self.stats.setObjectName("stats")
@@ -185,11 +193,42 @@ class EnvironmentPanel(QWidget):
         if self.env is not None and self.env.configure(*self.io):
             self._set(self.env)
             self.plantChanged.emit()
+        self._update_fit()
+
+    def needs(self, env_id: str) -> tuple[int, int]:
+        """Entradas e saidas que o ambiente usa com as E/S atuais do projeto."""
+        key = (env_id, self.io)
+        if key not in self._needs:
+            env = create(env_id)
+            env.configure(*self.io)
+            used = [[parse_operand(pt.address)[1] + 1 for pt in pts] for pts in (env.inputs, env.outputs)]
+            self._needs[key] = (max(used[0], default=0), max(used[1], default=0))
+        return self._needs[key]
+
+    def _missing(self, env_id: str) -> str:
+        n_in, n_out = self.needs(env_id)
+        lack = [f"{n} entradas" for n in (n_in,) if n > self.io[0]] +                [f"{n} saídas" for n in (n_out,) if n > self.io[1]]
+        return " e ".join(lack)
+
+    def _update_fit(self) -> None:
+        """Ambientes que nao cabem nas E/S do controlador ficam desabilitados na lista."""
+        model = self.combo.model()
+        for k in range(1, self.combo.count()):
+            missing = self._missing(self.combo.itemData(k))
+            name = self.combo.itemData(k, Qt.UserRole + 1)
+            self.combo.setItemText(k, f"{name}  (precisa de {missing})" if missing else name)
+            model.item(k).setEnabled(not missing)
+        missing = self._missing(self.env.id) if self.env is not None else ""
+        self.fit_warning.setText(f"Este ambiente precisa de {missing}, mais do que o controlador do projeto "
+                                 f"tem ({self.io[0]} entradas e {self.io[1]} saídas). Troque o controlador em "
+                                 "Editar > Propriedades do projeto ou escolha outro ambiente." if missing else "")
+        self.fit_warning.setVisible(bool(missing))
 
     def _set(self, env: Environment | None) -> None:
         if env is not None:
             env.configure(*self.io)
         self.env = env
+        self._update_fit()
         self.plant = EnvironmentPlant(env) if env is not None else None
         self.view.env = env
         self.description.setText(env.description if env else

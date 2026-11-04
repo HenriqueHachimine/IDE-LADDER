@@ -22,7 +22,7 @@ def _led_style(value: bool | None) -> str:
     return f"background:{c['LED_OFF']}; border:1px solid {c['LED_OFF_BORDER']};"
 
 
-def _short(name: str, limit: int = 14) -> str:
+def _short(name: str, limit: int = 20) -> str:
     """Nome de simbolo curto para caber no botao (o nome inteiro vai na dica)."""
     return name if len(name) <= limit else name[:limit - 1] + "…"
 
@@ -48,6 +48,10 @@ class IOPanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         self.inputs_box = QGroupBox("Entradas")
         self.inputs_grid = QGridLayout(self.inputs_box)
+        self.owned_hint = QLabel()          # legenda da borda tracejada (so com entradas comandadas)
+        self.owned_hint.setObjectName("hint")
+        self.owned_hint.setWordWrap(True)
+        self.owned_hint.hide()
         self.momentary = QCheckBox("Botões pulsadores (soltar desliga)")
         self.outputs_box = QGroupBox("Saídas")
         self.outputs_grid = QGridLayout(self.outputs_box)
@@ -63,6 +67,7 @@ class IOPanel(QWidget):
             t.setAlternatingRowColors(True)
             t.setShowGrid(False)
         layout.addWidget(self.inputs_box)
+        layout.addWidget(self.owned_hint)
         layout.addWidget(self.momentary)
         layout.addWidget(self.outputs_box)
         split = QSplitter(Qt.Vertical)      # o usuario ajusta a divisao entre as duas tabelas
@@ -91,7 +96,9 @@ class IOPanel(QWidget):
     def _reflow_inputs(self) -> None:
         """Colunas de entradas conforme a largura (4, 3, 2 ou 1): nada fica cortado no painel estreito."""
         width = self.inputs_box.width() or self.width() or 480
-        cols = max(1, min(4, (width - 24) // 110))
+        text_w = max((max(b.fontMetrics().horizontalAdvance(line) for line in b.text().split("\n"))
+                      for b in self.input_buttons), default=0)
+        cols = max(1, min(4, (width - 24) // max(110, text_w + 28)))    # o nome inteiro cabe no botao
         if cols == self._input_cols:
             return
         self._input_cols = cols
@@ -210,6 +217,11 @@ class IOPanel(QWidget):
         self._apply_owned()
 
     def _apply_owned(self) -> None:
+        owner = getattr(self, "owner", "ambiente de simulação")
+        any_owned = any(self.owned >> k & 1 for k in range(len(self.input_buttons)))
+        self.owned_hint.setText(f"Borda tracejada: entrada comandada pelo {owner} (muda sozinha, "
+                                "não dá para clicar).")
+        self.owned_hint.setVisible(any_owned)
         for k, b in enumerate(self.input_buttons):
             owned = bool(self.owned >> k & 1)
             b.setEnabled(self.editable and not owned)
@@ -218,7 +230,7 @@ class IOPanel(QWidget):
                 b.style().unpolish(b)
                 b.style().polish(b)
             full = b.property("fullName") or ""
-            b.setToolTip(f"{full}\nComandada pelo {getattr(self, 'owner', 'ambiente de simulação')}: "
+            b.setToolTip(f"{full}\nComandada pelo {owner}: "
                          "muda sozinha conforme o processo" if owned else full)
 
     def _pressed(self, k: int) -> None:

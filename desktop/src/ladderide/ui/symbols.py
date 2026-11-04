@@ -161,6 +161,7 @@ def paint_symbol(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
         box = QRectF(r.left() + w * 0.08, r.top() + 3, w * 0.84, r.height() - 6)
         p.setPen(_pen(st.power_in))
         p.drawLine(QPointF(r.left(), mid), QPointF(box.left(), mid))
+        p.drawLine(QPointF(box.right(), mid), QPointF(r.right(), mid))     # ate o fio do trilho direito
         p.setPen(QPen(color_for(st.power_in), 1.4 if not st.power_in else 2.2))
         p.setBrush(BOX_FILL)
         p.drawRoundedRect(box, 5, 5)
@@ -221,7 +222,7 @@ def _paint_block(p: QPainter, kind: str, r: QRectF, st: SymbolState) -> None:
     p.drawLine(QPointF(r.left(), mid), QPointF(box.left(), mid))
     if is_compare:
         p.setPen(_pen(st.power_out))
-        p.drawLine(QPointF(box.right(), mid), QPointF(r.right(), mid))
+    p.drawLine(QPointF(box.right(), mid), QPointF(r.right(), mid))
     lit = st.power_out if is_compare else st.power_in
     p.setPen(QPen(color_for(lit), 2.2 if lit else 1.4))
     p.setBrush(BOX_FILL)

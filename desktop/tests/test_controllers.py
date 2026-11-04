@@ -169,9 +169,11 @@ def test_new_project_dialog_lists_processors_by_family():
     from ladderide.ui.dialogs import NewProjectDialog
     QApplication.instance() or QApplication([])
     dlg = NewProjectDialog()
-    groups = [dlg.list.topLevelItem(k).text(0) for k in range(dlg.list.topLevelItemCount())]
+    tops = [dlg.list.topLevelItem(k) for k in range(dlg.list.topLevelItemCount())]
+    groups = [g.text(0).split("  (")[0] for g in tops]       # familias Allen-Bradley: "(N modelos)"
     assert groups == ["Placa do projeto e simulação", "Arduino", "Allen-Bradley SLC 500 modular",
                       "Allen-Bradley MicroLogix 1000", "Allen-Bradley SLC 500 fixo"]
+    assert [g.isExpanded() for g in tops] == [True, True, False, False, False]   # referencia recolhida
     rows = {r.text(0): r.text(1) for r in dlg._rows()}
     assert rows["1747-L553"] == "5/05 CPU 64K Mem. OS500" and rows["1747-L511"] == "5/01 CPU 1K Mem."
     assert rows["1747-L40P"] == "24-230 VAC In, 16-Triac Out"
@@ -252,3 +254,21 @@ def test_properties_lock_io_to_the_controller():
     assert (dlg.n_inputs.value(), dlg.n_outputs.value()) == (12, 12) and not dlg.n_inputs.isEnabled()
     dlg.controller.setCurrentIndex(dlg.controller.findData("personalizado"))
     assert dlg.n_inputs.isEnabled()
+
+
+def test_environments_that_need_more_io_than_the_controller_are_disabled():
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    from ladderide.ui.env_panel import EnvironmentPanel
+    QApplication.instance() or QApplication([])
+    panel = EnvironmentPanel()
+    panel.select("semaforo")                                    # usa Q0.0 a Q0.7
+    panel.set_io(10, 6, 32)                                     # MicroLogix 1000: 10 E / 6 S
+    k = panel.combo.findData("semaforo")
+    assert not panel.combo.model().item(k).isEnabled() and "8 saídas" in panel.combo.itemText(k)
+    assert panel.combo.model().item(panel.combo.findData("silo")).isEnabled()
+    assert not panel.fit_warning.isHidden() and "8 saídas" in panel.fit_warning.text()
+    panel.set_io(8, 8, 32)
+    assert panel.combo.model().item(k).isEnabled() and panel.combo.itemText(k) == "Semáforo de cruzamento"
+    assert panel.fit_warning.isHidden()
