@@ -7,6 +7,7 @@
     python -m ladderide.cli --port COM5 download projeto.ladproj [--stop]
     python -m ladderide.cli --port COM5 monitor [--interval 0.2] [--count N]
     python -m ladderide.cli --port COM5 equivalence [--vectors shared/test-vectors/scan]
+    python -m ladderide.cli factoryio [127.0.0.1] [--unit 1] [--sensors 8] [--set 1010] [--count 0]
     (no Linux a porta e /dev/ttyUSB0 ou /dev/ttyACM0; use --virtual para o dispositivo virtual)
 """
 from __future__ import annotations
@@ -86,6 +87,18 @@ def main(argv: list[str] | None = None) -> int:
     cp.add_argument("-o", "--output")
     e = sub.add_parser("equivalence")
     e.add_argument("--vectors", default=str(ROOT / "shared" / "test-vectors" / "scan"))
+    f = sub.add_parser("factoryio", help="testa a ligacao com o Factory IO (driver Modbus TCP/IP Server)")
+    f.add_argument("address", nargs="?", default="127.0.0.1", help="PC com o Factory IO")
+    f.add_argument("--mb-port", type=int, default=502, help="porta Modbus TCP")
+    f.add_argument("--unit", type=int, default=1, help="Slave ID do driver")
+    f.add_argument("--sensor-table", choices=("inputs", "coils"), default="inputs")
+    f.add_argument("--sensor-offset", type=int, default=0)
+    f.add_argument("--sensors", type=int, default=8)
+    f.add_argument("--actuator-offset", type=int, default=0)
+    f.add_argument("--actuators", type=int, default=8)
+    f.add_argument("--set", help="escreve estes bits nas coils dos atuadores (ex.: 1010 = Q0.0 e Q0.2)")
+    f.add_argument("--interval", type=float, default=0.2)
+    f.add_argument("--count", type=int, default=1, help="leituras (0 = sem fim)")
     args = ap.parse_args(argv)
 
     if args.cmd == "ports":
@@ -110,6 +123,8 @@ def main(argv: list[str] | None = None) -> int:
         if code.errors:
             print(f"{code.errors} erro(s) no diagrama (marcados com ERRO no codigo)", file=sys.stderr)
         return 1 if code.errors else 0
+    if args.cmd == "factoryio":
+        return _factoryio(args)
     if args.cmd in ("verify", "il"):
         from .verify import il_blocks, il_text, verify_for_esp32
         project, r = _compile(args.project)
@@ -139,6 +154,42 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     finally:
         client.close()
+
+
+def _factoryio(args) -> int:
+    from .comm.modbus_tcp import ModbusError, ModbusTcpClient
+    client = ModbusTcpClient(args.address, args.mb_port, args.unit)
+    try:
+        client.connect()
+        if args.set is not None:
+            text = args.set.strip()
+            if not text or set(text) - {"0", "1"}:
+                raise ValueError("--set aceita apenas 0 e 1 (ex.: 1010)")
+            client.write_coils(args.actuator_offset, [ch == "1" for ch in text])
+            print(f"Coils {args.actuator_offset}.. <- {' '.join(text)}")
+        read = client.read_discrete_inputs if args.sensor_table == "inputs" else client.read_coils
+        n = 0
+        while args.count == 0 or n < args.count:
+            stamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+            line = stamp
+            if args.sensors:
+                line += f" sensores=[{' '.join('1' if v else '0' for v in read(args.sensor_offset, args.sensors))}]"
+            if args.actuators:
+                coils = client.read_coils(args.actuator_offset, args.actuators)
+                line += f" atuadores=[{' '.join('1' if v else '0' for v in coils)}]"
+            print(line)
+            n += 1
+            if args.count == 0 or n < args.count:
+                time.sleep(args.interval)
+    except ModbusError as exc:
+        print(f"ERRO: {exc}", file=sys.stderr)
+        return 2
+    except ValueError as exc:
+        print(f"ERRO: {exc}", file=sys.stderr)
+        return 2
+    finally:
+        client.close()
+    return 0
 
 
 def _device_command(client: DeviceClient, args) -> int:

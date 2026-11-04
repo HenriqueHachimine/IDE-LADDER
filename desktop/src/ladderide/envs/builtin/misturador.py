@@ -43,16 +43,16 @@ class BatchMixerEnvironment(Environment):
     id = "misturador"
     name = "Misturador de batelada"
     description = ("Receita: 40 L do produto A (bomba 1) e 30 L do produto B (bomba 2), contados pelos pulsos "
-                   "dos fluxometros (1 pulso por litro). Depois o lote e agitado e aquecido ate o termostato "
-                   "(40 degC) e descarregado pela bomba de saida ate esvaziar. Aquecer abaixo do nivel baixo, "
-                   "aquecer sem agitar, transbordar, deixar a bomba de saida trabalhar a seco ou descarregar um "
-                   "lote fora da receita, frio ou sem mistura sao falhas.")
+                   "dos fluxometros (1 pulso por litro). Depois o lote e agitado e aquecido até o termostato "
+                   "(40 degC) e descarregado pela bomba de saída até esvaziar. Aquecer abaixo do nível baixo, "
+                   "aquecer sem agitar, transbordar, deixar a bomba de saída trabalhar a seco ou descarregar um "
+                   "lote fora da receita, frio ou sem mistura são falhas.")
     example = "ambientes/misturador.ladproj"
     inputs = [
-        IOPoint("START", "I0.0", "Start", "Botao de partida (NA)", BUTTON),
-        IOPoint("STOP", "I0.1", "Stop", "Botao de parada (NF: le 1 quando solto)", BUTTON, normally_closed=True),
-        IOPoint("LOW", "I0.2", "Nivel_Baixo", "Chave de nivel: liquido acima de 10 L"),
-        IOPoint("HIGH", "I0.3", "Nivel_Alto", "Chave de nivel: liquido acima de 90 L"),
+        IOPoint("START", "I0.0", "Start", "Botão de partida (NA)", BUTTON),
+        IOPoint("STOP", "I0.1", "Stop", "Botão de parada (NF: lê 1 quando solto)", BUTTON, normally_closed=True),
+        IOPoint("LOW", "I0.2", "Nivel_Baixo", "Chave de nível: liquido acima de 10 L"),
+        IOPoint("HIGH", "I0.3", "Nivel_Alto", "Chave de nível: liquido acima de 90 L"),
         IOPoint("THERMO", "I0.4", "Termostato", "Fecha com 40 degC (abre abaixo de 39 degC)"),
         IOPoint("FLOW1", "I0.5", "Fluxometro_1", "1 pulso por litro do produto A"),
         IOPoint("FLOW2", "I0.6", "Fluxometro_2", "1 pulso por litro do produto B"),
@@ -62,9 +62,9 @@ class BatchMixerEnvironment(Environment):
         IOPoint("PUMP2", "Q0.1", "Bomba_2", "Bomba do produto B"),
         IOPoint("MIXER", "Q0.2", "Misturador", "Motor do agitador"),
         IOPoint("DRAIN", "Q0.3", "Bomba_Saida", "Bomba de descarga"),
-        IOPoint("HEATER", "Q0.4", "Aquecedor", "Resistencia de aquecimento"),
+        IOPoint("HEATER", "Q0.4", "Aquecedor", "Resistência de aquecimento"),
         IOPoint("RUN", "Q0.5", "Lampada_Run", "Lampada RUN"),
-        IOPoint("FULL", "Q0.6", "Lampada_Cheio", "Lampada nivel alto"),
+        IOPoint("FULL", "Q0.6", "Lampada_Cheio", "Lampada nível alto"),
     ]
 
     def reset(self) -> None:
@@ -181,11 +181,11 @@ class BatchMixerEnvironment(Environment):
         if self.spilled > 0:
             out.append(f"O tanque transbordou ({self.spilled:.1f} L)")
         if self.dry_heat:
-            out.append("Aquecedor ligado abaixo do nivel baixo: resistencia exposta queimou")
+            out.append("Aquecedor ligado abaixo do nível baixo: resistência exposta queimou")
         if self.unstirred:
             out.append("Aquecedor ligado sem o misturador: superaquecimento local do produto")
         if self.dry_pump:
-            out.append("Bomba de saida trabalhando a seco: desligue quando o tanque esvaziar")
+            out.append("Bomba de saída trabalhando a seco: desligue quando o tanque esvaziar")
         if self.bad:
             out.append(f"{len(self.bad)} lote(s) rejeitado(s): {self.bad[-1]}")
         return out
@@ -195,7 +195,7 @@ class BatchMixerEnvironment(Environment):
         a = f"{self.a / v * 100:.0f}% A" if v > 0.5 else "-"
         return [f"Tanque: {v:.1f} L ({a}) | {self.temp:.1f} degC | mistura {self.mix * 100:.0f}%",
                 f"Lotes bons: {self.good} | rejeitados: {len(self.bad)}"
-                + (f" | ultimo: {self.last_batch}" if self.last_batch else "")]
+                + (f" | último: {self.last_batch}" if self.last_batch else "")]
 
     # ------------------------------------------------------------ desenho
     def controls(self):
@@ -262,7 +262,7 @@ class BatchMixerEnvironment(Environment):
         p.drawRect(heat)
         draw.tag(p, heat.right() + 6, heat.center().y(), "Q0.4 aquecedor", out["HEATER"])
         # chaves de nivel e termostato
-        for key, liters, addr in (("HIGH", HIGH_L, "I0.3 nivel alto"), ("LOW", LOW_L, "I0.2 nivel baixo")):
+        for key, liters, addr in (("HIGH", HIGH_L, "I0.3 nível alto"), ("LOW", LOW_L, "I0.2 nível baixo")):
             y = TANK.bottom() - TANK.height() * liters / CAPACITY
             p.setPen(QPen(QColor("#111827"), 1))
             p.setBrush(QColor("#a16207"))
@@ -278,7 +278,7 @@ class BatchMixerEnvironment(Environment):
             p.drawPolyline([QPointF(TANK.left() + 40, TANK.bottom()), QPointF(TANK.left() + 40, 380),
                             QPointF(640, 380)])
         self._pump(p, QPointF(560, 380), self.speed["DRAIN"], self.angle * 3)
-        draw.tag(p, 500, 400, "Q0.3 bomba de saida", out["DRAIN"])
+        draw.tag(p, 500, 400, "Q0.3 bomba de saída", out["DRAIN"])
         # painel
         draw.panel(p, QRectF(12, 120, 140, 190), "BATELADA")
         for k, (key, label, color, addr) in enumerate((("RUN", "RUN", draw.GREEN, "Q0.5"),

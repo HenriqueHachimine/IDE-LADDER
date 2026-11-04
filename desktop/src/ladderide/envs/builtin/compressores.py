@@ -32,24 +32,24 @@ SIMULTANEOUS_S = 0.5         # duas partidas mais proximas que isso = pico de co
 class AirCompressorEnvironment(Environment):
     id = "compressores"
     name = "Central de ar comprimido"
-    description = ("Dois compressores alimentam o reservatorio que abastece a fabrica (consumo ajustavel). "
+    description = ("Dois compressores alimentam o reservatorio que abastece a fabrica (consumo ajustável). "
                    "Pressostato 1 (I0.2) fecha em 100 psi e abre em 120 psi; pressostato 2 (I0.3) fecha em 90 "
-                   "e abre em 110. Os reles termicos (I0.4, I0.5, NF) desarmam com mais de 6 partidas por minuto "
-                   "e rearmam apos 30 s. Partir os dois motores juntos causa pico de corrente; a agua condensada "
-                   "precisa ser drenada (Q0.2), mas o dreno tambem perde ar. Alterne o compressor lider.")
+                   "e abre em 110. Os relés termicos (I0.4, I0.5, NF) desarmam com mais de 6 partidas por minuto "
+                   "e rearmam após 30 s. Partir os dois motores juntos causa pico de corrente; a água condensada "
+                   "precisa ser drenada (Q0.2), mas o dreno também perde ar. Alterne o compressor lider.")
     example = "ambientes/compressores.ladproj"
     inputs = [
-        IOPoint("START", "I0.0", "Start", "Botao de partida (NA)", BUTTON),
-        IOPoint("STOP", "I0.1", "Stop", "Botao de parada (NF: le 1 quando solto)", BUTTON, normally_closed=True),
+        IOPoint("START", "I0.0", "Start", "Botão de partida (NA)", BUTTON),
+        IOPoint("STOP", "I0.1", "Stop", "Botão de parada (NF: lê 1 quando solto)", BUTTON, normally_closed=True),
         IOPoint("PE1", "I0.2", "Pressostato_1", "Fechado abaixo de 100 psi (abre em 120 psi)"),
         IOPoint("PE2", "I0.3", "Pressostato_2", "Fechado abaixo de 90 psi (abre em 110 psi)"),
-        IOPoint("TRIP1", "I0.4", "Termico_1", "Rele termico do motor 1 (NF: 1 = normal)", normally_closed=True),
-        IOPoint("TRIP2", "I0.5", "Termico_2", "Rele termico do motor 2 (NF: 1 = normal)", normally_closed=True),
+        IOPoint("TRIP1", "I0.4", "Termico_1", "Relé termico do motor 1 (NF: 1 = normal)", normally_closed=True),
+        IOPoint("TRIP2", "I0.5", "Termico_2", "Relé termico do motor 2 (NF: 1 = normal)", normally_closed=True),
     ]
     outputs = [
         IOPoint("M1", "Q0.0", "Motor_1", "Contator do compressor 1"),
         IOPoint("M2", "Q0.1", "Motor_2", "Contator do compressor 2"),
-        IOPoint("DRAIN", "Q0.2", "Valvula_Dreno", "Valvula solenoide de dreno do condensado"),
+        IOPoint("DRAIN", "Q0.2", "Valvula_Dreno", "Válvula solenoide de dreno do condensado"),
         IOPoint("RUN", "Q0.3", "Lampada_Run", "Lampada RUN"),
         IOPoint("FAULT", "Q0.4", "Lampada_Falha", "Lampada de falha (termico desarmado)"),
     ]
@@ -160,15 +160,15 @@ class AirCompressorEnvironment(Environment):
             if self.trip_count[k]:
                 out.append(f"Motor {k + 1} desarmou por excesso de partidas ({self.trip_count[k]}x)")
         if self.safety_opened:
-            out.append("A valvula de seguranca abriu (140 psi): compressor ligado sem controle de pressao")
+            out.append("A válvula de seguranca abriu (140 psi): compressor ligado sem controle de pressão")
         if self.low_events:
-            out.append("Pressao abaixo de 60 psi: a fabrica ficou sem ar")
+            out.append("Pressão abaixo de 60 psi: a fabrica ficou sem ar")
         if self.water_alarm:
             out.append("Reservatorio cheio de condensado: acione o dreno periodicamente")
         return out
 
     def stats(self) -> list[str]:
-        return [f"Pressao: {self.psi:.1f} psi | consumo {self.demand * 100:.0f}% | condensado {self.water:.0f}%",
+        return [f"Pressão: {self.psi:.1f} psi | consumo {self.demand * 100:.0f}% | condensado {self.water:.0f}%",
                 f"Motor 1: {len(self.starts[0])} partidas/min, {self.run_ms[0] / 1000:.0f} s ligado | "
                 f"Motor 2: {len(self.starts[1])} partidas/min, {self.run_ms[1] / 1000:.0f} s ligado"]
 
@@ -226,7 +226,7 @@ class AirCompressorEnvironment(Environment):
             p.setBrush(QColor(59, 130, 246, 180))
             for j in range(3):
                 p.drawEllipse(QPointF(dv.x(), dv.y() + 20 + j * 10 + (self.time_ms / 40) % 10), 2.5, 3.5)
-        draw.tag(p, dv.x() + 14, dv.y() + 8, f"Q0.2 dreno | agua {self.water:.0f}%", out["DRAIN"])
+        draw.tag(p, dv.x() + 14, dv.y() + 8, f"Q0.2 dreno | água {self.water:.0f}%", out["DRAIN"])
         # consumo e falhas simuladas
         draw.text(p, 375, 385, f"consumo {self.demand * 100:.0f}%", 8, True, draw.INK,
                   Qt.AlignHCenter | Qt.AlignVCenter, 96)

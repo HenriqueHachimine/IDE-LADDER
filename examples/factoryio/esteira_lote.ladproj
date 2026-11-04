@@ -1,0 +1,327 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Factory IO - esteira com lote",
+  "description": "Exemplo para o Factory IO (driver Modbus TCP/IP Server, ver docs/factory-io.md). Partida liga o sistema (selo), o emissor solta caixas com a entrada livre, a esteira leva ate a saida e cada caixa e contada. Com 5 caixas a esteira para e acende Lote_Completo; Partida comeca outro lote. Caixa parada na saida por 4 s com a esteira ligada e atolamento: para tudo e a lampada pisca ate Partida. Parada e NF (Stop do Factory IO): sem conexao a entrada le 0 e o sistema desliga.",
+  "version": "1.0.0",
+  "created": "2026-10-20T23:11:31",
+  "modified": "2026-10-20T23:11:31",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020
+  },
+  "symbols": [
+    {
+      "name": "Partida",
+      "address": "I0.0",
+      "comment": "Input 0 - Start Button (NA)"
+    },
+    {
+      "name": "Parada",
+      "address": "I0.1",
+      "comment": "Input 1 - Stop Button (NF: le 1 quando solto)"
+    },
+    {
+      "name": "Sensor_Entrada",
+      "address": "I0.2",
+      "comment": "Input 2 - Diffuse Sensor no inicio da esteira"
+    },
+    {
+      "name": "Sensor_Saida",
+      "address": "I0.3",
+      "comment": "Input 3 - Diffuse Sensor no fim da esteira"
+    },
+    {
+      "name": "Esteira",
+      "address": "Q0.0",
+      "comment": "Coil 0 - Belt Conveyor"
+    },
+    {
+      "name": "Emissor",
+      "address": "Q0.1",
+      "comment": "Coil 1 - Emitter (caixas)"
+    },
+    {
+      "name": "Luz_Partida",
+      "address": "Q0.2",
+      "comment": "Coil 2 - Start Button Light (sistema ligado)"
+    },
+    {
+      "name": "Luz_Lote",
+      "address": "Q0.3",
+      "comment": "Coil 3 - Light Indicator (lote completo; pisca no atolamento)"
+    },
+    {
+      "name": "Ligado",
+      "address": "M0.0",
+      "comment": "Sistema ligado (selo)"
+    },
+    {
+      "name": "Atolado",
+      "address": "M0.1",
+      "comment": "Alarme de atolamento memorizado"
+    },
+    {
+      "name": "Tempo_Atolamento",
+      "address": "T0",
+      "comment": "TON 4 s com caixa parada no sensor de saida"
+    },
+    {
+      "name": "Caixas",
+      "address": "C0",
+      "comment": "CTU 5 caixas por lote"
+    }
+  ],
+  "rungs": [
+    {
+      "comment": "Selo: Partida liga, Parada (NF) desliga",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Partida"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Ligado"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Parada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ligado"
+        }
+      ]
+    },
+    {
+      "comment": "Lampada do botao Partida",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ligado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Partida"
+        }
+      ]
+    },
+    {
+      "comment": "Partida comeca um lote novo e reconhece o alarme",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Partida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Caixas"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Atolado"
+        }
+      ]
+    },
+    {
+      "comment": "Esteira anda ate completar o lote",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ligado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixas.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Atolado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira"
+        }
+      ]
+    },
+    {
+      "comment": "Nova caixa so com a entrada livre",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Esteira"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Entrada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Emissor"
+        }
+      ]
+    },
+    {
+      "comment": "Conta as caixas que chegam a saida",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Esteira"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Saida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Caixas",
+          "preset": 5
+        }
+      ]
+    },
+    {
+      "comment": "Caixa parada na saida com a esteira ligada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Esteira"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Saida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Atolamento",
+          "preset": 4000
+        }
+      ]
+    },
+    {
+      "comment": "Memoriza o atolamento",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Atolamento.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Atolado"
+        }
+      ]
+    },
+    {
+      "comment": "Lote completo (fixa) ou atolamento (pisca 1 Hz)",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Caixas.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Atolado"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "S0.3"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Lote"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-10-20T23:11:31",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 9
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.0",
+    "build_id": "0xc665fa12",
+    "size": 276,
+    "instructions": 55,
+    "date": "2026-10-20T23:11:31"
+  },
+  "environment": ""
+}

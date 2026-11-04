@@ -7,35 +7,62 @@ os importou passa a desenhar com a nova cor no proximo repaint.
 """
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
+
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QColor, QGuiApplication, QPalette
 from PySide6.QtWidgets import QApplication
 
 from .fonts import ui_font
 
+_ARROW_DIR = Path(tempfile.gettempdir()) / "ladderide-tema"
+
+
+def _arrow(direction: str, color: str) -> str:
+    """Caminho (com /) de um SVG de seta na cor pedida, para usar em url() na folha de estilo."""
+    _ARROW_DIR.mkdir(exist_ok=True)
+    path = _ARROW_DIR / f"seta-{direction}-{color.lstrip('#')}.svg"
+    if not path.exists():
+        points = "1,5.5 5,1.5 9,5.5" if direction == "up" else "1,1.5 5,5.5 9,1.5"
+        path.write_text(f'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="7" viewBox="0 0 10 7">'
+                        f'<polyline points="{points}" fill="none" stroke="{color}" stroke-width="1.8" '
+                        'stroke-linecap="round" stroke-linejoin="round"/></svg>', encoding="utf-8")
+    return path.as_posix()
+
 MODES = {"light": "Claro", "dark": "Escuro", "system": "Seguir o Windows"}
 
 LIGHT = {
     "BG": "#eef2f7", "SURFACE": "#ffffff", "SURFACE_ALT": "#f8fafc", "BORDER": "#d8e0ea",
-    "TEXT": "#0f172a", "MUTED": "#64748b", "SUBTLE": "#475569", "DISABLED": "#a3b1c2",
+    "TEXT": "#0f172a", "MUTED": "#64748b", "SUBTLE": "#475569", "DISABLED": "#8593a6",
     "ACCENT": "#2563eb", "ACCENT_HOVER": "#1d4ed8", "ACCENT_SOFT": "#dbeafe", "ACCENT_BORDER": "#93c5fd",
     "HOVER": "#f1f5f9", "PRESSED": "#e2e8f0", "INPUT_BORDER": "#c7d2df", "INPUT_HOVER": "#94a3b8",
     "GRID": "#edf1f6", "SCROLL": "#c3cedb", "SCROLL_HOVER": "#94a3b8",
-    "SUCCESS": "#16a34a", "SUCCESS_BORDER": "#15803d", "WARN": "#b45309", "DANGER": "#b91c1c",
+    "SUCCESS": "#15803d", "SUCCESS_BORDER": "#166534", "WARN": "#b45309", "DANGER": "#b91c1c",
     "BADGE_BG": "#e2e8f0", "BADGE_FG": "#334155",
     "LED_OFF": "#e2e8f0", "LED_OFF_BORDER": "#94a3b8", "LED_UNKNOWN": "#f8fafc",
+    "LED_ON": "#16a34a", "LED_ON_BORDER": "#14532d",
     "TOOLTIP_BG": "#0f172a", "TOOLTIP_FG": "#ffffff",
+    # selos de estado (fundo, texto): ok / atencao / erro
+    "OK_BG": "#dcfce7", "OK_FG": "#166534", "WARN_BG": "#fef3c7", "WARN_FG": "#92400e",
+    "ERR_BG": "#fee2e2", "ERR_FG": "#991b1b",
+    # entrada comandada por ambiente ou Factory IO: informacao, nao botao desabilitado
+    "OWNED_BG": "#eef2ff", "OWNED_FG": "#3730a3", "OWNED_BORDER": "#a5b4fc",
 }
 DARK = {
     "BG": "#0b1120", "SURFACE": "#151e2e", "SURFACE_ALT": "#1a2436", "BORDER": "#2a3649",
-    "TEXT": "#e2e8f0", "MUTED": "#94a3b8", "SUBTLE": "#a5b4c8", "DISABLED": "#55637a",
+    "TEXT": "#e2e8f0", "MUTED": "#94a3b8", "SUBTLE": "#a5b4c8", "DISABLED": "#6b7a90",
     "ACCENT": "#3b82f6", "ACCENT_HOVER": "#2563eb", "ACCENT_SOFT": "#1e3a5f", "ACCENT_BORDER": "#3b82f6",
     "HOVER": "#1f2a3d", "PRESSED": "#26344b", "INPUT_BORDER": "#334155", "INPUT_HOVER": "#475569",
     "GRID": "#1f2a3b", "SCROLL": "#334155", "SCROLL_HOVER": "#475569",
-    "SUCCESS": "#16a34a", "SUCCESS_BORDER": "#22c55e", "WARN": "#f59e0b", "DANGER": "#f87171",
+    "SUCCESS": "#15803d", "SUCCESS_BORDER": "#22c55e", "WARN": "#f59e0b", "DANGER": "#f87171",
     "BADGE_BG": "#26344b", "BADGE_FG": "#cbd5e1",
     "LED_OFF": "#26344b", "LED_OFF_BORDER": "#475569", "LED_UNKNOWN": "#151e2e",
+    "LED_ON": "#22c55e", "LED_ON_BORDER": "#15803d",
     "TOOLTIP_BG": "#e2e8f0", "TOOLTIP_FG": "#0f172a",
+    "OK_BG": "#14532d", "OK_FG": "#bbf7d0", "WARN_BG": "#4a3a12", "WARN_FG": "#fde68a",
+    "ERR_BG": "#4c1d1d", "ERR_FG": "#fecaca",
+    "OWNED_BG": "#1e2a4a", "OWNED_FG": "#c7d2fe", "OWNED_BORDER": "#4f46e5",
 }
 
 current_mode = "light"      # escolha do usuario
@@ -109,6 +136,23 @@ QLineEdit, QSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{ background: {c['SUR
              border: 1px solid {c['INPUT_BORDER']}; border-radius: 6px; padding: 4px 6px;
              selection-background-color: {c['ACCENT']}; }}
 QLineEdit:focus, QSpinBox:focus, QComboBox:focus {{ border-color: {c['ACCENT']}; }}
+QSpinBox {{ padding-right: 20px; }}
+QSpinBox::up-button, QSpinBox::down-button {{ subcontrol-origin: border; width: 18px; border: none;
+             border-left: 1px solid {c['INPUT_BORDER']}; background: {c['SURFACE_ALT']}; }}
+QSpinBox::up-button {{ subcontrol-position: top right; border-top-right-radius: 6px; }}
+QSpinBox::down-button {{ subcontrol-position: bottom right; border-bottom-right-radius: 6px;
+             border-top: 1px solid {c['INPUT_BORDER']}; }}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {{ background: {c['HOVER']}; }}
+QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {{ background: {c['PRESSED']}; }}
+QSpinBox::up-arrow {{ image: url({_arrow("up", c['SUBTLE'])}); width: 9px; height: 6px; }}
+QSpinBox::down-arrow {{ image: url({_arrow("down", c['SUBTLE'])}); width: 9px; height: 6px; }}
+QSpinBox::up-arrow:disabled, QSpinBox::up-arrow:off {{ image: url({_arrow("up", c['DISABLED'])}); }}
+QSpinBox::down-arrow:disabled, QSpinBox::down-arrow:off {{ image: url({_arrow("down", c['DISABLED'])}); }}
+QComboBox {{ padding-right: 24px; }}
+QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right; width: 22px;
+             border: none; border-left: 1px solid {c['BORDER']}; }}
+QComboBox::down-arrow {{ image: url({_arrow("down", c['SUBTLE'])}); width: 9px; height: 6px; }}
+QComboBox::down-arrow:disabled {{ image: url({_arrow("down", c['DISABLED'])}); }}
 QComboBox QAbstractItemView {{ background: {c['SURFACE']}; border: 1px solid {c['BORDER']};
              selection-background-color: {c['ACCENT_SOFT']}; selection-color: {c['TEXT']}; }}
 QCheckBox::indicator {{ width: 14px; height: 14px; border: 1px solid {c['INPUT_HOVER']}; border-radius: 3px;
@@ -149,6 +193,17 @@ QLabel#danger {{ color: {c['DANGER']}; }}
 QLabel#stats {{ color: {c['TEXT']}; font-weight: 600; }}
 QLabel#stateBadge {{ border-radius: 9px; padding: 2px 10px; font-weight: 600; background: {c['BADGE_BG']};
                      color: {c['BADGE_FG']}; }}
+QPushButton#segment {{ border-radius: 0; padding: 5px 14px; background: {c['SURFACE']}; }}
+QPushButton#segment[pos="middle"], QPushButton#segment[pos="last"] {{ border-left: none; }}
+QPushButton#segment[pos="first"] {{ border-top-left-radius: 6px; border-bottom-left-radius: 6px; }}
+QPushButton#segment[pos="last"] {{ border-top-right-radius: 6px; border-bottom-right-radius: 6px; }}
+QPushButton#segment:hover {{ background: {c['HOVER']}; }}
+QPushButton#segment:checked {{ background: {c['ACCENT']}; color: white; border-color: {c['ACCENT_HOVER']};
+             font-weight: 600; }}
+QPushButton[owned="true"]:disabled {{ background: {c['OWNED_BG']}; color: {c['OWNED_FG']};
+             border: 1px dashed {c['OWNED_BORDER']}; }}
+QPushButton[owned="true"]:disabled:checked {{ background: {c['OK_BG']}; color: {c['OK_FG']};
+             border: 1px dashed {c['SUCCESS']}; font-weight: 600; }}
 QGraphicsView {{ border: none; background: {c['BG']}; }}
 """
 
@@ -195,6 +250,17 @@ def apply_theme(app: QApplication, mode: str | None = None) -> str:
     app.setPalette(_palette(colors))
     app.setStyleSheet(build_qss(colors))
     return current_name
+
+
+def install_translations(app: QApplication) -> bool:
+    """Carrega a traducao pt_BR do Qt (botoes padrao dos dialogos). Retorna se encontrou o arquivo."""
+    from PySide6.QtCore import QLibraryInfo, QLocale, QTranslator
+    translator = QTranslator(app)
+    ok = translator.load(QLocale(QLocale.Portuguese, QLocale.Brazil), "qtbase", "_",
+                         QLibraryInfo.path(QLibraryInfo.TranslationsPath))
+    if ok:
+        app.installTranslator(translator)
+    return ok
 
 
 def load_mode() -> str:

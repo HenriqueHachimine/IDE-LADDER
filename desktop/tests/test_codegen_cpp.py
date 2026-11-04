@@ -259,7 +259,7 @@ def test_cpp_is_generated_even_with_errors():
     p.rungs = [Rung([Contact("XIC", "Botao_Inexistente")], [Coil("OTE", "Q0.0")]), Rung([Contact("XIC", "I0.1")], [])]
     code = generate_cpp(p)
     assert code.errors >= 2
-    assert "// ERRO: variavel nao declarada: Botao_Inexistente" in code.text
+    assert "// ERRO: variável não declarada: Botao_Inexistente" in code.text
     assert "Q0_0 = false;" in code.text
     assert "// rede sem saida" in code.text
 

@@ -42,11 +42,11 @@ class Car:
 @register
 class TrafficLightEnvironment(Environment):
     id = "semaforo"
-    name = "Semaforo de cruzamento"
-    description = ("Controle os semaforos da via Norte-Sul (NS) e Leste-Oeste (LO). Os carros aceleram e freiam "
-                   "como motoristas reais (modelo IDM, 50 km/h): no amarelo, quem nao consegue parar segue em "
+    name = "Semáforo de cruzamento"
+    description = ("Controle os semáforos da via Norte-Sul (NS) e Leste-Oeste (LO). Os carros aceleram e freiam "
+                   "como motoristas reais (modelo IDM, 50 km/h): no amarelo, quem não consegue parar segue em "
                    "frente, por isso o vermelho geral precisa dar tempo de o cruzamento esvaziar. Os sensores "
-                   "indicam carros esperando; os pedestres (1,3 m/s) pedem travessia pelos botoes.")
+                   "indicam carros esperando; os pedestres (1,3 m/s) pedem travessia pelos botões.")
     example = "ambientes/semaforo.ladproj"
     inputs = [
         IOPoint("PED_NS", "I0.0", "Botao_Pedestre_NS", "Pedestre pede para atravessar a via NS", BUTTON),
@@ -202,7 +202,7 @@ class TrafficLightEnvironment(Environment):
     def alarms(self) -> list[str]:
         out = []
         if self.conflict_ms > 0:
-            out.append("PERIGO: as duas vias estao liberadas (verde/amarelo) ao mesmo tempo")
+            out.append("PERIGO: as duas vias estão liberadas (verde/amarelo) ao mesmo tempo")
         if self.ped_conflict_ms > 0:
             out.append("PERIGO: travessia de pedestres liberada com carros passando na mesma via")
         if self.collisions:
@@ -210,10 +210,10 @@ class TrafficLightEnvironment(Environment):
         if self.hits:
             out.append(f"{self.hits} pedestre(s) atropelado(s): carro passou pela faixa com pedestre na pista")
         if self.dark_ms > 500:
-            out.append("Um dos semaforos esta apagado")
+            out.append("Um dos semáforos esta apagado")
         for d in ("NS", "LO"):
             if self.out.get(f"RED_{d}") and self.out.get(f"GRN_{d}"):
-                out.append(f"Semaforo {d} com vermelho e verde acesos juntos")
+                out.append(f"Semáforo {d} com vermelho e verde acesos juntos")
         return out
 
     def stats(self) -> list[str]:

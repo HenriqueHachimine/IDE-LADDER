@@ -51,6 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     app = QApplication(argv)
     app.setApplicationName("LadderIDE")
     app.setOrganizationName("CLP-ESP32")
+    from .ui.theme import install_translations
+    install_translations(app)              # botoes padrao do Qt (OK, Cancelar, Fechar) em portugues
     from .ui.theme import apply_theme, load_mode
     apply_theme(app, load_mode())          # claro, escuro ou seguir o Windows (Exibir > Tema)
     window = MainWindow(persist_layout=not smoke_out)   # lembra a posicao dos paineis

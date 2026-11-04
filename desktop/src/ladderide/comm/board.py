@@ -16,28 +16,28 @@ _ARRAY = re.compile(r'^\s*static\s+const\s+\w+\s+([A-Z_][A-Z0-9_]*)\s*\[\d*\]\s*
 
 # grupo e explicacao de cada definicao conhecida
 KNOWN = {
-    "FW_VERSION": ("Identificacao", "Versao do firmware informada a IDE (comando INFO)"),
+    "FW_VERSION": ("Identificacao", "Versão do firmware informada a IDE (comando INFO)"),
     "HW_ID": ("Identificacao", "Identificador da placa"),
-    "PIN_595_SER": ("Registradores de deslocamento", "GPIO de dados serie dos reles (74HC595 SER)"),
+    "PIN_595_SER": ("Registradores de deslocamento", "GPIO de dados serie dos relés (74HC595 SER)"),
     "PIN_SR_CLK": ("Registradores de deslocamento", "GPIO de relogio compartilhado (595 SCK / 165 CLK)"),
     "PIN_SR_LATCH": ("Registradores de deslocamento", "GPIO de latch compartilhado (595 RCK / 165 SH/LD)"),
-    "PIN_595_OE": ("Registradores de deslocamento", "GPIO de /OE do 74HC595 (0 = saidas habilitadas)"),
-    "PIN_165_QH": ("Registradores de deslocamento", "GPIO que le a saida serie das entradas (74HC165 QH)"),
-    "RELAY_ACTIVE_LOW": ("Polaridade", "1 = nivel 0 no 595 energiza o rele"),
-    "INPUT_ACTIVE_LOW": ("Polaridade", "1 = entrada ativa le nivel 0 (optoacoplador puxa para GND)"),
-    "OUT_MAP": ("Mapeamento", "Posicao no 74HC595 -> saida Qk"),
-    "IN_MAP": ("Mapeamento", "Posicao no 74HC165 -> entrada Ik"),
+    "PIN_595_OE": ("Registradores de deslocamento", "GPIO de /OE do 74HC595 (0 = saídas habilitadas)"),
+    "PIN_165_QH": ("Registradores de deslocamento", "GPIO que lê a saída serie das entradas (74HC165 QH)"),
+    "RELAY_ACTIVE_LOW": ("Polaridade", "1 = nível 0 no 595 energiza o relé"),
+    "INPUT_ACTIVE_LOW": ("Polaridade", "1 = entrada ativa lê nível 0 (optoacoplador puxa para GND)"),
+    "OUT_MAP": ("Mapeamento", "Posição no 74HC595 -> saída Qk"),
+    "IN_MAP": ("Mapeamento", "Posição no 74HC165 -> entrada Ik"),
     "BOARD_INPUTS": ("Mapeamento", "Entradas digitais da placa"),
-    "BOARD_OUTPUTS": ("Mapeamento", "Saidas a rele da placa"),
+    "BOARD_OUTPUTS": ("Mapeamento", "Saídas a relé da placa"),
     "MODBUS_ENABLED": ("RS-485 / Modbus", "Modbus RTU somente leitura habilitado"),
     "PIN_RS485_RX": ("RS-485 / Modbus", "GPIO RX do transceptor RS-485 (UART2)"),
     "PIN_RS485_TX": ("RS-485 / Modbus", "GPIO TX do transceptor RS-485 (UART2)"),
     "PIN_RS485_DE": ("RS-485 / Modbus", "GPIO DE/RE do transceptor (1 = transmitir)"),
-    "MODBUS_ADDRESS": ("RS-485 / Modbus", "Endereco Modbus da placa"),
+    "MODBUS_ADDRESS": ("RS-485 / Modbus", "Endereço Modbus da placa"),
     "MODBUS_BAUD": ("RS-485 / Modbus", "Velocidade do barramento RS-485 (bit/s)"),
     "LDP_BAUD": ("CLP", "Velocidade da USB-serial com a IDE (bit/s)"),
-    "SCAN_PERIOD_MS": ("CLP", "Periodo da varredura (ms)"),
-    "SCAN_WATCHDOG_US": ("CLP", "Tempo maximo de uma varredura antes de FAULT (us)"),
+    "SCAN_PERIOD_MS": ("CLP", "Período da varredura (ms)"),
+    "SCAN_WATCHDOG_US": ("CLP", "Tempo máximo de uma varredura antes de FAULT (us)"),
     "AUTORUN_ON_BOOT": ("CLP", "1 = entra em RUN ao ligar; 0 = sempre inicia em STOP"),
 }
 GROUP_ORDER = ["Identificacao", "Registradores de deslocamento", "Polaridade", "Mapeamento", "RS-485 / Modbus",
@@ -61,7 +61,7 @@ class BoardItem:
 @dataclass
 class BoardConfig:
     items: list[BoardItem] = field(default_factory=list)
-    source: str = "valores padrao"
+    source: str = "valores padrão"
 
     def value(self, name: str, default=None):
         item = next((i for i in self.items if i.name == name), None)

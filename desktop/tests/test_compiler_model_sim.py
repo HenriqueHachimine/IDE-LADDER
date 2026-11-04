@@ -79,19 +79,19 @@ def test_build_id_is_deterministic():
 
 
 @pytest.mark.parametrize("mutate,fragment", [
-    (lambda p: setattr(p.rungs[0].condition[1], "operand", "Parar"), "variavel nao declarada: Parar"),
+    (lambda p: setattr(p.rungs[0].condition[1], "operand", "Parar"), "variável não declarada: Parar"),
     (lambda p: setattr(p.rungs[0].condition[1], "operand", ""), "operando vazio"),
     (lambda p: setattr(p.rungs[0].condition[1], "operand", "I1.0"), "fora da faixa"),
-    (lambda p: setattr(p.rungs[0].outputs[0], "operand", "I0.3"), "bobina so pode escrever em Q ou M"),
+    (lambda p: setattr(p.rungs[0].outputs[0], "operand", "I0.3"), "bobina só pode escrever em Q ou M"),
     (lambda p: setattr(p.rungs[1].outputs[0], "operand", "C1"), "TON exige um temporizador"),
-    (lambda p: p.rungs[3].outputs.append(TimerBox("TOF", "T0", 5)), "T0 ja e acionado"),
-    (lambda p: setattr(p.rungs[3].outputs[0], "operand", "C5"), "RES em C5, que nao e acionado"),
+    (lambda p: p.rungs[3].outputs.append(TimerBox("TOF", "T0", 5)), "T0 já e acionado"),
+    (lambda p: setattr(p.rungs[3].outputs[0], "operand", "C5"), "RES em C5, que não e acionado"),
     (lambda p: setattr(p.rungs[2].condition[0], "operand", "T3.DN"), "T3 e usado mas nenhuma"),
     (lambda p: setattr(p.rungs[1].outputs[0], "preset", -1), "preset fora da faixa"),
-    (lambda p: p.rungs.append(Rung([Contact("XIC", "I0.0")], [])), "rede sem saida"),
-    (lambda p: p.symbols.append(Symbol("Liga", "I0.5")), "simbolo duplicado"),
-    (lambda p: p.symbols.append(Symbol("I0.5", "I0.5")), "nome de simbolo invalido"),
-    (lambda p: p.symbols.append(Symbol("Xis", "Z9")), "endereco invalido"),
+    (lambda p: p.rungs.append(Rung([Contact("XIC", "I0.0")], [])), "rede sem saída"),
+    (lambda p: p.symbols.append(Symbol("Liga", "I0.5")), "símbolo duplicado"),
+    (lambda p: p.symbols.append(Symbol("I0.5", "I0.5")), "nome de símbolo inválido"),
+    (lambda p: p.symbols.append(Symbol("Xis", "Z9")), "endereço inválido"),
 ])
 def test_compile_errors_point_to_problem(mutate, fragment):
     p = seal_project()
@@ -119,7 +119,7 @@ def test_warnings_do_not_block():
     r = compile_project(p)
     assert r.ok, messages(r)
     text = " | ".join(messages(r))
-    for fragment in ("duplicada", "SET/RESET", "ramo paralelo vazio", "menor que o periodo"):
+    for fragment in ("duplicada", "SET/RESET", "ramo paralelo vazio", "menor que o período"):
         assert fragment in text
 
 

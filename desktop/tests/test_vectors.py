@@ -64,7 +64,7 @@ def test_vector_equivalence_c(case, c_vm):
     result = c_vm.run(image, scans)
     assert result.error is None
     for n, (py, c) in enumerate(zip(py_lines, result.lines, strict=True), start=1):
-        assert py == c, f"{case['name']}: divergencia na varredura {n}\n  py: {py}\n  c : {c}"
+        assert py == c, f"{case['name']}: divergência na varredura {n}\n  py: {py}\n  c : {c}"
 
 
 def build_error_case(case: dict) -> bytes:

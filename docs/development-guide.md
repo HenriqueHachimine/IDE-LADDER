@@ -54,6 +54,8 @@ Dependências: spec → (VMs, compilador) → simulador; protocolo → (firmware
 - Mudança de semântica/formato/protocolo: spec → JSON → vetores → as duas
   implementações, no mesmo PR (`CONTRIBUTING.md`).
 - Versionamento semântico: Desktop/firmware; LDRB e LDP têm versões próprias.
+- Padrões de projeto: siga os já usados (`docs/design-patterns.md`). Por exemplo, um
+  processo externo novo é um adaptador de `Plant`; um meio de comunicação novo é um `Transport`.
 
 ## 5. Como estender
 
@@ -62,5 +64,7 @@ Dependências: spec → (VMs, compilador) → simulador; protocolo → (firmware
   paleta. Incremente `minor` do LDRB.
 - **Nova placa:** `firmware/src/board_config.h` (e `io_board.cpp` se o
   hardware de E/S for diferente).
+- **Novo processo externo** (outro simulador 3D, outro protocolo): implemente o
+  protocolo `Plant` (`sim/simulator.py`), como `FactoryIOLink` (ADR 0007).
 - **Wi-Fi/TCP:** implementar uma HAL de envio por socket no firmware; o
   Desktop já tem `TcpTransport`.

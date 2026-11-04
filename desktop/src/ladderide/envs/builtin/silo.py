@@ -46,19 +46,19 @@ class SiloEnvironment(Environment):
     id = "silo"
     name = "Silo de envase"
     description = ("A esteira traz caixas vazias. A fotocelula (I0.2) ve a caixa quando ela chega sob o bico; "
-                   "a esteira tem inercia e a caixa passa um pouco do ponto. A valvula demora a abrir e a fechar, "
-                   "a vazao cai com o nivel do silo e o produto em queda continua caindo depois que a valvula "
-                   "fecha. O sensor de nivel (I0.3) atua com 95%. STOP e um botao NF.")
+                   "a esteira tem inercia e a caixa passa um pouco do ponto. A válvula demora a abrir e a fechar, "
+                   "a vazao cai com o nível do silo e o produto em queda continua caindo depois que a válvula "
+                   "fecha. O sensor de nível (I0.3) atua com 95%. STOP e um botão NF.")
     example = "ambientes/silo.ladproj"
     inputs = [
-        IOPoint("START", "I0.0", "Start", "Botao de partida (NA)", BUTTON),
-        IOPoint("STOP", "I0.1", "Stop", "Botao de parada (NF: le 1 quando solto)", BUTTON, normally_closed=True),
+        IOPoint("START", "I0.0", "Start", "Botão de partida (NA)", BUTTON),
+        IOPoint("STOP", "I0.1", "Stop", "Botão de parada (NF: lê 1 quando solto)", BUTTON, normally_closed=True),
         IOPoint("PROX", "I0.2", "Sensor_Presenca", "Fotocelula: caixa interrompendo o feixe sob o bico"),
-        IOPoint("LEVEL", "I0.3", "Sensor_Nivel", "Sensor de nivel: caixa sob o bico com 95% ou mais"),
+        IOPoint("LEVEL", "I0.3", "Sensor_Nivel", "Sensor de nível: caixa sob o bico com 95% ou mais"),
     ]
     outputs = [
         IOPoint("MOTOR", "Q0.0", "Motor_Esteira", "Motor da esteira"),
-        IOPoint("VALVE", "Q0.1", "Valvula", "Valvula solenoide do silo"),
+        IOPoint("VALVE", "Q0.1", "Valvula", "Válvula solenoide do silo"),
         IOPoint("RUN", "Q0.2", "Lampada_Run", "Lampada RUN (processo ligado)"),
         IOPoint("FILL", "Q0.3", "Lampada_Fill", "Lampada FILL (enchendo)"),
         IOPoint("FULL", "Q0.4", "Lampada_Full", "Lampada FULL (caixa cheia)"),
@@ -137,7 +137,7 @@ class SiloEnvironment(Environment):
         if self.spilled >= 1:
             out.append(f"Produto derramado na esteira ({self.spilled:.0f}% de uma caixa)")
         if self.overflow >= 1:
-            out.append("Caixa transbordando: a valvula ficou aberta tempo demais")
+            out.append("Caixa transbordando: a válvula ficou aberta tempo demais")
         if self.shipped_partial:
             out.append(f"{self.shipped_partial} caixa(s) sairam com menos de 90%")
         if self.silo <= 0.01:
@@ -145,11 +145,11 @@ class SiloEnvironment(Environment):
         return out
 
     def stats(self) -> list[str]:
-        last = f", ultima com {self.last_fill:.0f}%" if self.last_fill is not None else ""
+        last = f", última com {self.last_fill:.0f}%" if self.last_fill is not None else ""
         refill = " (reabastecendo)" if self.refilling else ""
         return [f"Caixas cheias expedidas: {self.shipped_full}{last}",
                 f"Silo: {100 * self.silo / SILO_CAPACITY:.0f}%{refill} | esteira {self.belt_v / 100:.2f} m/s | "
-                f"valvula {100 * self.valve:.0f}%"]
+                f"válvula {100 * self.valve:.0f}%"]
 
     # ------------------------------------------------------------ desenho
     def controls(self):

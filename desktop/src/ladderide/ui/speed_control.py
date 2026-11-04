@@ -1,14 +1,14 @@
-"""Controle da velocidade da simulacao: valor livre (digitado), predefinicoes e barra deslizante.
+"""Controle da velocidade da simulacao: valor livre (digitado) e predefinicoes.
 
-Um unico SpeedModel e compartilhado pela barra de ferramentas, pelo painel
-Simulador e pelos atalhos, entao todos mostram sempre o mesmo valor.
+Um unico SpeedModel e compartilhado pela caixa da barra de ferramentas, pelos
+atalhos e pelo Factory IO (que trava em 1x), entao todos usam sempre o mesmo valor.
 """
 from __future__ import annotations
 
 import math
 
-from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtWidgets import QComboBox, QHBoxLayout, QLabel, QSlider, QVBoxLayout, QWidget
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QComboBox
 
 MIN_SPEED = 0.01
 MAX_SPEED = 1000.0
@@ -20,7 +20,7 @@ HINT = ("Velocidade do tempo simulado (temporizadores e ambiente). Digite qualqu
 
 def format_speed(value: float) -> str:
     if math.isinf(value):
-        return "Maxima"
+        return "Máxima"
     if value >= 100:
         text = f"{value:.0f}"
     elif value >= 10:
@@ -35,7 +35,7 @@ def format_speed(value: float) -> str:
 def parse_speed(text: str) -> float | None:
     """'3', '2,5x', '0.5 x', 'max' -> valor; None se nao for uma velocidade valida."""
     t = text.strip().lower().replace(" ", "").removesuffix("(temporeal)")
-    if t in ("max", "maxima", "máx", "máxima", "inf"):
+    if t in ("max", "maxima", "máxima", "máx", "inf"):
         return math.inf
     t = t.removesuffix("x").replace(",", ".")
     try:
@@ -87,7 +87,7 @@ class SpeedCombo(QComboBox):
         for p in PRESETS:
             self.addItem("1x (tempo real)" if p == 1.0 else format_speed(p), p)
         self.setToolTip(HINT)
-        self.setMinimumContentsLength(8)
+        self.setMinimumContentsLength(11)          # cabe "1x (tempo real)" inteiro (texto estreito)
         self.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
         self.activated.connect(lambda i: self._apply(self.itemText(i)))
         self.lineEdit().editingFinished.connect(lambda: self._apply(self.currentText()))
@@ -110,53 +110,3 @@ class SpeedCombo(QComboBox):
         self.setEditText(self.itemText(index) if index >= 0 else format_speed(value))
         self.blockSignals(False)
 
-
-class SpeedSlider(QWidget):
-    """Barra em escala logaritmica de 0,1x a 100x; a ultima posicao e a velocidade maxima."""
-    LO, HI, STEPS = -1.0, 2.0, 300            # log10 dos extremos
-
-    def __init__(self, model: SpeedModel, parent=None):
-        super().__init__(parent)
-        self.model_ = model
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-        self.slider = QSlider(Qt.Horizontal)
-        self.slider.setRange(0, self.STEPS + 1)
-        self.slider.setToolTip(HINT)
-        layout.addWidget(self.slider)
-        marks = QHBoxLayout()
-        for text in ("0,1x", "1x", "10x", "100x / Max"):    # um terco da barra por decada
-            label = QLabel(text)
-            label.setObjectName("muted")
-            marks.addWidget(label)
-            if not text.endswith("Max"):
-                marks.addStretch(1)
-        layout.addLayout(marks)
-        self.slider.valueChanged.connect(self._moved)
-        model.changed.connect(self._show)
-        self._show(model.value)
-
-    def position(self, value: float) -> int:
-        if math.isinf(value):
-            return self.STEPS + 1
-        frac = (math.log10(value) - self.LO) / (self.HI - self.LO)
-        return round(min(1.0, max(0.0, frac)) * self.STEPS)
-
-    def value_at(self, pos: int) -> float:
-        if pos > self.STEPS:
-            return math.inf
-        value = 10 ** (self.LO + pos / self.STEPS * (self.HI - self.LO))
-        for p in PRESETS[:-1]:                    # perto de uma predefinicao: encaixa nela
-            if abs(value / p - 1) < 0.03:
-                return p
-        digits = 2 if value < 10 else 1 if value < 100 else 0
-        return round(value, digits)
-
-    def _moved(self, pos: int) -> None:
-        self.model_.set(self.value_at(pos))
-
-    def _show(self, value: float) -> None:
-        self.slider.blockSignals(True)
-        self.slider.setValue(self.position(value))
-        self.slider.blockSignals(False)

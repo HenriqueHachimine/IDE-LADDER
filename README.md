@@ -5,7 +5,7 @@ monitor online) e firmware interpretador para uma placa ESP32 com 8 relés.
 Trabalho final da disciplina de Controladores Lógicos Programáveis.
 
 > **Situação (v0.9.0, 2026-10-20):** software completo e testado no PC
-> (322 testes, incluindo o firmware executado como "dispositivo virtual").
+> (382 testes, incluindo o firmware executado como "dispositivo virtual").
 > O firmware compila para o ESP32, mas **ainda não foi testado na placa** —
 > ver [roteiro de hardware](docs/hardware-test-procedure.md).
 
@@ -18,10 +18,12 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   GEQ, LIM, MEQ) e matemática (ADD, SUB, MUL, DIV, SQR, NEG, TOD, FRD) com
   registradores inteiros de 32 bits
 - **Escolha do controlador** ao criar o projeto (ESP32 Relay X8, simulação com
-  16 E/S ou personalizado), que limita E/S e variáveis ([controladores](docs/controllers.md))
+  16 E/S, Arduino, personalizado ou modelos Allen-Bradley de referência), que limita E/S e
+  variáveis; a simulação mostra o controlador e a lista de ambientes desabilita os que precisam
+  de mais E/S do que ele tem ([controladores](docs/controllers.md))
 - **Compilador** com erros e avisos por rede e elemento; nunca gera programa inválido
 - **Simulador** contínuo com velocidade ajustável (0,01× a 1000× ou a máxima do
-  PC, pela barra de ferramentas, barra deslizante ou Ctrl+. / Ctrl+,), por
+  PC, pela caixa da barra de ferramentas ou Ctrl+. / Ctrl+,), por
   varredura e passo a passo, com
   fluxo de energia, entradas virtuais, temporizadores e contadores ao vivo
 - **Transferência** USB transacional (CRC, validação no firmware, gravação
@@ -36,13 +38,15 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   linha de garrafas, ar comprimido, misturador de batelada)
   controlados pelo programa, com alarmes de erros de lógica; novos ambientes são
   plugins independentes ([guia](docs/simulation-environments.md))
+- **Factory IO** pelo driver Modbus TCP/IP Server: a simulação controla cenas 3D, com os
+  sensores nas entradas I e os atuadores nas saídas Q ([guia](docs/factory-io.md))
 - **Verificar para ESP32** (F9): executa o programa no código C do firmware,
   compara com o simulador varredura a varredura e confere memória, E/S e limites da placa
 - **Blocos de instrução** (F12): o diagrama convertido em lista de instruções por
   rede, ligada ao diagrama e animada na simulação
-- **Simulador da placa ESP32** (Ctrl+Shift+E): a placa de 8 relés com o firmware real rodando
-  no PC, níveis dos registradores 74HC595/74HC165, pinos e configuração de `board_config.h`
-  e monitor dos quadros LDP
+- **Simulador da placa** (Ctrl+Shift+E): ESP32 (1 a 8 relés), Arduino UNO (1 a 8) ou
+  Arduino Mega (1 a 16), desenhadas com o firmware do CLP rodando no PC; na ESP32, níveis dos
+  registradores 74HC595/74HC165, pinos e configuração de `board_config.h`, e monitor dos quadros LDP
 - **Código C++** (Ctrl+F7): o diagrama traduzido para C++ legível enquanto se
   edita, antes de compilar; um teste compila o C++ e confere que ele reproduz o simulador
 - **Equivalência garantida por testes**: simulador e firmware executam o mesmo
@@ -55,7 +59,7 @@ desktop/   IDE (Python + PySide6): core, model, compiler, sim, comm, ui, cli
 firmware/  ESP32 (PlatformIO): lib/ladder_vm, lib/plc_core (C99 portátil), src/ (HAL ESP32)
 shared/    isa.json, protocol.json (fontes únicas) e vetores de teste
 examples/  demonstração, portas lógicas, temporizadores, contadores, blocos numéricos,
-           ambientes de simulação, testes de hardware
+           ambientes de simulação, Factory IO, testes de hardware
 installer/ instalador do Windows (um único .exe, sem administrador)
 docs/      especificações, arquitetura, ADRs, manual, testes, relatório
 scripts/   geração de headers e exemplos, empacotamento (build_app, build_installer)
@@ -63,7 +67,8 @@ scripts/   geração de headers e exemplos, empacotamento (build_app, build_inst
 
 Detalhes: [arquitetura](docs/architecture.md) · [especificação LADDER](docs/ladder-specification.md) ·
 [formato LDRB](docs/intermediate-format.md) · [protocolo](docs/communication-protocol.md) ·
-[formato de projeto](docs/project-format.md) · [decisões](docs/decisions/)
+[formato de projeto](docs/project-format.md) · [padrões de projeto](docs/design-patterns.md) ·
+[Factory IO](docs/factory-io.md) · [decisões](docs/decisions/)
 
 ## Requisitos
 
@@ -94,8 +99,14 @@ sudo apt install python3-venv build-essential libxcb-cursor0   # Debian/Ubuntu
 python3 -m venv .venv && . .venv/bin/activate
 python -m pip install -e "desktop[gui,comm,dev]"
 python -m ladderide examples/demo/demonstracao.ladproj
-sudo usermod -aG dialout $USER     # acesso a /dev/ttyUSB0 do ESP32 (saia e entre na sessao)
+sudo usermod -aG dialout $USER     # acesso a /dev/ttyUSB0 e /dev/ttyACM0 (saia e entre na sessão)
 ```
+
+No Linux, **Gravar C++ na placa** precisa do PlatformIO (`pipx install platformio`
+e as regras udev do PlatformIO). O Factory IO só roda no Windows: use-o em outro
+PC ou máquina virtual na rede, pelo IP do driver. Detalhes, portas das placas
+(UNO/Mega original em `/dev/ttyACM0`, clones CH340 em `/dev/ttyUSB0`) e problemas
+comuns: [manual, seção 1.1](docs/user-guide.md#11-linux-em-detalhe).
 
 **Gerar o instalador do Windows:** `python scripts/build_installer.py` gera
 `dist\LadderIDE-Setup-<versão>.exe`, um único arquivo que instala a IDE para o

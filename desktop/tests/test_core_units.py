@@ -143,4 +143,4 @@ def test_speed_text_parsing_and_format():
     assert parse_speed("abc") is None and parse_speed("0") is None and parse_speed("-2") is None
     assert parse_speed("99999") == MAX_SPEED
     assert [format_speed(v) for v in (0.25, 1.0, 3.5, 12.5, 250.0, math.inf)] == \
-        ["0,25x", "1x", "3,5x", "12,5x", "250x", "Maxima"]
+        ["0,25x", "1x", "3,5x", "12,5x", "250x", "Máxima"]

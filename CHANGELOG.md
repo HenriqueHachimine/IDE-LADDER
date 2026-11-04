@@ -7,11 +7,119 @@ ensaios na placa real.
 ## [Não lançado]
 
 ### Corrigido
+- Segunda revisão de UI/UX:
+  - abas dos painéis da direita escritas duas vezes, sobrepostas (o Qt 6.12 deixava visível uma
+    barra de abas antiga ao agrupar painéis e a cada `restoreState`);
+  - paleta de instruções cortada (sem a 3ª coluna) depois de simular ou de diminuir a janela;
+    agora ela nunca fica mais estreita que as 3 colunas;
+  - blocos TON/TOF/RTO/CTU/CTD e de matemática sem o fio entre a caixa e o trilho direito;
+  - comandos e velocidade repetidos no painel Simulador: ficam só na barra de ferramentas, e o
+    painel passa a mostrar o controlador simulado;
+  - ícones de Varredura (▶1), Passo (seta na lista de instruções) e Reiniciar (↻) redesenhados;
+    Verificar ESP32 com texto e ícone claro; zoom sai da barra (continua em Exibir, Ctrl+/- e
+    Ctrl+roda);
+  - entradas comandadas pelo processo com legenda da borda tracejada e nome inteiro (cortava
+    nomes com mais de 14 letras, ex.: `Sensor_Presen…`);
+  - Novo projeto: placa do projeto, simulação e Arduino em destaque, famílias de referência
+    (Allen-Bradley, WEG, Omron) recolhidas; a dica apontava para "Programa > Propriedades", que fica em Editar;
+  - ambientes que precisam de mais E/S do que o controlador tem ficam desabilitados na lista,
+    com o motivo, e o ambiente em uso mostra um aviso.
+- Trocar o controlador em Programa → Propriedades só reduzia as E/S: ao passar de um de 8 E/S
+  para um de 16, o projeto (e o Simulador de E/S) ficava com 8. Agora as E/S do projeto são sempre
+  as do controlador: campos travados em Propriedades (menos no Personalizado) e projetos salvos com
+  outras quantidades ajustados ao abrir; o Simulador de E/S mostra as quantidades no título.
+- Painel Factory IO: a partir do 9º sensor/atuador o endereço aparecia como `I0.8`, `Q0.9`; agora
+  `I1.0`, `Q1.1`.
+- Revisão visual (auditoria de UX/UI): textos da interface, ambientes e mensagens com acentuação;
+  botões padrão do Qt em português; setas das caixas numéricas e das listas desenhadas pelo tema;
+  velocidade "1x (tempo real)" inteira na barra; selos de estado com cores do tema (o selo
+  EXECUTANDO ofuscava no tema escuro); verde de sucesso e texto desabilitado com mais contraste;
+  entradas comandadas por ambiente/Factory IO legíveis e com dica de quem comanda; grade de
+  entradas que se adapta à largura do painel; nomes longos no diagrama quebram em duas linhas
+  quando cabem, e a dica mostra nome e endereço.
 - C++ gerado: numa rede com várias saídas, quando uma saída alterava um bit lido pela condição
   (ex.: `XIC Q0.0` → `OTU Q0.0` e `OTE Q0.1`), a condição era recalculada depois da alteração e o
   resultado divergia do CLP. Agora a condição é guardada antes, como no interpretador.
+- Renomear um símbolo na tabela de símbolos deixava o diagrama com o nome antigo. Agora os
+  operandos acompanham o novo nome (inclusive `Nome.DN`, `Nome.ACC`).
 
 ### Adicionado
+- **Módulos de expansão** (Programa → Módulos de expansão, e botão na aba CLP real): até 3 módulos
+  no CLIC-02 (CLW-02/8ER-D, 8ET-D, 8ER-A, 8ER-24A) e até 3 unidades CP1W nos CP1E de 30/40 pontos e
+  NA20 (8ED, 8ER, 16ER, 20EDR1, 32ER, 40EDR e versões a transistor). As E/S do projeto somam as dos
+  módulos; o diálogo mostra os endereços na IDE e no CLP (X/Y, CIO m/n); o desenho mostra os módulos
+  encaixados; a ligação com o CLP real lê e escreve também as E/S dos módulos.
+- Todas as variantes do Omron CP1E do manual W480 (tipos E, E(S), N, N(S1) e NA, saída a relé,
+  transistor NPN ou PNP): 48 CPUs, em dois grupos na lista do novo projeto.
+- A IDE aceita até 32 saídas (antes 16), como já aceitava 32 entradas; a placa continua com 16.
+- **Controladores WEG CLIC-02 e Omron CP1E** na lista do novo projeto: CLIC-02 (12HR-D, 12HT-D,
+  20HR-D, 20HT-D, 20VR-D, 20VT-D, 20HR-12D, 10HR-A, 20HR-A) e CP1E (E10, E14S, E20, E20S, E30S,
+  E40S, N14, N20, N30, N40, NA20), com as E/S e a memória dos manuais.
+- **Processo → CLP real**: o CLP desenhado (bornes e display do CLIC-02, LEDs do CP1E) com as E/S
+  ao vivo, porta serial, protocolo, Testar, RUN/STOP e **Transmitir e executar** (compila, conecta
+  e roda o programa da IDE com as entradas e saídas do CLP). CLIC-02 por Modbus RTU (RS-485,
+  programa ponte M01..M08 → Q01..Q08); CP1E por Host Link (RS-232C, modo MONITOR, CIO 0/1 e
+  100/101). Ao desconectar, as saídas do CLP são desligadas; se a serial cair, as entradas voltam a
+  0 e a IDE reconecta.
+- **Gravar C++ na placa** (Dispositivo, e botão na aba Código C++): compila o C++ do diagrama com
+  o PlatformIO e grava no ESP32, Arduino UNO ou Mega pela USB. No UNO/Mega, um `io_board` gerado
+  usa os pinos da aba Placa; o monitor serial usa `PLC_PRINTF`/`PLC_TEXT`, com os textos na flash
+  no AVR (o UNO compila com 541 de 2048 bytes de RAM no exemplo do Simulador de E/S).
+- **Factory IO: configuração do driver** espelhando a página do Modbus TCP/IP Server: Auto
+  connect, Write/Read Digital, Write Register (Input ou Holding Registers, FC04/FC03), Read
+  Register, Scale (valor bruto e de engenharia na tabela), Offset/Count até 256 pontos digitais e
+  64 registradores, conferência ao editar, botão Padrão e **Testar** (lê uma vez sem escrever).
+- **Controladores com mais de 16 entradas na simulação** (1747-L30 com 18, L40 com 24, MicroLogix
+  Analog com 20): a IDE aceita até 32 entradas; a placa e o protocolo continuam em 16.
+- **Novo projeto com lista de processadores** agrupada por família, como no RSLogix 500:
+  placa do projeto e simulação, Arduino UNO e Mega 2560, Allen-Bradley SLC 500 modular
+  (1747-L511 a L553, 5/01 a 5/05), MicroLogix 1000 e SLC 500 fixo (L20, L30, L40). Cada um
+  limita E/S, variáveis e a memória de programa (instruções e redes); o compilador acusa
+  "memória de programa esgotada". Os controladores Arduino/ESP32 ajustam a aba Placa.
+- **Ambiente Simulador de E/S e BCD** (como o I/O Simulator e o BCD Simulator do LogixPro): uma
+  botoeira por entrada e uma lâmpada por saída do controlador do projeto, botoeiras com tipo
+  trocável (pulsador NA/NF, chave NA/NF), thumbwheel BCD em N0 e display BCD de N1. Ambientes
+  podem se adaptar ao controlador (`configure`) e trocar registradores N com o simulador.
+- **Ajuda > Guia do usuário** (Ctrl+F1, também no Sobre): guia ilustrado com as telas da IDE
+  (janela, novo projeto, edição, símbolos, C++, blocos IL, simulação com ambiente, Factory IO,
+  placa ESP32 e Arduino Mega, dispositivo, verificação, comunicação, tema escuro), sumário,
+  busca e clique na imagem para ver em tamanho real. Conteúdo em `ladderide/help/`, incluído no
+  instalador.
+- **Ajuda > Como funciona a comunicação** (Shift+F1, também no Sobre): mapa clicável e ao vivo
+  do caminho do programa (editor, compilador, simulador, ambiente, Factory IO, cliente LDP,
+  transporte, firmware, relés, Modbus RTU), quadro LDP desenhado com exemplo real, tabelas de
+  comandos e erros do `protocol.json`, sequência da transferência, mapeamento Modbus TCP do
+  Factory IO e log do tráfego LDP.
+- Arduino Mega no simulador da placa redesenhado: proporção da placa real, conectores na ordem
+  da serigrafia com corpo plástico, ATmega2560 a 45°, 16U2, ICSP, regulador, e pinos dos relés
+  (D22…) e das entradas (D38–D53) destacados; os fios saem pela borda sem cruzar o conector.
+- Painel **Processo**: Ambiente animado, Factory IO e Placa ESP32/Arduino num só painel, com
+  seletor e selo do que está ativo (antes eram três abas, embora só um seja usado por vez).
+- Simulador da placa: escolha entre ESP32 Relay (1 a 8 relés), Arduino UNO (1 a 8) e Arduino
+  Mega 2560 (1 a 16), cada uma desenhada (placa, pinos, módulo de relés, fios e botões de
+  entrada). O dispositivo virtual aceita `--inputs`, `--outputs` e `--hardware`; o painel avisa
+  quando o projeto tem mais E/S que a placa e oferece ajustar o projeto. Arduino só na simulação.
+- Factory IO: a coluna Simbolo do painel é editável (duplo clique). Cria, renomeia ou remove o
+  símbolo do endereço, atualizando o diagrama; a porta do driver vai no comentário.
+- Relatório reestruturado segundo a ABNT (NBR 14724, 6024, 6028, 6023): capa, folha de rosto,
+  resumo/abstract, listas, sumário, seções numeradas, quadros com fonte e referências;
+  conteúdo atualizado (blocos numéricos, ambientes, Factory IO, padrões de projeto, 338 testes).
+  `docs/report/build_docx.js` gera `relatorio.docx` formatado a partir de `relatorio.md`.
+- Documentação dos padrões de projeto usados (`docs/design-patterns.md`: Adapter, Strategy,
+  Template Method, Composite, Interpreter, Observer, Memento, Command, Facade, Factory Method,
+  Registry/Plugin, máquina de estados, camadas e HAL) e ADR 0007 (Factory IO por Modbus TCP).
+- Factory IO: a tabela do painel lista todas as portas do driver (Inputs, Input Regs, Coils,
+  Holding Regs) com o endereço no CLP, o símbolo e o valor ao vivo; os registradores analógicos
+  vão e vêm dos registradores N (FC04/FC16). No diagrama LADDER, duplo clique no endereço de um
+  elemento (ou "Alterar endereço..." no botão direito) abre a escolha rápida do endereço, com a
+  porta do Factory IO de cada um.
+- Ligação com o Factory IO (Simulação → Factory IO): o simulador vira cliente Modbus TCP do driver
+  *Modbus TCP/IP Server* e troca sensores (Inputs ou Coils → I) e atuadores (Q → Coils) a cada
+  20 ms. Velocidade travada em 1× enquanto conectado, reconexão automática, sensores em 0 sem
+  conexão e atuadores desligados ao desconectar. Comando `ladderide.cli factoryio` para
+  diagnóstico. Cliente Modbus TCP próprio, sem dependências (`docs/factory-io.md`). Exemplo
+  `examples/factoryio/esteira_lote.ladproj` (esteira com lote de 5 caixas e alarme de
+  atolamento). Ainda não testado com o Factory IO real.
 - Velocidade da simulação ajustável: valor digitado de 0,01× a 1000× ou "max", predefinições até
   100×, barra deslizante no painel Simulador, seletor na barra de ferramentas e atalhos
   Ctrl+. / Ctrl+, / Ctrl+;. O painel mostra a velocidade real e avisa quando o PC não acompanha

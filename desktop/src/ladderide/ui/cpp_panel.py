@@ -70,6 +70,7 @@ class CppHighlighter(QSyntaxHighlighter):
 
 class CppPanel(QWidget):
     elementActivated = Signal(str)
+    uploadRequested = Signal()            # Gravar C++ na placa (a janela abre o dialogo)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -88,12 +89,16 @@ class CppPanel(QWidget):
         self.highlighter = CppHighlighter(self.editor.document())
         layout.addWidget(self.editor, 1)
         row = QHBoxLayout()
-        self.copy_btn = QPushButton("Copiar codigo")
+        self.copy_btn = QPushButton("Copiar código")
         self.save_btn = QPushButton("Salvar .cpp...")
         self.copy_btn.clicked.connect(lambda: QGuiApplication.clipboard().setText(self.text))
         self.save_btn.clicked.connect(self._save)
+        self.upload_btn = QPushButton("Gravar na placa...")
+        self.upload_btn.setToolTip("Compila este C++ e grava no ESP32, Arduino UNO ou Mega pela USB")
+        self.upload_btn.clicked.connect(self.uploadRequested)
         row.addWidget(self.copy_btn)
         row.addWidget(self.save_btn)
+        row.addWidget(self.upload_btn)
         row.addStretch(1)
         layout.addLayout(row)
         self.project = None
@@ -120,11 +125,11 @@ class CppPanel(QWidget):
         self._syncing = False
         bar.setValue(pos)
         if code.errors:
-            status = (f"{code.errors} erro(s) no diagrama: as linhas afetadas estao marcadas com ERRO e o "
-                      "operando invalido aparece como false.")
+            status = (f"{code.errors} erro(s) no diagrama: as linhas afetadas estão marcadas com ERRO e o "
+                      "operando inválido aparece como false.")
         else:
             status = "Sem erros." + (f" {code.warnings} aviso(s)." if code.warnings else "")
-        self.info.setText(f"Traducao do diagrama para C++, atualizada a cada edicao (nao precisa compilar). "
+        self.info.setText(f"Tradução do diagrama para C++, atualizada a cada edição (não precisa compilar). "
                           f"{len(code.rung_lines)} redes. {status} Clique numa linha para localizar a rede.")
         self._paint_rung(self._rung)
 
@@ -178,7 +183,7 @@ class CppPanel(QWidget):
     def _save(self) -> None:
         name = (self.project.name if self.project else "programa").strip() or "programa"
         safe = re.sub(r"[^A-Za-z0-9_-]+", "_", name)
-        path, _ = QFileDialog.getSaveFileName(self, "Salvar codigo C++", f"{safe}.cpp", "Codigo C++ (*.cpp)")
+        path, _ = QFileDialog.getSaveFileName(self, "Salvar código C++", f"{safe}.cpp", "Código C++ (*.cpp)")
         if path:
             with open(path, "w", encoding="utf-8") as f:
                 f.write(self.text)

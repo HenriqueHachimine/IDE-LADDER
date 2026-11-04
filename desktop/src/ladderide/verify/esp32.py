@@ -30,7 +30,7 @@ from ..core.isa import Area, Op
 from ..core.vm import LadderVM
 from ..model.project import Project
 
-OK, WARN, ERROR, INFO, SKIP = "ok", "aviso", "erro", "info", "nao verificado"
+OK, WARN, ERROR, INFO, SKIP = "ok", "aviso", "erro", "info", "não verificado"
 
 
 @dataclass
@@ -49,7 +49,7 @@ class BoardProfile:
     watchdog_us: int = 50000
     firmware: str = "1.0.0"
     hardware: str = "esp32-relay-x8-303e32dc812"
-    source: str = "valores padrao"
+    source: str = "valores padrão"
 
     @classmethod
     def load(cls) -> "BoardProfile":
@@ -94,10 +94,10 @@ class VerifyReport:
 
     def summary(self) -> str:
         if self.errors:
-            return f"{len(self.errors)} erro(s): o programa NAO deve ser enviado ao ESP32."
+            return f"{len(self.errors)} erro(s): o programa NÃO deve ser enviado ao ESP32."
         if self.warnings:
             return f"Pronto para o ESP32, com {len(self.warnings)} aviso(s)."
-        return "Pronto para o ESP32: todas as verificacoes passaram."
+        return "Pronto para o ESP32: todas as verificações passaram."
 
     def as_text(self) -> str:
         lines = [self.summary(), ""]
@@ -156,7 +156,7 @@ def firmware_trace(image: bytes, seq: list[tuple[int, int]]) -> tuple[str, list[
                               timeout=60)
     lines = proc.stdout.splitlines()
     if not lines:
-        raise RuntimeError(proc.stderr.strip() or "executor da VM C nao produziu saida")
+        raise RuntimeError(proc.stderr.strip() or "executor da VM C não produziu saída")
     return lines[0].strip(), lines[1:]
 
 
@@ -171,11 +171,11 @@ def verify_for_esp32(project: Project, result: CompileResult, *, device_info=Non
 
     # 1. compilacao ------------------------------------------------------------
     if not result.ok:
-        rep.add(ERROR, "Compilacao", "\n".join(str(d) for d in result.errors) or "o programa nao compilou")
+        rep.add(ERROR, "Compilacao", "\n".join(str(d) for d in result.errors) or "o programa não compilou")
         return rep
     code = result.program.code
     rep.add(OK if not result.warnings else WARN, "Compilacao",
-            f"{len(code)} instrucoes, {len(project.rungs)} redes, id 0x{result.build_id:08x}"
+            f"{len(code)} instruções, {len(project.rungs)} redes, id 0x{result.build_id:08x}"
             + ("".join(f"\n{d}" for d in result.warnings)))
 
     # 2. imagem LDRB -----------------------------------------------------------
@@ -193,29 +193,29 @@ def verify_for_esp32(project: Project, result: CompileResult, *, device_info=Non
     try:
         status, c_lines = firmware_trace(image, seq)
     except Exception as exc:  # noqa: BLE001 - ausencia do gcc nao impede o restante
-        rep.add(SKIP, "Validacao pelo codigo C do firmware",
-                f"nao foi possivel executar a VM C no PC: {exc}\n"
-                "Instale o gcc (MinGW) para habilitar esta verificacao.")
-        rep.add(SKIP, "Equivalencia simulador x firmware", "depende da VM C")
+        rep.add(SKIP, "Validação pelo código C do firmware",
+                f"não foi possível executar a VM C no PC: {exc}\n"
+                "Instale o gcc (MinGW) para habilitar esta verificação.")
+        rep.add(SKIP, "Equivalência simulador x firmware", "depende da VM C")
     else:
         if status != "OK":
-            rep.add(ERROR, "Validacao pelo codigo C do firmware",
-                    f"o firmware rejeitaria esta imagem ({status}); a transferencia seria recusada")
+            rep.add(ERROR, "Validação pelo código C do firmware",
+                    f"o firmware rejeitaria esta imagem ({status}); a transferência seria recusada")
         else:
-            rep.add(OK, "Validacao pelo codigo C do firmware",
-                    "lv_image_validate (o mesmo codigo que roda no ESP32) aceitou a imagem")
+            rep.add(OK, "Validação pelo código C do firmware",
+                    "lv_image_validate (o mesmo código que roda no ESP32) aceitou a imagem")
             py_lines = python_trace(image, seq)
             rep.scans_compared = len(py_lines)
             diff = next((k for k, (a, c) in enumerate(zip(py_lines, c_lines)) if a != c), None)
             if diff is None and len(py_lines) == len(c_lines):
-                rep.add(OK, "Equivalencia simulador x firmware",
+                rep.add(OK, "Equivalência simulador x firmware",
                         f"{len(py_lines)} varreduras com entradas variadas e dt de 0 a 5000 ms: estado "
-                        "completo (saidas, memorias, temporizadores, contadores e fluxo de energia) identico")
+                        "completo (saídas, memórias, temporizadores, contadores e fluxo de energia) identico")
             else:
                 k = diff if diff is not None else min(len(py_lines), len(c_lines))
                 dt, inputs = seq[k] if k < len(seq) else (0, 0)
-                rep.add(ERROR, "Equivalencia simulador x firmware",
-                        f"divergencia na varredura {k} (dt={dt} ms, entradas=0x{inputs:02x})\n"
+                rep.add(ERROR, "Equivalência simulador x firmware",
+                        f"divergência na varredura {k} (dt={dt} ms, entradas=0x{inputs:02x})\n"
                         f"simulador: {py_lines[k] if k < len(py_lines) else '-'}\n"
                         f"firmware:  {c_lines[k] if k < len(c_lines) else '-'}")
 
@@ -224,34 +224,34 @@ def verify_for_esp32(project: Project, result: CompileResult, *, device_info=Non
     bad_out = sorted(i for i in _used_bits(result, Area.Q) if i >= b.outputs)
     if bad_in or bad_out:
         names = [f"I{i // 8}.{i % 8}" for i in bad_in] + [f"Q{i // 8}.{i % 8}" for i in bad_out]
-        rep.add(ERROR, "Entradas e saidas da placa",
-                f"a placa tem {b.inputs} entradas e {b.outputs} reles; enderecos inexistentes: {', '.join(names)}")
+        rep.add(ERROR, "Entradas e saídas da placa",
+                f"a placa tem {b.inputs} entradas e {b.outputs} relés; endereços inexistentes: {', '.join(names)}")
     elif prog.n_inputs > b.inputs or prog.n_outputs > b.outputs:
-        rep.add(ERROR, "Entradas e saidas da placa",
-                f"o projeto declara {prog.n_inputs} entradas/{prog.n_outputs} saidas; a placa tem "
+        rep.add(ERROR, "Entradas e saídas da placa",
+                f"o projeto declara {prog.n_inputs} entradas/{prog.n_outputs} saídas; a placa tem "
                 f"{b.inputs}/{b.outputs}. Ajuste em Propriedades do projeto.")
     else:
         used_q = len(_used_bits(result, Area.Q))
-        rep.add(OK, "Entradas e saidas da placa",
-                f"usa {len(_used_bits(result, Area.I))} de {b.inputs} entradas e {used_q} de {b.outputs} reles "
+        rep.add(OK, "Entradas e saídas da placa",
+                f"usa {len(_used_bits(result, Area.I))} de {b.inputs} entradas e {used_q} de {b.outputs} relés "
                 f"(perfil: {b.source})")
 
     from ..model.controllers import controller_for
     ctrl = controller_for(project)
     if ctrl is not None and not ctrl.hardware:
         rep.add(WARN, "Controlador do projeto",
-                f"o projeto usa o controlador '{ctrl.name}', que nao e a placa; troque em Programa > "
+                f"o projeto usa o controlador '{ctrl.name}', que não e a placa; troque em Programa > "
                 "Propriedades antes de transferir")
 
     limit = isa.MAX_IMAGE_SIZE
     pct = 100 * len(image) / limit
-    rep.add(OK if pct <= 90 else WARN, "Memoria de programa",
+    rep.add(OK if pct <= 90 else WARN, "Memória de programa",
             f"{len(image)} de {limit} bytes ({pct:.1f}%)")
     lim = isa.LIM
     depth = branch_depth(code)
     problems = []
     if len(code) > lim["max_instructions"]:
-        problems.append(f"{len(code)} instrucoes (max {lim['max_instructions']})")
+        problems.append(f"{len(code)} instruções (max {lim['max_instructions']})")
     if depth > lim["max_branch_depth"]:
         problems.append(f"aninhamento {depth} (max {lim['max_branch_depth']})")
     if len(prog.timers) > lim["max_timers"] or len(prog.counters) > lim["max_counters"]:
@@ -259,31 +259,31 @@ def verify_for_esp32(project: Project, result: CompileResult, *, device_info=Non
     rep.add(ERROR if problems else OK, "Limites do interpretador",
             "; ".join(problems) if problems else
             f"{len(prog.timers)}/{lim['max_timers']} temporizadores, {len(prog.counters)}/{lim['max_counters']} "
-            f"contadores, {prog.n_markers} memorias M, aninhamento de ramos {depth}/{lim['max_branch_depth']}")
+            f"contadores, {prog.n_markers} memórias M, aninhamento de ramos {depth}/{lim['max_branch_depth']}")
 
     # 6. temporizacao ----------------------------------------------------------
     period = project.io.scan_period_ms
     if period != b.scan_period_ms:
-        rep.add(WARN, "Periodo de varredura",
+        rep.add(WARN, "Período de varredura",
                 f"o projeto simula com {period} ms, mas o firmware varre a cada {b.scan_period_ms} ms; "
                 "os tempos na placa podem diferir do simulador")
     else:
-        rep.add(OK, "Periodo de varredura", f"{period} ms no simulador e no firmware")
+        rep.add(OK, "Período de varredura", f"{period} ms no simulador e no firmware")
     short = [f"{result.timer_names.get(k, f'T{k}')} ({t.preset_ms} ms)" for k, t in enumerate(prog.timers)
              if 0 < t.preset_ms < 2 * b.scan_period_ms]
     if short:
-        rep.add(WARN, "Resolucao dos temporizadores",
-                f"presets menores que 2 varreduras ({2 * b.scan_period_ms} ms) terminam com atraso de ate "
+        rep.add(WARN, "Resolução dos temporizadores",
+                f"presets menores que 2 varreduras ({2 * b.scan_period_ms} ms) terminam com atraso de até "
                 f"{b.scan_period_ms} ms: {', '.join(short)}")
     elif prog.timers:
-        rep.add(OK, "Resolucao dos temporizadores",
-                f"todos os presets sao >= {2 * b.scan_period_ms} ms (erro maximo de 1 varredura = "
+        rep.add(OK, "Resolução dos temporizadores",
+                f"todos os presets são >= {2 * b.scan_period_ms} ms (erro máximo de 1 varredura = "
                 f"{b.scan_period_ms} ms)")
 
     # 7. dispositivo conectado -------------------------------------------------
     if device_info is None:
         rep.add(SKIP, "Dispositivo conectado",
-                "nenhum dispositivo conectado; formato do firmware e tempo de varredura real nao foram "
+                "nenhum dispositivo conectado; formato do firmware e tempo de varredura real não foram "
                 "conferidos (conecte no painel Dispositivo e verifique novamente)")
         return rep
     di = device_info
@@ -297,17 +297,17 @@ def verify_for_esp32(project: Project, result: CompileResult, *, device_info=Non
         problems.append(f"imagem de {len(image)} B > {di.max_image} B suportados")
     rep.add(ERROR if problems else OK, "Compatibilidade com o dispositivo",
             "; ".join(problems) if problems else
-            f"{di.firmware} | {di.hardware}, LDRB {di.fmt_major}.{di.fmt_minor}, ate {di.max_image} B")
+            f"{di.firmware} | {di.hardware}, LDRB {di.fmt_major}.{di.fmt_minor}, até {di.max_image} B")
     st = device_status
     if st is None or not st.has_program or st.build_id != result.build_id:
         rep.add(SKIP, "Tempo de varredura medido no dispositivo",
-                "o dispositivo nao esta executando este programa; transfira, coloque em RUN e verifique de novo")
+                "o dispositivo não esta executando este programa; transfira, coloque em RUN e verifique de novo")
     elif st.scan_count == 0:
         rep.add(SKIP, "Tempo de varredura medido no dispositivo", "nenhuma varredura executada ainda (RUN)")
     else:
         margin = st.max_exec_us / b.watchdog_us
         status = ERROR if st.max_exec_us >= b.watchdog_us else (WARN if margin > 0.5 or st.overruns else OK)
         rep.add(status, "Tempo de varredura medido no dispositivo",
-                f"ultima {st.last_exec_us} us, maxima {st.max_exec_us} us em {st.scan_count} varreduras; "
-                f"watchdog {b.watchdog_us} us ({100 * margin:.1f}% usado); atrasos de periodo: {st.overruns}")
+                f"última {st.last_exec_us} us, máxima {st.max_exec_us} us em {st.scan_count} varreduras; "
+                f"watchdog {b.watchdog_us} us ({100 * margin:.1f}% usado); atrasos de período: {st.overruns}")
     return rep

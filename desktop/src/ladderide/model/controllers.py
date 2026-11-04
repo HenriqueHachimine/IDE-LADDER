@@ -1,7 +1,10 @@
 """Controladores (CPU do CLP) que o projeto pode usar.
 
-Cada controlador limita entradas, saidas e a quantidade de variaveis: memorias
-M, temporizadores, contadores e registradores N. A lista vem de
+Cada controlador limita entradas, saidas, a quantidade de variaveis (memorias
+M, temporizadores, contadores e registradores N) e a memoria de programa
+(instrucoes e redes). WEG CLIC-02 e Omron CP1E tem `link`: o protocolo serial com
+que a aba Processo > CLP real conversa com o CLP. Os processadores SLC 500 trazem tambem o catalogo, a CPU,
+a memoria real, o sistema operacional e as portas de comunicacao. A lista vem de
 shared/specifications/controllers.json e, se existir, de
 ~/.ladderide/controladores.json (controladores do usuario). Os limites nunca
 passam dos da ISA, que e o que o firmware e as VMs suportam.
@@ -13,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..core import isa
+from . import expansions
 from .project import Project
 
 SPEC_PATH = isa.ISA_PATH.with_name("controllers.json")
@@ -34,21 +38,49 @@ class Controller:
     hardware: bool = False          # existe placa/firmware real para ele
     custom: bool = False            # quantidades escolhidas pelo usuario
     source: str = "padrao"
+    instructions: int = isa.MAX_INSTRUCTIONS   # memoria de programa
+    rungs: int = isa.MAX_RUNGS
+    family: str = "Outros"          # grupo na lista do novo projeto
+    catalog: str = ""               # ex.: 1747-L553
+    cpu: str = ""                   # ex.: 5/05
+    memory_k: int = 0               # memoria do processador real, em K palavras
+    os: str = ""                    # sistema operacional, ex.: OS500
+    ports: str = ""                 # portas de comunicacao
+    spec: str = ""                  # texto da lista, ex.: "5/05 CPU 64K Mem. OS500"
+    board: str = ""                 # perfil da aba Placa (comm/board_profiles.py), se houver
+    link: str = ""                  # protocolo do CLP real (comm/plc_serial.DRIVERS): clic02 | hostlink
+    expansion_bus: str = ""         # modulos de expansao que encaixam (model/expansions.py): clic02 | cp1w
+    max_expansions: int = 0         # quantos modulos o CPU aceita (0 = nao aceita)
 
     @classmethod
     def from_dict(cls, d: dict, source: str) -> "Controller":
         def limit(key: str, maximum: int, minimum: int = 0) -> int:
             return max(minimum, min(int(d.get(key, maximum)), maximum))
         return cls(str(d["id"]), str(d.get("name", d["id"])), str(d.get("description", "")),
-                   limit("inputs", isa.MAX_INPUTS, 1), limit("outputs", isa.MAX_OUTPUTS, 1),
+                   limit("inputs", isa.IDE_MAX_INPUTS, 1), limit("outputs", isa.IDE_MAX_OUTPUTS, 1),
                    limit("markers", isa.MAX_MARKERS), limit("timers", isa.MAX_TIMERS),
                    limit("counters", isa.MAX_COUNTERS), limit("words", isa.MAX_WORDS),
                    max(1, int(d.get("scan_period_ms", 10))), bool(d.get("hardware", False)),
-                   bool(d.get("custom", False)), source)
+                   bool(d.get("custom", False)), source,
+                   limit("instructions", isa.MAX_INSTRUCTIONS, 1), limit("rungs", isa.MAX_RUNGS, 1),
+                   str(d.get("family", "Outros")), str(d.get("catalog", "")), str(d.get("cpu", "")),
+                   max(0, int(d.get("memory_k", 0))), str(d.get("os", "")), str(d.get("ports", "")),
+                   str(d.get("spec", "")), str(d.get("board", "")), str(d.get("link", "")),
+                   str(d.get("expansion_bus", "")), max(0, int(d.get("max_expansions", 0))))
+
+    @property
+    def label(self) -> str:
+        """Nome curto da lista: o catalogo, se houver."""
+        return self.catalog or self.name
+
+    @property
+    def memory_text(self) -> str:
+        return f"{self.memory_k}K Mem." if self.memory_k else ""
 
     def summary(self) -> str:
-        return (f"{self.inputs} entradas, {self.outputs} saidas, {self.markers} memorias M, "
-                f"{self.timers} temporizadores, {self.counters} contadores, {self.words} registradores N")
+        return (f"{self.inputs} entradas, {self.outputs} saídas, {self.markers} memórias M, "
+                f"{self.timers} temporizadores, {self.counters} contadores, {self.words} registradores N, "
+                f"programa de até {self.instructions} instruções em {self.rungs} redes")
 
 
 def _read(path: Path, source: str) -> tuple[list[Controller], str | None]:
@@ -95,6 +127,25 @@ def controller_for(project: Project) -> Controller | None:
     return controller_by_id(project.target.device)
 
 
+def match_controller_io(project: Project) -> bool:
+    """Entradas e saidas do projeto = as do controlador (a quantidade de E/S e da CPU/modulo).
+    Para projetos salvos com outras quantidades. Devolve True se mudou algo. Personalizado e
+    controlador desconhecido ficam como estao."""
+    ctrl = controller_for(project)
+    io = project.io
+    if ctrl is None or ctrl.custom:
+        return False
+    modules = expansions.valid_modules(ctrl, project.target.expansions)
+    ids = [m.id for m in modules]
+    n_in, n_out = expansions.total_io(ctrl, modules)       # CPU + modulos de expansao
+    if (io.n_inputs, io.n_outputs) == (n_in, n_out) and ids == project.target.expansions:
+        return False
+    project.target.expansions = ids
+    io.n_inputs, io.n_outputs = n_in, n_out
+    io.safe_outputs &= (1 << min(io.n_outputs, isa.MAX_OUTPUTS)) - 1
+    return True
+
+
 def apply_controller(project: Project, ctrl: Controller, *, fill: bool = True) -> None:
     """Associa o controlador ao projeto e ajusta as quantidades aos limites dele.
 
@@ -102,14 +153,17 @@ def apply_controller(project: Project, ctrl: Controller, *, fill: bool = True) -
     fill=False (troca de controlador): so reduz o que passar do limite."""
     io = project.io
     project.target.device = ctrl.id
+    modules = expansions.valid_modules(ctrl, project.target.expansions)   # os que encaixam no novo CPU
+    project.target.expansions = [m.id for m in modules]
+    n_in, n_out = expansions.total_io(ctrl, modules)
     if fill:
-        io.n_inputs, io.n_outputs = ctrl.inputs, ctrl.outputs
+        io.n_inputs, io.n_outputs = n_in, n_out
         io.n_markers = min(64, ctrl.markers)
         io.n_words = min(32, ctrl.words)
         io.scan_period_ms = ctrl.scan_period_ms
     else:
-        io.n_inputs = min(io.n_inputs, ctrl.inputs)
-        io.n_outputs = min(io.n_outputs, ctrl.outputs)
+        io.n_inputs = min(io.n_inputs, n_in)
+        io.n_outputs = min(io.n_outputs, n_out)
         io.n_markers = min(io.n_markers, ctrl.markers)
         io.n_words = min(io.n_words, ctrl.words)
-    io.safe_outputs &= (1 << io.n_outputs) - 1
+    io.safe_outputs &= (1 << min(io.n_outputs, isa.MAX_OUTPUTS)) - 1   # estado seguro: 16 bits na imagem

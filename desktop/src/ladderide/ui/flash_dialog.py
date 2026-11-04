@@ -33,10 +33,10 @@ class FlashDialog(QDialog):
         self.refresh_btn.clicked.connect(self.refresh_ports)
         row.addWidget(self.refresh_btn)
         layout.addLayout(row)
-        note = QLabel("A gravacao substitui o firmware da placa e leva menos de um minuto. Se a placa nao "
-                      "entrar em modo de gravacao sozinha, segure BOOT, aperte e solte RST, e solte BOOT. "
-                      "O programa LADDER gravado antes continua na memoria; se ele for de uma versao antiga "
-                      "da IDE, a placa fica em FAULT ate voce transferir o programa de novo.")
+        note = QLabel("A gravação substitui o firmware da placa e leva menos de um minuto. Se a placa não "
+                      "entrar em modo de gravação sozinha, segure BOOT, aperte e solte RST, e solte BOOT. "
+                      "O programa LADDER gravado antes continua na memória; se ele for de uma versão antiga "
+                      "da IDE, a placa fica em FAULT até você transferir o programa de novo.")
         note.setWordWrap(True)
         note.setObjectName("muted")
         layout.addWidget(note)
@@ -62,7 +62,7 @@ class FlashDialog(QDialog):
             self.info.setText(f"Firmware {self.bundle.version} para {self.bundle.hardware} "
                               f"({self.bundle.source}).")
         except FlashError as exc:
-            self.info.setText(f"<b>Nao e possivel gravar:</b> {exc}")
+            self.info.setText(f"<b>Não e possível gravar:</b> {exc}")
             self.flash_btn.setEnabled(False)
 
     def refresh_ports(self) -> None:
@@ -100,7 +100,7 @@ class FlashDialog(QDialog):
         self.process.readyReadStandardOutput.connect(self._output)
         self.process.finished.connect(self._finished)
         self.process.errorOccurred.connect(lambda _e: self.log.appendPlainText(
-            f"Nao foi possivel iniciar o esptool: {self.process.errorString()}"))
+            f"Não foi possível iniciar o esptool: {self.process.errorString()}"))
         self.flash_btn.setEnabled(False)
         self.close_btn.setEnabled(False)
         self.process.start(cmd[0], cmd[1:])
@@ -127,8 +127,8 @@ class FlashDialog(QDialog):
             self.log.appendPlainText("\nFirmware gravado. A placa reiniciou; conecte pela aba Dispositivo e "
                                      "transfira o programa.")
         else:
-            self.log.appendPlainText(f"\nA gravacao falhou (codigo {code}). Confira a porta, o cabo USB e o "
-                                     "modo de gravacao (BOOT + RST).")
+            self.log.appendPlainText(f"\nA gravação falhou (código {code}). Confira a porta, o cabo USB e o "
+                                     "modo de gravação (BOOT + RST).")
 
     def reject(self) -> None:
         if self.process is not None and self.process.state() != QProcess.NotRunning:

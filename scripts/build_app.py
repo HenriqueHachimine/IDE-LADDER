@@ -155,9 +155,13 @@ def main() -> int:
         "--paths", str(ROOT / "desktop" / "src"),
         "--add-data", f"{ROOT / 'shared' / 'specifications'}{sep}shared/specifications",
         "--add-data", f"{ROOT / 'examples'}{sep}examples",
+        "--add-data", f"{ROOT / 'desktop' / 'src' / 'ladderide' / 'help'}{sep}ladderide/help",   # guia do usuario
         "--add-binary", f"{device}{sep}build/host",
         "--add-binary", f"{runner}{sep}build/host",
         "--add-data", f"{ROOT / 'firmware' / 'src' / 'board_config.h'}{sep}firmware/src",
+        # Gravar C++ na placa (comm/cpp_upload.py): E/S da ESP32 copiadas para o projeto PlatformIO
+        "--add-data", f"{ROOT / 'firmware' / 'src' / 'io_board.h'}{sep}firmware/src",
+        "--add-data", f"{ROOT / 'firmware' / 'src' / 'io_board.cpp'}{sep}firmware/src",
         *extra,
         "--collect-submodules", "ladderide.envs.builtin",     # ambientes carregados dinamicamente
         "--icon", str(ico) if ico else "NONE",

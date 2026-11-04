@@ -8,11 +8,17 @@ flowchart LR
     UI[ui: editor, simulador, dispositivo] --> MODEL[model: projeto, redes, edição]
     UI --> COMP[compiler: modelo → LDRB + mapa de depuração]
     UI --> SIM[sim: Simulator]
-    UI --> COMM[comm: LDP, transportes, monitor]
+    UI --> COMM[comm: LDP, transportes, monitor, Modbus TCP]
+    UI --> ENVS[envs: ambientes de simulacao]
     COMP --> CORE[core: ISA, LDRB, montador, LadderVM]
     SIM --> CORE
+    SIM -. Plant .- ENVS
+    SIM -. Plant .- FIOL[sim.factoryio: FactoryIOLink]
+    FIOL --> COMM
     CLI[cli] --> COMM
   end
+  FIO[Factory IO - driver Modbus TCP/IP Server]
+  FIOL <-- "Modbus TCP (FC02 / FC15)" --> FIO
   subgraph Shared["shared/"]
     ISA[(isa.json)]
     PROTO[(protocol.json)]
@@ -55,9 +61,11 @@ Princípios:
 | `core` | ISA, formato LDRB, montador LIL, VM de referência, CRC |
 | `model` | Projeto `.ladproj` versionado; redes em árvore série/paralelo; operações de edição que preservam a validade |
 | `compiler` | Validação (símbolos, operandos, faixas, acionamento único, estrutura), geração LDRB, mapa instrução↔elemento, importador LIL/LDRB |
-| `sim` | Simulador com tempo virtual: contínuo, por varredura, passo a passo |
-| `comm` | Quadros LDP, transportes (serial, TCP, processo), cliente com retransmissão, transferência transacional, monitor, equivalência no dispositivo, dispositivo virtual |
-| `ui` | Janela, diagrama (Qt Graphics View), paleta, painéis de simulação e dispositivo |
+| `sim` | Simulador com tempo virtual: contínuo, por varredura, passo a passo; protocolo `Plant` para processos externos; ponte com o Factory IO (`factoryio.py`) |
+| `envs` | Ambientes de simulação (plugins com `@register`), adaptador `EnvironmentPlant`, física e desenho comuns |
+| `comm` | Quadros LDP, transportes (serial, TCP, processo), cliente com retransmissão, transferência transacional, monitor, equivalência no dispositivo, dispositivo virtual, cliente Modbus TCP (`modbus_tcp.py`) |
+| `codegen`, `verify` | Tradução do diagrama para C++; verificação do programa no código C do firmware |
+| `ui` | Janela, diagrama (Qt Graphics View), paleta, painéis de simulação, dispositivo, ambiente e Factory IO |
 | `cli` | Linha de comando para hardware e evidências |
 
 ### 2.1 Modelo de rede
@@ -73,6 +81,14 @@ A view recebe uma "fonte ao vivo" com a mesma interface no simulador
 (`Simulator`) e no monitor (`MonitorSource`, a partir do instantâneo do
 dispositivo). A energia de cada fio vem do bit `power[pc]` da instrução que o
 alimenta, mapeado pelo compilador (`element_pc`, `branch_end_pc`).
+
+### 2.3 Processos externos (`Plant`)
+
+O simulador conhece uma única interface de processo físico, o protocolo `Plant`. Os
+ambientes internos (`EnvironmentPlant`) e o Factory IO (`FactoryIOLink`, ADR 0007) são
+adaptadores dessa interface, e a janela escolhe qual está ligado: o Factory IO, se
+conectado, ou o ambiente escolhido. Os padrões de projeto usados estão em
+`docs/design-patterns.md`.
 
 ## 3. Firmware
 

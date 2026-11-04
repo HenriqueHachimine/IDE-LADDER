@@ -1,51 +1,40 @@
 """Painel do simulador offline."""
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt
-from PySide6.QtWidgets import (QFormLayout, QGridLayout, QLabel, QSizePolicy, QToolButton, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import QFormLayout, QLabel, QVBoxLayout, QWidget
 
 from ..sim.simulator import SimState, Simulator
+from . import theme
 from .io_panel import IOPanel
-from .speed_control import SpeedCombo, SpeedModel, SpeedSlider, format_speed
+from .speed_control import SpeedModel, format_speed
 
 
 class SimPanel(QWidget):
-    def __init__(self, actions: dict, parent=None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 8, 10, 8)
-        bar = QGridLayout()                 # uma linha compacta (os mesmos comandos estao na barra e nas F5-F11)
-        bar.setSpacing(2)
-        for k, key in enumerate(("sim_run", "sim_pause", "sim_stop", "sim_scan", "sim_step", "sim_reset")):
-            b = QToolButton()
-            b.setDefaultAction(actions[key])
-            b.setToolButtonStyle(Qt.ToolButtonIconOnly)
-            b.setIconSize(QSize(20, 20))
-            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-            bar.addWidget(b, 0, k)
-        layout.addLayout(bar)
         form = QFormLayout()
         form.setHorizontalSpacing(14)
+        # comandos e velocidade ficam so na barra de ferramentas (e nas F5-F11); aqui o estado
         self.speed_model = SpeedModel(1.0, self)
-        self.speed = SpeedCombo(self.speed_model)
-        self.speed_slider = SpeedSlider(self.speed_model)
+        self.controller = QLabel("-")      # o que esta sendo simulado (E/S e limites vem dele)
+        self.controller.setWordWrap(True)
         self.state = QLabel("PARADO")
         self.state.setObjectName("stateBadge")
         self.scans = QLabel("0")
         self.vtime = QLabel("0,000 s")
         self.real_speed = QLabel("-")
-        self.real_speed.setToolTip("Quanto o tempo simulado esta andando por segundo de relogio. Se ficar "
-                                   "abaixo do pedido, o PC nao acompanha; o resultado continua o mesmo, "
-                                   "so mais devagar.")
+        self.real_speed.setToolTip("Quanto o tempo simulado está andando por segundo de relógio. Se ficar "
+                                   "abaixo do pedido, o PC não acompanha; o resultado continua o mesmo, "
+                                   "só mais devagar.")
         self.pc = QLabel("-")
-        form.addRow("Velocidade:", self.speed)
-        form.addRow("", self.speed_slider)
+        form.addRow("Controlador:", self.controller)
         form.addRow("Estado:", self.state)
         form.addRow("Varreduras:", self.scans)
         form.addRow("Tempo simulado:", self.vtime)
         form.addRow("Velocidade real:", self.real_speed)
-        form.addRow("Proxima instrucao:", self.pc)
+        form.addRow("Próxima instrução:", self.pc)
         layout.addLayout(form)
         self.io = IOPanel(show_commanded=False)
         layout.addWidget(self.io, 1)
@@ -71,7 +60,7 @@ class SimPanel(QWidget):
         text = format_speed(sim.actual_speed)
         slow = sim.limited and sim.actual_speed < 0.9 * self.speed_factor
         self.real_speed.setText(text + ("  (limite do PC)" if slow else ""))
-        self.real_speed.setStyleSheet("color:#b45309;" if slow else "")
+        self.real_speed.setStyleSheet(f"color:{theme.colors['WARN']};" if slow else "")
 
     def refresh(self, sim: Simulator | None) -> None:
         if sim is None:
@@ -88,7 +77,8 @@ class SimPanel(QWidget):
         if sim.state != SimState.STOPPED and vm.in_scan:
             text += " (no meio da varredura)"
         self.state.setText(text)
-        self._badge(*{SimState.RUNNING: ("#dcfce7", "#166534"), SimState.PAUSED: ("#fef3c7", "#92400e")}
+        c = theme.colors
+        self._badge(*{SimState.RUNNING: (c["OK_BG"], c["OK_FG"]), SimState.PAUSED: (c["WARN_BG"], c["WARN_FG"])}
                     .get(sim.state, (None, None)))
         self.scans.setText(str(vm.scan_count))
         self.vtime.setText(f"{sim.virtual_ms / 1000:.3f} s".replace(".", ","))

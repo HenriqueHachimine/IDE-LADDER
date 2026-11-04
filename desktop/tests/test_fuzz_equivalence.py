@@ -164,7 +164,7 @@ def test_fuzz_random_programs(c_vm):
         c = c_vm.run(image, scans)
         assert c.error is None
         for n, (a, b) in enumerate(zip(py, c.lines, strict=True), start=1):
-            assert a == b, f"iteracao {it}, varredura {n}\n  py: {a}\n  c : {b}"
+            assert a == b, f"iteração {it}, varredura {n}\n  py: {a}\n  c : {b}"
 
 
 def test_fuzz_mutated_images(c_vm):
@@ -186,11 +186,11 @@ def test_fuzz_mutated_images(c_vm):
             py_err = (exc.code.value, exc.index)
         scans = random_scans(rng, 20)
         c = c_vm.run(data, scans)
-        assert c.error == py_err, f"iteracao {it}: python={py_err} c={c.error} imagem={data.hex()}"
+        assert c.error == py_err, f"iteração {it}: python={py_err} c={c.error} imagem={data.hex()}"
         if py_err is None:
             accepted += 1
-            assert python_trace(data, scans) == c.lines, f"iteracao {it}: traco divergente"
-    assert accepted > 0, "nenhuma mutacao valida exercitou a execucao"
+            assert python_trace(data, scans) == c.lines, f"iteração {it}: traco divergente"
+    assert accepted > 0, "nenhuma mutação valida exercitou a execução"
 
 
 @pytest.mark.parametrize("n", [0, 1, 7, 100])
