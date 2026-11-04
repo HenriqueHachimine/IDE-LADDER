@@ -7,6 +7,23 @@ ensaios na placa real.
 ## [Não lançado]
 
 ### Corrigido
+- Segunda revisão de UI/UX:
+  - abas dos painéis da direita escritas duas vezes, sobrepostas (o Qt 6.12 deixava visível uma
+    barra de abas antiga ao agrupar painéis e a cada `restoreState`);
+  - paleta de instruções cortada (sem a 3ª coluna) depois de simular ou de diminuir a janela;
+    agora ela nunca fica mais estreita que as 3 colunas;
+  - blocos TON/TOF/RTO/CTU/CTD e de matemática sem o fio entre a caixa e o trilho direito;
+  - comandos e velocidade repetidos no painel Simulador: ficam só na barra de ferramentas, e o
+    painel passa a mostrar o controlador simulado;
+  - ícones de Varredura (▶1), Passo (seta na lista de instruções) e Reiniciar (↻) redesenhados;
+    Verificar ESP32 com texto e ícone claro; zoom sai da barra (continua em Exibir, Ctrl+/- e
+    Ctrl+roda);
+  - entradas comandadas pelo processo com legenda da borda tracejada e nome inteiro (cortava
+    nomes com mais de 14 letras, ex.: `Sensor_Presen…`);
+  - Novo projeto: placa do projeto, simulação e Arduino em destaque, famílias de referência
+    (Allen-Bradley, WEG, Omron) recolhidas; a dica apontava para "Programa > Propriedades", que fica em Editar;
+  - ambientes que precisam de mais E/S do que o controlador tem ficam desabilitados na lista,
+    com o motivo, e o ambiente em uso mostra um aviso.
 - Trocar o controlador em Programa → Propriedades só reduzia as E/S: ao passar de um de 8 E/S
   para um de 16, o projeto (e o Simulador de E/S) ficava com 8. Agora as E/S do projeto são sempre
   as do controlador: campos travados em Propriedades (menos no Personalizado) e projetos salvos com

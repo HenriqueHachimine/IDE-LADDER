@@ -129,11 +129,12 @@ o mesmo código no microcontrolador. O ADR 0002 registra essa decisão.
 
 ## 6. Observer
 
-**Problema.** A velocidade da simulação é exibida e alterada em três lugares: a caixa na
-barra de ferramentas, a caixa no painel Simulador e a barra deslizante.
+**Problema.** A velocidade da simulação é alterada por vários caminhos: a caixa na
+barra de ferramentas, os atalhos (Ctrl+. / Ctrl+, / Ctrl+;) e a ligação com o Factory IO,
+que a trava em 1x.
 
 **Solução.** O `SpeedModel` (`ui/speed_control.py`) é o sujeito, com o sinal
-`changed`. `SpeedCombo` e `SpeedSlider` são observadores e se atualizam sozinhos. O
+`changed`. O `SpeedCombo` é o observador e se atualiza sozinho. O
 mesmo mecanismo de sinais do Qt liga:
 - a sessão do dispositivo à janela (`DeviceSession`: `snapshot`, `disconnected`, `progress`);
 - o painel Factory IO à janela (`FactoryIOPanel.linkChanged`).

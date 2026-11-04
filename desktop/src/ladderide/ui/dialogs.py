@@ -282,11 +282,13 @@ class NewProjectDialog(QDialog):
         form.addRow("Nome:", self.name)
         self.list = QTreeWidget()
         self.list.setHeaderLabels(self.COLUMNS)
-        self.list.setRootIsDecorated(False)
         self.list.setUniformRowHeights(True)
         self.list.setAlternatingRowColors(True)
         groups: dict[str, QTreeWidgetItem] = {}
+        with_board: set[str] = set()        # familias com placa simulavel (ESP32, Arduino)
         for c in load_controllers():
+            if c.board:
+                with_board.add(c.family)
             group = groups.get(c.family)
             if group is None:
                 group = groups[c.family] = QTreeWidgetItem(self.list, [c.family])
@@ -299,7 +301,14 @@ class NewProjectDialog(QDialog):
                                           f"{c.instructions} instr. / {c.rungs} redes"])
             row.setData(0, Qt.UserRole, c.id)
             row.setToolTip(0, c.name)
-        self.list.expandAll()
+        # placa do projeto, simulacao e Arduino abertos; familias de referencia (Allen-Bradley, WEG,
+        # Omron...) recolhidas
+        for family, group in groups.items():
+            reference = family not in with_board
+            group.setExpanded(not reference)
+            if reference:
+                group.setText(0, f"{family}  ({group.childCount()} modelos)")
+        self.list.itemClicked.connect(lambda item, _c: item.childCount() and item.setExpanded(not item.isExpanded()))
         for col in range(len(self.COLUMNS)):
             self.list.resizeColumnToContents(col)
         self.list.setColumnWidth(0, max(self.list.columnWidth(0), 150))
@@ -311,8 +320,8 @@ class NewProjectDialog(QDialog):
         self.details.setMinimumHeight(96)
         self.details.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         hint = QLabel("O controlador limita as entradas e saídas, a quantidade de memórias, temporizadores, "
-                      "contadores e registradores e o tamanho do programa. Pode ser trocado depois em "
-                      "Programa > Propriedades.")
+                      "contadores e registradores e o tamanho do programa. A simulação e a lista de "
+                      "ambientes seguem essas E/S. Pode ser trocado depois em Editar > Propriedades do projeto.")
         hint.setWordWrap(True)
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.buttons.accepted.connect(self.accept)
@@ -335,6 +344,7 @@ class NewProjectDialog(QDialog):
     def select(self, controller_id: str) -> bool:
         for row in self._rows():
             if row.data(0, Qt.UserRole) == controller_id:
+                row.parent().setExpanded(True)          # familia recolhida: abre para mostrar a escolha
                 self.list.setCurrentItem(row)
                 return True
         return False

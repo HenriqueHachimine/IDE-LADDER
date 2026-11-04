@@ -9,7 +9,7 @@ from PySide6.QtCore import QElapsedTimer, QSettings, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QCursor, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (QApplication, QDockWidget, QFileDialog, QHBoxLayout, QInputDialog, QLabel,
                                QListWidget, QListWidgetItem, QMainWindow, QMessageBox, QPushButton, QScrollArea,
-                               QTableWidget, QToolButton,
+                               QTabBar, QTableWidget, QToolButton,
                                QTableWidgetItem, QVBoxLayout, QWidget, QHeaderView)
 
 from .. import __version__
@@ -304,12 +304,12 @@ class MainWindow(QMainWindow):
         # Tres barras na ordem do fluxo de trabalho: editar -> compilar/simular -> dispositivo.
         # Texto so nas acoes principais; as demais mostram icone e dica com o atalho.
         groups = {
-            "Edição": ("new", "open", "save", None, "undo", "redo", None, "rung_add", None, "zoom_in", "zoom_out"),
+            "Edição": ("new", "open", "save", None, "undo", "redo", None, "rung_add"),   # zoom: menu e Ctrl+roda
             "Simulação": ("cpp_code", "compile", None, "sim_run", "sim_pause", "sim_scan", "sim_step", "sim_reset", "sim_stop",
                           "speed", None, "process"),
             "Dispositivo": ("verify", "device_transfer", None, "il_blocks"),
         }
-        with_text = {"cpp_code", "compile", "sim_run", "sim_stop", "process", "device_transfer"}
+        with_text = {"cpp_code", "compile", "sim_run", "sim_stop", "process", "verify", "device_transfer"}
         self.toolbars = []
         for title, keys in groups.items():
             tb = self.addToolBar(title)
@@ -339,7 +339,7 @@ class MainWindow(QMainWindow):
         self.palette.toolClicked.connect(self.tool_clicked)
         self.palette_dock = self._dock("Instruções", self.palette, Qt.LeftDockWidgetArea, "dock_palette")
 
-        self.sim_panel = SimPanel(self.actions_)
+        self.sim_panel = SimPanel()
         self.sim_panel.io.inputChanged.connect(self.on_input)
         self.sim_panel.speed_model.changed.connect(self.on_speed_changed)
         self.sim_dock = self._dock("Simulador", self.sim_panel, Qt.RightDockWidgetArea, "dock_sim", scroll=True)
@@ -450,9 +450,17 @@ class MainWindow(QMainWindow):
                 QTimer.singleShot(0, self._initial_sizes)
             QTimer.singleShot(0, lambda: self._freeze_sizes(self.layout_locked))
 
+    def restoreState(self, state, version: int = 0) -> bool:
+        # Qt 6.12 deixa barras de abas antigas visiveis (abas escritas duas vezes, sobrepostas) ao
+        # agrupar paineis e a cada restoreState; escondidas antes, o Qt so volta a exibir as que usa
+        for bar in self.findChildren(QTabBar, options=Qt.FindDirectChildrenOnly):
+            bar.hide()
+        return super().restoreState(state, version)
+
     def _initial_sizes(self) -> None:
         self._apply_default_sizes()
         self._default_layout = self.saveState(self.LAYOUT_VERSION)
+        self.restoreState(self._default_layout, self.LAYOUT_VERSION)    # descarta as barras de abas antigas
 
     def _dock(self, title: str, widget, area, name: str, scroll: bool = False) -> QDockWidget:
         dock = QDockWidget(title, self)
@@ -572,6 +580,9 @@ class MainWindow(QMainWindow):
         self._refresh_cpp()
         self.esp32_panel.set_project(self.project)
         io = self.project.io
+        ctrl = controller_for(self.project)
+        self.sim_panel.controller.setText(f"{ctrl.name if ctrl else 'Personalizado'}  "
+                                          f"({io.n_inputs}E / {io.n_outputs}S)")
         self.env_panel.set_io(io.n_inputs, io.n_outputs, io.n_words)
         self.fio_panel.set_limits(self.project.io.n_inputs, self.project.io.n_outputs, self.project.io.n_words)
         self.fio_panel.set_symbols({s.address: s.name for s in self.project.symbols})
@@ -1311,8 +1322,7 @@ class MainWindow(QMainWindow):
         elif not locked and self._speed_before_fio is not None:
             self.sim_panel.set_speed(self._speed_before_fio)
             self._speed_before_fio = None
-        for w in (self.sim_panel.speed, self.sim_panel.speed_slider, self.toolbar_speed):
-            w.setEnabled(not locked)
+        self.toolbar_speed.setEnabled(not locked)
         for k in ("sim_faster", "sim_slower", "sim_realtime"):
             self.actions_[k].setEnabled(not locked)
 

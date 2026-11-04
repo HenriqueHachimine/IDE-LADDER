@@ -76,18 +76,19 @@ def _draw(name: str, p: QPainter) -> None:
     elif name == "stop":
         p.setPen(Qt.NoPen); p.setBrush(RED)
         p.drawRoundedRect(QRectF(5, 5, 12, 12), 2, 2)
-    elif name == "scan":
-        _arrow_arc(p, QRectF(3.5, 3.5, 15, 15), 90, -300, BLUE)
-        p.setPen(QPen(BLUE, 1)); f = p.font(); f.setPointSizeF(6.5); f.setBold(True); p.setFont(f)
-        p.drawText(QRectF(3.5, 3.5, 15, 15), Qt.AlignCenter, "1")
-    elif name == "step":
+    elif name == "scan":                        # executar um ciclo: play + "1"
         p.setPen(Qt.NoPen); p.setBrush(BLUE)
-        p.drawPolygon(QPolygonF([QPointF(4, 5), QPointF(13, 11), QPointF(4, 17)]))
-        p.drawRoundedRect(QRectF(14.5, 5, 3, 12), 1, 1)
-    elif name == "reset":                       # voltar ao inicio: barra + triangulo para a esquerda
-        p.setPen(Qt.NoPen); p.setBrush(INK)
-        p.drawRoundedRect(QRectF(4.5, 5, 3, 12), 1, 1)
-        p.drawPolygon(QPolygonF([QPointF(18, 5), QPointF(9, 11), QPointF(18, 17)]))
+        p.drawPolygon(QPolygonF([QPointF(2.5, 5), QPointF(11, 11), QPointF(2.5, 17)]))
+        p.setPen(QPen(BLUE, 1)); f = p.font(); f.setPixelSize(13); f.setBold(True); p.setFont(f)
+        p.drawText(QRectF(11, 2, 10, 18), Qt.AlignCenter, "1")
+    elif name == "step":                        # proxima instrucao: seta apontando uma linha da lista
+        p.setPen(QPen(INK, 1.8, Qt.SolidLine, Qt.RoundCap))
+        for y in (5, 11, 17):
+            p.drawLine(QPointF(10, y), QPointF(19.5, y))
+        p.setPen(Qt.NoPen); p.setBrush(BLUE)
+        p.drawPolygon(QPolygonF([QPointF(2.5, 6.5), QPointF(8.5, 11), QPointF(2.5, 15.5)]))
+    elif name == "reset":                       # reiniciar: seta circular no sentido anti-horario
+        _arrow_arc(p, QRectF(4, 4, 14, 14), 60, 270, INK)
     elif name in ("zoom_in", "zoom_out"):
         p.setPen(QPen(INK, 1.8, Qt.SolidLine, Qt.RoundCap))
         p.drawEllipse(QRectF(3, 3, 12, 12))
@@ -106,14 +107,14 @@ def _draw(name: str, p: QPainter) -> None:
         p.drawLine(QPointF(3, 3), QPointF(3, 19)); p.drawLine(QPointF(19, 3), QPointF(19, 19))
         p.setPen(QPen(BLUE, 2, Qt.SolidLine, Qt.RoundCap))
         p.drawLine(QPointF(3, 11), QPointF(19, 11))
-    elif name == "verify":
-        p.setPen(QPen(INK, 1.4)); p.setBrush(QColor("#1e293b"))
-        p.drawRoundedRect(QRectF(4, 4, 14, 14), 2, 2)
+    elif name == "verify":                      # chip com visto: conferir o programa no codigo do ESP32
         p.setPen(QPen(INK, 1.4))
         for k in range(3):
             y = 7 + k * 4
             p.drawLine(QPointF(1.5, y), QPointF(4, y)); p.drawLine(QPointF(18, y), QPointF(20.5, y))
-        p.setPen(QPen(QColor("#4ade80"), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.setBrush(QColor("#dcfce7"))
+        p.drawRoundedRect(QRectF(4, 4, 14, 14), 2, 2)
+        p.setPen(QPen(GREEN, 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         p.drawPolyline(QPolygonF([QPointF(7.5, 11), QPointF(10, 13.5), QPointF(14.5, 8.5)]))
     elif name == "il":
         p.setPen(QPen(INK, 1.4)); p.setBrush(QColor("white"))

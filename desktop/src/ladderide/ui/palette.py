@@ -105,6 +105,12 @@ class Palette(QScrollArea):
         layout.addStretch(1)
         self.setWidget(body)
 
+    def minimumSizeHint(self) -> QSize:
+        # nunca mais estreita que as 3 colunas de botoes (o painel nao corta nem encolhe a paleta)
+        hint = super().minimumSizeHint()
+        width = self.widget().minimumSizeHint().width() + self.verticalScrollBar().sizeHint().width()
+        return QSize(max(hint.width(), width), hint.height())
+
     def theme_changed(self) -> None:
         for b in self.buttons:
             b.setIcon(tool_icon(b.tool))

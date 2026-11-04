@@ -5,7 +5,7 @@ monitor online) e firmware interpretador para uma placa ESP32 com 8 relés.
 Trabalho final da disciplina de Controladores Lógicos Programáveis.
 
 > **Situação (v0.9.0, 2026-10-20):** software completo e testado no PC
-> (322 testes, incluindo o firmware executado como "dispositivo virtual").
+> (382 testes, incluindo o firmware executado como "dispositivo virtual").
 > O firmware compila para o ESP32, mas **ainda não foi testado na placa** —
 > ver [roteiro de hardware](docs/hardware-test-procedure.md).
 
@@ -18,10 +18,12 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   GEQ, LIM, MEQ) e matemática (ADD, SUB, MUL, DIV, SQR, NEG, TOD, FRD) com
   registradores inteiros de 32 bits
 - **Escolha do controlador** ao criar o projeto (ESP32 Relay X8, simulação com
-  16 E/S ou personalizado), que limita E/S e variáveis ([controladores](docs/controllers.md))
+  16 E/S, Arduino, personalizado ou modelos Allen-Bradley de referência), que limita E/S e
+  variáveis; a simulação mostra o controlador e a lista de ambientes desabilita os que precisam
+  de mais E/S do que ele tem ([controladores](docs/controllers.md))
 - **Compilador** com erros e avisos por rede e elemento; nunca gera programa inválido
 - **Simulador** contínuo com velocidade ajustável (0,01× a 1000× ou a máxima do
-  PC, pela barra de ferramentas, barra deslizante ou Ctrl+. / Ctrl+,), por
+  PC, pela caixa da barra de ferramentas ou Ctrl+. / Ctrl+,), por
   varredura e passo a passo, com
   fluxo de energia, entradas virtuais, temporizadores e contadores ao vivo
 - **Transferência** USB transacional (CRC, validação no firmware, gravação

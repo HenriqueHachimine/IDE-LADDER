@@ -63,7 +63,7 @@ def test_transfer_runs_program_with_clic02_io(window):
     assert panel.linked and w.sim is not None and w.sim.state == SimState.RUNNING
     assert w.process_panel.current == "plc"
     assert w._plant() is panel.link
-    assert not w.sim_panel.speed.isEnabled()                  # CLP real roda em tempo real
+    assert not w.toolbar_speed.isEnabled()                    # CLP real roda em tempo real
     assert pump(app, lambda: panel.link.connected)
 
     slave.regs[CLIC_INPUTS] = 0b01                             # I01 ligado no CLIC-02
@@ -78,7 +78,7 @@ def test_transfer_runs_program_with_clic02_io(window):
     assert pump(app, lambda: slave.regs[CLIC_MARKERS] == 0b100)
     panel.connect_btn.click()                                  # desconectar desliga as saidas
     assert not panel.linked and slave.regs[CLIC_MARKERS] == 0
-    assert w.sim_panel.speed.isEnabled()
+    assert w.toolbar_speed.isEnabled()
 
 
 def test_cp1e_project_selects_hostlink_and_draws(window):
@@ -107,7 +107,7 @@ def test_controller_without_link_explains(window):
 def test_new_project_dialog_lists_weg_and_omron():
     QApplication.instance() or QApplication([])
     dlg = NewProjectDialog()
-    families = [dlg.list.topLevelItem(i).text(0) for i in range(dlg.list.topLevelItemCount())]
+    families = [dlg.list.topLevelItem(i).text(0).split("  (")[0] for i in range(dlg.list.topLevelItemCount())]
     assert "WEG CLIC-02" in families and "Omron CP1E tipo E" in families
     dlg.select("clw-02-20vr-d")
     assert dlg.selected_id() == "clw-02-20vr-d"
