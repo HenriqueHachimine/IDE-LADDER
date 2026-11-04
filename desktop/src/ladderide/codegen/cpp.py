@@ -211,6 +211,11 @@ static inline bool MEQ(int32_t source, int32_t mask, int32_t cmp) {
 _COMPARE_OPS = {"EQU": "==", "NEQ": "!=", "LES": "<", "GRT": ">", "LEQ": "<=", "GEQ": ">="}
 
 
+def _io_word(io) -> str:
+    """Tipo das mascaras de entradas/saidas: 16 bits ate 16 pontos, 32 bits acima (expansoes, SLC fixo)."""
+    return "uint32_t" if io.n_inputs > 16 or io.n_outputs > 16 else "uint16_t"
+
+
 @dataclass
 class CppCode:
     text: str
@@ -303,7 +308,7 @@ class _Gen:
         self.p = project
         c = _Compiler(project)
         io = project.io
-        self.io_ok = (1 <= io.n_inputs <= isa.IDE_MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
+        self.io_ok = (1 <= io.n_inputs <= isa.IDE_MAX_INPUTS and 1 <= io.n_outputs <= isa.IDE_MAX_OUTPUTS
                       and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS)
         if self.io_ok:
             c.check_controller()
@@ -599,7 +604,7 @@ class _Gen:
         out += ["    FIRST_SCAN = true;", "    clock_phase = 0;", "}", "",
                 "// Uma varredura: le as entradas, executa as redes em ordem e devolve as saidas.",
                 "// dt_ms = tempo desde a varredura anterior (ignorado na primeira).",
-                f"uint16_t plc_scan({'uint32_t' if io.n_inputs > 16 else 'uint16_t'} inputs, uint32_t dt_ms) {{",
+                f"{_io_word(io)} plc_scan({_io_word(io)} inputs, uint32_t dt_ms) {{",
                 "    uint32_t dt = FIRST_SCAN ? 0 : dt_ms;",
                 "    if (!FIRST_SCAN) clock_phase = (clock_phase + dt % 1000u) % 1000u;",
                 "    CLOCK_1S = clock_phase < 500u;",
@@ -621,8 +626,8 @@ class _Gen:
             first_el.append(nodes[0].id if nodes else None)
         out += ["",
                 "    FIRST_SCAN = false;",
-                "    uint16_t outputs = 0;",
-                f"    for (int k = 0; k < {io.n_outputs}; k++) if (Q[k]) outputs |= (uint16_t)(1u << k);",
+                f"    {_io_word(io)} outputs = 0;",
+                f"    for (int k = 0; k < {io.n_outputs}; k++) if (Q[k]) outputs |= ({_io_word(io)})1 << k;",
                 "    return outputs;",
                 "}"]
         if namespace:
@@ -712,7 +717,7 @@ class _Gen:
         s += [f"    Serial.println({_c_str(line)});" for line in help_lines]
         s += ["}",
               "",
-              "static void print_state(uint16_t inputs, uint16_t outputs) {",
+              f"static void print_state({_io_word(io)} inputs, {_io_word(io)} outputs) {{",
               "    stamp();",
               "    Serial.println(\"estado atual:\");",
               f"    for (int k = 0; k < {io.n_inputs}; k++)",
@@ -730,8 +735,8 @@ class _Gen:
               "",
               "// Compara com a varredura anterior e escreve o que mudou: entradas (causa),",
               "// temporizadores e contadores, e por fim as saidas (efeito).",
-              "static void report_changes(uint16_t inputs, uint16_t outputs, bool quiet) {",
-              "    static uint16_t last_in = 0, last_out = 0;"]
+              f"static void report_changes({_io_word(io)} inputs, {_io_word(io)} outputs, bool quiet) {{",
+              f"    static {_io_word(io)} last_in = 0, last_out = 0;"]
         if n_t:
             s.append(f"    static bool last_tt[{n_t}], last_dn[{n_t}];")
         if n_c:
@@ -791,7 +796,7 @@ class _Gen:
               "",
               "void loop() {",
               "    static uint32_t last = millis();",
-              "    static uint16_t inputs = 0, outputs = 0;",
+              f"    static {_io_word(io)} inputs = 0, outputs = 0;",
               "    static bool started = false;",
               "    while (Serial.available() > 0) {",
               "        int ch = Serial.read();",

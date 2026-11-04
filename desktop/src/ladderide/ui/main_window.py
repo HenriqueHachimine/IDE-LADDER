@@ -18,12 +18,14 @@ from ..compiler.compiler import COMPILER_VERSION, TARGET_FORMAT, CompileResult
 from ..core.image import ImageValidationError
 from ..core.asm import AsmError
 from ..model import edit
+from ..model import expansions
 from ..model.controllers import controller_for, match_controller_io
 from ..model.project import (CompareBox, Contact, CounterBox, MathBox, Project, ProjectFormatError, ResetBox,
                              Symbol, TimerBox, Coil)
 
 EDITABLE_ON_INSERT = (Contact, Coil, TimerBox, CounterBox, ResetBox, CompareBox, MathBox)
 from ..sim.factoryio import FactoryIOConfig
+from ..sim.plc_link import PlcLinkConfig
 from ..sim.simulator import SimState, Simulator
 from ..comm.monitor import MonitorSource
 from ..comm.protocol import DevState
@@ -36,6 +38,7 @@ from .cpp_panel import CppPanel
 from .esp32_panel import Esp32Panel
 from .process_panel import ProcessPanel
 from .factoryio_panel import FactoryIOPanel
+from .plc_panel import PlcPanel
 from .il_panel import ILPanel
 from .user_guide import UserGuideDialog
 from .verify_dialog import VerifyDialog
@@ -113,6 +116,7 @@ class MainWindow(QMainWindow):
         if persist_layout:
             self._restore_layout()
             self._restore_factoryio_config()
+            self._restore_plc_config()
             settings = self._settings()
             self.esp32_panel.set_board(settings.value("board/id", "", type=str),
                                        settings.value("board/relays", 8, type=int), emit=False)
@@ -153,6 +157,8 @@ class MainWindow(QMainWindow):
         A("edit", "Editar elemento...", lambda: self.edit_element(self.view.selection), "Return")
         A("rung_add", "Nova rede", lambda: self.on_view_action("rung_append", None), "Ctrl+R")
         A("project", "Propriedades do projeto...", self.project_properties)
+        A("expansions", "Módulos de expansão...", self.edit_expansions,
+          tip="Encaixa módulos de E/S no CLP do projeto (WEG CLIC-02, Omron CP1E)")
         A("compile", "Compilar", self.compile, "F7", "Valida e gera o programa intermediário")
         A("sim_run", "Executar", self.sim_run, "F5", "Executa a simulação continuamente")
         A("sim_pause", "Pausar", self.sim_pause, "F6")
@@ -246,6 +252,7 @@ class MainWindow(QMainWindow):
             m.addAction(a[k])
         m.addSeparator()
         m.addAction(a["project"])
+        m.addAction(a["expansions"])
         m = mb.addMenu("&Programa")
         m.addAction(a["cpp_code"])
         m.addAction(a["compile"])
@@ -396,9 +403,17 @@ class MainWindow(QMainWindow):
         self.fio_panel.linkChanged.connect(self.on_factoryio_changed)
         self.fio_panel.symbolEdited.connect(self.on_factoryio_symbol)
         self.fio_panel.configChanged.connect(self._save_factoryio_config)
-        # Ambiente, Factory IO e Placa sao alternativas (um processo por vez): um painel so, com seletor
-        self.process_panel = ProcessPanel({"env": self.env_panel, "fio": self.fio_panel, "board": self.esp32_panel})
+        # CLP real (WEG CLIC-02 / Omron CP1E pela serial)
+        self.plc_panel = PlcPanel()
+        self.plc_panel.linkChanged.connect(self.on_plc_changed)
+        self.plc_panel.transferRequested.connect(self.plc_transfer)
+        self.plc_panel.configChanged.connect(self._save_plc_config)
+        self.plc_panel.expansionsRequested.connect(self.edit_expansions)
+        # Ambiente, Factory IO, Placa e CLP real sao alternativas (um processo por vez): um painel so, com seletor
+        self.process_panel = ProcessPanel({"env": self.env_panel, "fio": self.fio_panel, "board": self.esp32_panel,
+                                           "plc": self.plc_panel})
         self.process_dock = self._dock("Processo", self.process_panel, Qt.BottomDockWidgetArea, "dock_process")
+        self.process_panel.pageChanged.connect(self._grow_process_dock)
         self.tabifyDockWidget(self.symbols_dock, self.process_dock)
         self.env_dock = self.fio_dock = self.esp32_dock = self.process_dock   # nomes antigos: o mesmo painel
         self._speed_before_fio: float | None = None
@@ -560,6 +575,8 @@ class MainWindow(QMainWindow):
         self.env_panel.set_io(io.n_inputs, io.n_outputs, io.n_words)
         self.fio_panel.set_limits(self.project.io.n_inputs, self.project.io.n_outputs, self.project.io.n_words)
         self.fio_panel.set_symbols({s.address: s.name for s in self.project.symbols})
+        self.plc_panel.set_project(io.n_inputs, io.n_outputs, controller_for(self.project),
+                                   expansions.project_modules(self.project))
 
     def _update_title(self) -> None:
         name = Path(self.path).name if self.path else "sem arquivo"
@@ -569,7 +586,7 @@ class MainWindow(QMainWindow):
         a = self.actions_
         sim_active = self.sim is not None and self.sim.active
         editing = not sim_active
-        for k in ("undo", "redo", "delete", "edit", "rung_add", "project", "import", "new", "open"):
+        for k in ("undo", "redo", "delete", "edit", "rung_add", "project", "expansions", "import", "new", "open"):
             a[k].setEnabled(editing)
         a["undo"].setEnabled(editing and bool(self.undo_stack))
         a["redo"].setEnabled(editing and bool(self.redo_stack))
@@ -652,7 +669,10 @@ class MainWindow(QMainWindow):
             self.view.update_live(None)
         self.sim_panel.refresh(self.sim)
         sim_on = self.sim is not None and self.sim.active
-        self.env_panel.refresh(self.sim.physical_outputs if sim_on and not self.fio_panel.linked else 0)
+        external = self.fio_panel.linked or self.plc_panel.linked
+        self.env_panel.refresh(self.sim.physical_outputs if sim_on and not external else 0)
+        if self.plc_panel.link is not None:     # parada/pausa: o CLP fica com as saidas no estado seguro
+            self.plc_panel.link.show_outputs(self.sim.physical_outputs if self.sim is not None else 0)
         if self.fio_panel.link is not None:     # parada/pausa tambem chegam a cena (estado seguro)
             self.fio_panel.link.show_outputs(self.sim.physical_outputs if self.sim is not None else 0)
             self.fio_panel.link.show_words(self.sim.vm.n if sim_on else [])
@@ -855,6 +875,23 @@ class MainWindow(QMainWindow):
         popup.show()
         self._address_popup = popup
         return popup
+
+    def edit_expansions(self) -> None:
+        """Modulos de expansao do CLP: as E/S do projeto passam a ser as do CPU mais as dos modulos."""
+        if not self._can_edit():
+            return
+        from .expansion_dialog import ExpansionDialog
+        dlg = ExpansionDialog(controller_for(self.project), list(self.project.target.expansions), self)
+        if not dlg.exec() or dlg.ids() == self.project.target.expansions:
+            return
+
+        def change() -> None:
+            self.project.target.expansions = dlg.ids()
+            match_controller_io(self.project)
+        if self.apply_edit(change):
+            io = self.project.io
+            self.statusBar().showMessage(f"Módulos de expansão: {len(dlg.ids())}. O projeto tem agora "
+                                         f"{io.n_inputs} entradas e {io.n_outputs} saídas. Ctrl+Z desfaz.", 6000)
 
     def project_properties(self) -> None:
         if not self._can_edit():
@@ -1160,11 +1197,15 @@ class MainWindow(QMainWindow):
 
     # =================================================== Factory IO (Modbus TCP)
     def _plant(self):
-        """Processo ligado a simulacao: o Factory IO, se conectado, senao o ambiente interno."""
+        """Processo ligado a simulacao: o CLP real ou o Factory IO, se conectados, senao o ambiente interno."""
+        if self.plc_panel.link is not None:
+            return self.plc_panel.link
         return self.fio_panel.link if self.fio_panel.link is not None else self.env_panel.plant
 
     def _plant_owner(self) -> str:
         """Quem comanda as entradas travadas: o texto vai na dica de cada botao."""
+        if self.plc_panel.link is not None:
+            return "CLP real"
         if self.fio_panel.link is not None:
             return "Factory IO"
         env = self.env_panel.env
@@ -1176,7 +1217,8 @@ class MainWindow(QMainWindow):
 
     def show_process(self) -> None:
         """Abre o painel Processo na opcao que estiver escolhida."""
-        {"env": self.show_environment, "fio": self.show_factoryio, "board": self.show_esp32}.get(
+        {"env": self.show_environment, "fio": self.show_factoryio, "board": self.show_esp32,
+         "plc": self.show_plc}.get(
             self.process_panel.current, self.show_environment)()
 
     def show_factoryio(self) -> None:
@@ -1189,7 +1231,7 @@ class MainWindow(QMainWindow):
         if self.sim is not None:
             self.sim.attach_plant(self._plant())
         self.sim_panel.io.set_owned(self._plant_owned(), self._plant_owner())
-        self._lock_speed(link is not None)
+        self._lock_speed(self._external_linked())
         if link is not None:
             if self.persist_layout:
                 self._settings().setValue("factoryio/config", json.dumps(link.config.to_dict()))
@@ -1198,6 +1240,68 @@ class MainWindow(QMainWindow):
         else:
             self.statusBar().showMessage("Factory IO desconectado.", 4000)
         self._update_live()
+
+    def _external_linked(self) -> bool:
+        return self.fio_panel.link is not None or self.plc_panel.link is not None
+
+    # ============================================== CLP real (CLIC-02 / CP1E)
+    def show_plc(self) -> None:
+        self.process_panel.show_page("plc")
+        self.process_dock.show()
+        self.process_dock.raise_()
+        self._grow_process_dock("plc")
+
+    def _grow_process_dock(self, page: str) -> None:
+        """O CLP desenhado precisa de altura: ao abrir o CLP real, o painel Processo cresce."""
+        if page == "plc" and not self.process_dock.isFloating() and self.process_dock.height() < 380:
+            self.resizeDocks([self.process_dock], [420], Qt.Vertical)
+
+    def on_plc_changed(self, link) -> None:
+        QTimer.singleShot(0, self._update_process_status)
+        if self.sim is not None:
+            self.sim.attach_plant(self._plant())
+        self.sim_panel.io.set_owned(self._plant_owned(), self._plant_owner())
+        self._lock_speed(self._external_linked())
+        if link is not None:
+            self.statusBar().showMessage("CLP real conectado: as entradas vêm do CLP e as saídas do programa vão "
+                                         "para ele (velocidade 1x).", 6000)
+        else:
+            self.statusBar().showMessage("CLP real desconectado (saídas do CLP desligadas).", 4000)
+        self._update_live()
+
+    def plc_transfer(self) -> None:
+        """Transmitir e executar: compila, conecta ao CLP e roda o programa com as E/S dele."""
+        if self.sim is not None and self.sim.active:
+            self.sim_stop()
+        self.sim = None
+        if not self.compile():
+            QMessageBox.warning(self, "CLP real", "Corrija os erros de compilação antes de transmitir.\n"
+                                                  "Veja a aba Mensagens.")
+            return
+        ctrl = controller_for(self.project)
+        if ctrl is not None and ctrl.link and ctrl.link != self.plc_panel.config().driver:
+            QMessageBox.information(self, "CLP real", f"O projeto usa o controlador {ctrl.name}, mas o protocolo "
+                                                      "escolhido é de outro CLP. Confira o protocolo.")
+            return
+        if not self.plc_panel.connect_link():
+            self.show_plc()
+            return
+        self.sim_run()
+        self.show_plc()
+        self.statusBar().showMessage("Programa compilado e em execução com as E/S do CLP real.", 6000)
+
+    def _save_plc_config(self, config) -> None:
+        if self.persist_layout:
+            self._settings().setValue("plc/config", json.dumps(config.to_dict()))
+
+    def _restore_plc_config(self) -> None:
+        raw = self._settings().value("plc/config", "", type=str)
+        try:
+            cfg = PlcLinkConfig.from_dict(json.loads(raw))
+        except (ValueError, TypeError, AttributeError):
+            return
+        self.plc_panel.set_config(cfg)
+        self.plc_panel.controller_link = cfg.driver
 
     def _lock_speed(self, locked: bool) -> None:
         """O Factory IO roda em tempo real: com ele ligado a simulacao fica em 1x."""
@@ -1283,7 +1387,9 @@ class MainWindow(QMainWindow):
             return
         link = self.fio_panel.link
         self.process_panel.set_status("fio", "" if link is None else "conectado" if link.connected else "conectando")
-        self.process_panel.set_status("env", "em uso" if self.env_panel.env is not None and link is None else "")
+        self.process_panel.set_status("env", "em uso" if self.env_panel.env is not None and not self._external_linked()
+                                      else "")
+        self.process_panel.set_status("plc", self.plc_panel.status_text())
         board_on = self.device_panel.connected and self.session.is_virtual
         self.process_panel.set_status("board", "ligada" if board_on else "")
 
@@ -1506,6 +1612,7 @@ class MainWindow(QMainWindow):
             self.session.close()
             self.esp32_panel.shutdown()          # encerra o exemplo Arduino, se estiver rodando
             self.fio_panel.shutdown()            # desliga os atuadores da cena e fecha a conexao
+            self.plc_panel.shutdown()            # desliga as saidas do CLP real e fecha a serial
             event.accept()
         else:
             event.ignore()
@@ -1558,6 +1665,10 @@ class MainWindow(QMainWindow):
             st["fio"] = (f"conectado, ciclo {link.cycle_ms:.0f} ms" if link.connected
                          else f"conectando ({link.error})" if link.error else "conectando")
         st["fio_config"] = self.fio_panel.config()
+        plc = self.plc_panel.link
+        if plc is not None:
+            st["plc"] = (f"conectado, {plc.model}, ciclo {plc.cycle_ms:.0f} ms" if plc.connected
+                         else f"conectando ({plc.error})" if plc.error else "conectando")
         env = self.env_panel.env
         if env is not None:
             st["env"] = env.name

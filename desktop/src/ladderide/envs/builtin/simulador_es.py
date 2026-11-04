@@ -84,7 +84,7 @@ class IOSimulatorEnvironment(Environment):
         return self.n_words > BCD_OUT
 
     def configure(self, n_inputs: int, n_outputs: int, n_words: int) -> bool:
-        io = (max(1, min(isa.IDE_MAX_INPUTS, n_inputs)), max(1, min(isa.MAX_OUTPUTS, n_outputs)), max(0, n_words))
+        io = (max(1, min(isa.IDE_MAX_INPUTS, n_inputs)), max(1, min(isa.IDE_MAX_OUTPUTS, n_outputs)), max(0, n_words))
         if io == (self.n_in, self.n_out, self.n_words):
             return False
         self.n_in, self.n_out, self.n_words = io

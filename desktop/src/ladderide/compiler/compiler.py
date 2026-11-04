@@ -107,7 +107,9 @@ class _Compiler:
             return
         self.max_timers, self.max_counters = ctrl.timers, ctrl.counters
         io = self.p.io
-        for what, used, limit in (("entradas", io.n_inputs, ctrl.inputs), ("saidas", io.n_outputs, ctrl.outputs),
+        from ..model import expansions
+        n_in, n_out = expansions.total_io(ctrl, expansions.valid_modules(ctrl, self.p.target.expansions))
+        for what, used, limit in (("entradas", io.n_inputs, n_in), ("saidas", io.n_outputs, n_out),
                                   ("memórias M", io.n_markers, ctrl.markers),
                                   ("registradores N", io.n_words, ctrl.words)):
             if used > limit:
@@ -443,7 +445,7 @@ class _Compiler:
                               + struct.pack("<HHHH", io.n_inputs, io.n_outputs, io.n_markers, io.n_words))
         image = encode(prog)
         try:
-            self.r.program = decode(image, isa.IDE_MAX_INPUTS)
+            self.r.program = decode(image, isa.IDE_MAX_INPUTS, isa.IDE_MAX_OUTPUTS)
         except ImageValidationError as exc:  # pragma: no cover - indica bug do compilador
             self.error(f"erro interno do compilador: imagem rejeitada ({exc})", rung=None)
             return
@@ -456,7 +458,7 @@ class _Compiler:
 def compile_project(project: Project) -> CompileResult:
     c = _Compiler(project)
     io = project.io
-    if not (1 <= io.n_inputs <= isa.IDE_MAX_INPUTS and 1 <= io.n_outputs <= isa.MAX_OUTPUTS
+    if not (1 <= io.n_inputs <= isa.IDE_MAX_INPUTS and 1 <= io.n_outputs <= isa.IDE_MAX_OUTPUTS
             and 0 <= io.n_markers <= isa.MAX_MARKERS and 0 <= io.n_words <= isa.MAX_WORDS):
         c.error("configuração de E/S fora dos limites", rung=None)
         return c.r

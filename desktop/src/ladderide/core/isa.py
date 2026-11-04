@@ -58,6 +58,7 @@ MAX_INPUTS: int = LIM["max_inputs"]
 # entradas). A placa, o protocolo e o firmware continuam com MAX_INPUTS.
 IDE_MAX_INPUTS: int = SPEC.get("ide_limits", {}).get("max_inputs", MAX_INPUTS)
 MAX_OUTPUTS: int = LIM["max_outputs"]
+IDE_MAX_OUTPUTS: int = SPEC.get("ide_limits", {}).get("max_outputs", MAX_OUTPUTS)   # idem, saidas
 MAX_MARKERS: int = LIM["max_markers"]
 MAX_TIMERS: int = LIM["max_timers"]
 MAX_COUNTERS: int = LIM["max_counters"]

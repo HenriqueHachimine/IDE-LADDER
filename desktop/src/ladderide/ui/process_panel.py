@@ -1,6 +1,6 @@
 """Painel "Processo": onde o programa LADDER age, um de cada vez.
 
-Ambiente animado, Factory IO e Placa (ESP32/Arduino virtual) sao alternativas:
+Ambiente animado, Factory IO, Placa (ESP32/Arduino virtual) e CLP real (WEG/Omron) sao alternativas:
 o programa comanda um processo de cada vez. Em vez de tres abas soltas, um
 seletor no topo escolhe o processo e mostra o painel correspondente, com uma
 frase dizendo para que serve. O selo de cada opcao mostra o que esta ativo.
@@ -19,6 +19,8 @@ PAGES = {
             "Cena 3D do Factory IO ligada à simulação pelo driver Modbus TCP/IP Server."),
     "board": ("Placa ESP32 / Arduino",
               "O firmware do CLP rodando no PC como a placa real: transferência, RUN/STOP e relés."),
+    "plc": ("CLP real",
+            "WEG CLIC-02 ou Omron CP1E pela serial: o programa da IDE lê as entradas e comanda as saídas do CLP."),
 }
 
 

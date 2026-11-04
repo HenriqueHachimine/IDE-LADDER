@@ -161,7 +161,7 @@ uint16_t plc_scan(uint16_t inputs, uint32_t dt_ms) {
 
     FIRST_SCAN = false;
     uint16_t outputs = 0;
-    for (int k = 0; k < 8; k++) if (Q[k]) outputs |= (uint16_t)(1u << k);
+    for (int k = 0; k < 8; k++) if (Q[k]) outputs |= (uint16_t)1 << k;
     return outputs;
 }
 

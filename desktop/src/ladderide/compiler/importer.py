@@ -26,7 +26,7 @@ def import_lil(text: str, name: str = "Importado") -> Project:
 
 
 def import_image(data: bytes, name: str = "Importado") -> Project:
-    return program_to_project(decode(data, isa.IDE_MAX_INPUTS), name)
+    return program_to_project(decode(data, isa.IDE_MAX_INPUTS, isa.IDE_MAX_OUTPUTS), name)
 
 
 def program_to_project(prog: Program, name: str) -> Project:

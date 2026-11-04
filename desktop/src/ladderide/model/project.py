@@ -158,6 +158,7 @@ class TargetConfig:
     baudrate: int = 115200
     host: str = ""
     tcp_port: int = 5020
+    expansions: list[str] = field(default_factory=list)   # modulos de expansao (model/expansions.py), em ordem
 
 
 @dataclass
@@ -269,7 +270,7 @@ class Project:
             "created": self.created,
             "modified": self.modified,
             "io": vars(self.io).copy(),
-            "target": vars(self.target).copy(),
+            "target": {**vars(self.target), "expansions": list(self.target.expansions)},
             "symbols": [vars(s).copy() for s in self.symbols],
             "rungs": [_rung_to_dict(r) for r in self.rungs],
             "history": list(self.history),

@@ -34,6 +34,61 @@ D2–D9, entradas em A0–A5, D10 e D11; Mega: relés em D22–D37, entradas em
 D38–D53). Ao abrir um projeto com um deles (ou com a ESP32), a aba Placa passa
 a simular essa placa, se estiver desligada.
 
+### WEG CLIC-02 e Omron CP1E (CLP real pela serial)
+
+| Família | Modelos | E/S | Memória | Ligação com a IDE |
+|---|---|---|---|---|
+| WEG CLIC-02 | 12HR-D, 12HT-D | 8E / 4S | 300 linhas, 63 M, 31 T, 31 C | Modbus RTU, RS-485 (módulo CLW-02/MBUS 3RD) |
+| WEG CLIC-02 | 20HR-D, 20HT-D, 20HR-12D, 20HR-A | 12E / 8S | idem | idem |
+| WEG CLIC-02 | 20VR-D, 20VT-D | 12E / 8S | idem | RS-485 incorporada |
+| WEG CLIC-02 | 10HR-A | 6E / 4S | idem | módulo CLW-02/MBUS 3RD |
+| Omron CP1E tipo E | E10, E14, E20, E30, E40 | 6/4 a 24/16 | 2K passos | só USB (CX-Programmer): somente simulação |
+| Omron CP1E tipo E(S) | E14S, E20S, E30S, E40S | 8/6 a 24/16 | 2K passos | Host Link, RS-232C |
+| Omron CP1E tipo N | N14, N20, N30, N40 | 8/6 a 24/16 | 8K passos | Host Link, RS-232C |
+| Omron CP1E tipo N(S1) | N30S1, N40S1 | 18/12, 24/16 | 8K passos | Host Link, RS-232C (+ RS-485) |
+| Omron CP1E tipo NA | NA20 | 12/8 + 2 EA / 1 SA | 8K passos | Host Link, RS-232C |
+
+Cada CP1E vem em três versões: `DR-A` (saída a relé, alimentação 100-240 Vca), `DT-D` (transistor NPN,
+24 Vcc) e `DT1-D` (transistor PNP, 24 Vcc). Na lista do novo projeto ficam em dois grupos, "tipo E" e
+"tipo N / NA".
+
+Fontes: manual do CLIC-02 (WEG 10009280784, cap. 4.2 e 10) e manual do CP1E (Omron W480,
+seções 5-1, 6-1 e 14-1). Os modelos de 60 pontos do CP1E (36E/24S) passam dos limites da IDE (32
+entradas) e ficaram de fora.
+
+**Módulos de expansão** (Programa → Módulos de expansão, ou o botão na aba CLP real). As E/S do
+projeto passam a ser as do CPU mais as dos módulos, na ordem em que estão encaixados; no programa, as
+entradas dos módulos vêm depois das do CPU (ex.: 12HR-D + 1 módulo: `I1.0`..`I1.3` = X01..X04) e as
+saídas idem. O diálogo mostra o endereço de cada módulo na IDE e no CLP, e não deixa passar das regras:
+
+- **CLIC-02**: até 3 módulos digitais de 4E/4S (CLW-02/8ER-D, 8ET-D, 8ER-A, 8ER-24A). No CLIC-02 as
+  entradas dos módulos são X01..X0C e as saídas Y01..Y0C. Na ligação, a IDE lê X (registrador
+  0x0611), escreve M11..M1C (0x0609) e o programa ponte ganha as linhas `M11 → Y01` ... `M1C → Y0C`.
+- **CP1E**: até 3 unidades CP1W (8ED, 8ER/8ET/8ET1, 16ER/ET/ET1, 20EDR1/EDT/EDT1, 32ER/ET/ET1,
+  40EDR/EDT/EDT1), só nos CPUs de 30 e 40 pontos e no NA20. Cada unidade recebe os canais seguintes
+  aos do CPU (CIO m para entradas, CIO n para saídas, seção 6-1-4).
+- A IDE aceita até 32 entradas e 32 saídas (`ide_limits` em `isa.json`); combinações acima disso são
+  recusadas. A placa ESP32/Arduino continua com 16 de cada.
+
+**Processo → CLP real.** Os dois fabricantes gravam o programa dentro do CLP só com o próprio
+software (Clic02 Edit, CX-Programmer), por um formato que os manuais não publicam. O que os manuais
+documentam é o acesso às variáveis e ao modo de operação pela serial, e é isso que a IDE usa: o
+programa LADDER compilado roda na IDE e o CLP real é o cartão de E/S. **Transmitir e executar**
+compila, conecta e põe a simulação para rodar em 1×; a cada ciclo (50 ms por padrão) a IDE lê as
+entradas do CLP e escreve as saídas do programa. Ao desconectar, as saídas do CLP são desligadas;
+se a comunicação cair, as entradas voltam a 0 e a IDE tenta de novo a cada segundo.
+
+- **CLIC-02** (Modbus RTU escravo, padrão 38400 8N2): no CLP, `CONFIG` com `REMOTE I/O = N` e `ID`
+  de 1 a 99. Grave nele uma vez, pelo Clic02 Edit, o *programa ponte* `M01 → Q01` ... `M08 → Q08`
+  (o CLIC-02 só comanda as saídas pelo próprio programa). A IDE lê `I01..I0C` (registrador 0x0610),
+  escreve `M01..M08` (0x0608), lê `Q01..Q08` (0x0613) e muda RUN/STOP (0x0100).
+- **CP1E** (Host Link modo C, padrão 9600 7E2, unidade 0): porta RS-232C em Host Link, CLP sem
+  programa (ou com um que não use CIO 100/101). A IDE põe o CP1E em MONITOR (`SC`), lê as entradas
+  em CIO 0 e 1 (`RR`, 12 bits por canal) e escreve as saídas em CIO 100 e 101 (`WR`, 8 bits por canal).
+
+O código está em `comm/plc_serial.py` (protocolos), `sim/plc_link.py` (troca de dados) e
+`ui/plc_panel.py` (painel).
+
 ### Allen-Bradley (SLC 500, MicroLogix 1000)
 
 A lista traz os processadores do RSLogix 500, com o mesmo texto:
@@ -73,7 +128,7 @@ continuarem utilizáveis. Assim, 64K corresponde aos limites da ISA (2048
 instruções e 256 redes) e o 1747-L531 (8K) fica com 256 instruções em 32
 redes.
 
-Nenhum deles tem placa real neste projeto: são somente simulação.
+Os Allen-Bradley não têm placa real neste projeto: são somente simulação.
 
 Os limites da ESP32 Relay X8 são os do firmware deste projeto (os mesmos da
 ISA, `shared/specifications/isa.json`). A placa recusa, na transferência,
@@ -105,7 +160,8 @@ formato de `shared/specifications/controllers.json`:
 
 Campos opcionais: `instructions` e `rungs` (memória de programa), `family`
 (grupo na lista), `catalog`, `spec` (texto da coluna Tipo), `cpu`, `memory_k`,
-`os`, `ports` (portas de comunicação) e `board` (perfil da aba Placa).
+`os`, `ports` (portas de comunicação), `board` (perfil da aba Placa) e `link` (`clic02` ou
+`hostlink`: protocolo da aba Processo → CLP real).
 Valores acima dos limites da ISA são reduzidos a esses limites. Um `id` igual
 ao de um controlador incluído substitui o incluído. O arquivo é lido sempre
 que a lista é aberta; se estiver inválido, é ignorado.

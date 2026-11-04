@@ -27,6 +27,23 @@ ensaios na placa real.
   operandos acompanham o novo nome (inclusive `Nome.DN`, `Nome.ACC`).
 
 ### Adicionado
+- **Módulos de expansão** (Programa → Módulos de expansão, e botão na aba CLP real): até 3 módulos
+  no CLIC-02 (CLW-02/8ER-D, 8ET-D, 8ER-A, 8ER-24A) e até 3 unidades CP1W nos CP1E de 30/40 pontos e
+  NA20 (8ED, 8ER, 16ER, 20EDR1, 32ER, 40EDR e versões a transistor). As E/S do projeto somam as dos
+  módulos; o diálogo mostra os endereços na IDE e no CLP (X/Y, CIO m/n); o desenho mostra os módulos
+  encaixados; a ligação com o CLP real lê e escreve também as E/S dos módulos.
+- Todas as variantes do Omron CP1E do manual W480 (tipos E, E(S), N, N(S1) e NA, saída a relé,
+  transistor NPN ou PNP): 48 CPUs, em dois grupos na lista do novo projeto.
+- A IDE aceita até 32 saídas (antes 16), como já aceitava 32 entradas; a placa continua com 16.
+- **Controladores WEG CLIC-02 e Omron CP1E** na lista do novo projeto: CLIC-02 (12HR-D, 12HT-D,
+  20HR-D, 20HT-D, 20VR-D, 20VT-D, 20HR-12D, 10HR-A, 20HR-A) e CP1E (E10, E14S, E20, E20S, E30S,
+  E40S, N14, N20, N30, N40, NA20), com as E/S e a memória dos manuais.
+- **Processo → CLP real**: o CLP desenhado (bornes e display do CLIC-02, LEDs do CP1E) com as E/S
+  ao vivo, porta serial, protocolo, Testar, RUN/STOP e **Transmitir e executar** (compila, conecta
+  e roda o programa da IDE com as entradas e saídas do CLP). CLIC-02 por Modbus RTU (RS-485,
+  programa ponte M01..M08 → Q01..Q08); CP1E por Host Link (RS-232C, modo MONITOR, CIO 0/1 e
+  100/101). Ao desconectar, as saídas do CLP são desligadas; se a serial cair, as entradas voltam a
+  0 e a IDE reconecta.
 - **Gravar C++ na placa** (Dispositivo, e botão na aba Código C++): compila o C++ do diagrama com
   o PlatformIO e grava no ESP32, Arduino UNO ou Mega pela USB. No UNO/Mega, um `io_board` gerado
   usa os pinos da aba Placa; o monitor serial usa `PLC_PRINTF`/`PLC_TEXT`, com os textos na flash

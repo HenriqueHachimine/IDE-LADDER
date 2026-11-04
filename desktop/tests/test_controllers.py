@@ -35,7 +35,7 @@ def test_user_controller_file_adds_and_limits(tmp_path, monkeypatch):
     small = controller_by_id("didatico")
     assert (small.inputs, small.outputs, small.timers, small.source) == (4, 2, 2, str(path))
     big = controller_by_id("exagerado")
-    assert (big.inputs, big.outputs, big.words) == (isa.IDE_MAX_INPUTS, isa.MAX_OUTPUTS, isa.MAX_WORDS)
+    assert (big.inputs, big.outputs, big.words) == (isa.IDE_MAX_INPUTS, isa.IDE_MAX_OUTPUTS, isa.MAX_WORDS)
 
     p = Project()
     apply_controller(p, small)
@@ -170,7 +170,8 @@ def test_new_project_dialog_lists_processors_by_family():
     QApplication.instance() or QApplication([])
     dlg = NewProjectDialog()
     groups = [dlg.list.topLevelItem(k).text(0) for k in range(dlg.list.topLevelItemCount())]
-    assert groups == ["Placa do projeto e simulação", "Arduino", "Allen-Bradley SLC 500 modular",
+    assert groups == ["Placa do projeto e simulação", "Arduino", "WEG CLIC-02", "Omron CP1E tipo E", "Omron CP1E tipo N / NA",
+                      "Allen-Bradley SLC 500 modular",
                       "Allen-Bradley MicroLogix 1000", "Allen-Bradley SLC 500 fixo"]
     rows = {r.text(0): r.text(1) for r in dlg._rows()}
     assert rows["1747-L553"] == "5/05 CPU 64K Mem. OS500" and rows["1747-L511"] == "5/01 CPU 1K Mem."

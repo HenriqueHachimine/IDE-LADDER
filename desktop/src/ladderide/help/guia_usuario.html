@@ -125,7 +125,7 @@ selecionar o elemento com problema. Programas com erro não são simulados nem t
 <b>Saídas</b> acendem conforme o programa. O tempo é virtual: acelerar não muda o resultado.</p>
 
 <h3><a name="processo"></a>Painel Processo</h3>
-<p>O programa comanda um processo de cada vez, por isso Ambiente animado, Factory IO e Placa ficam
+<p>O programa comanda um processo de cada vez, por isso Ambiente animado, Factory IO, Placa e CLP real ficam
 num só painel, com um seletor no topo. O seletor marca o que está ativo (por exemplo,
 "Ambiente animado ● em uso"). O botão <b>Processo</b> da barra de ferramentas abre o painel.</p>
 
@@ -156,6 +156,26 @@ mesma ordem da página <i>Configuration</i> do driver (Auto connect, Write/Read 
 Write/Read Register, Scale, Offset e Count de cada tabela) e confere a configuração enquanto
 você edita:</p>
 <p><img src="img/10_portas_driver.png"></p>
+
+<h3><a name="clpreal"></a>CLP real (WEG CLIC-02 e Omron CP1E)</h3>
+<p>Escolha um controlador <b>WEG CLIC-02</b> ou <b>Omron CP1E</b> ao criar o projeto. A opção
+<b>CLP real</b> do painel Processo desenha o CLP com as entradas e saídas ao vivo e já vem com o
+protocolo do controlador: Modbus RTU (RS-485) no CLIC-02, Host Link (RS-232C) no CP1E. Escolha a
+porta do cabo, confira velocidade, formato e ID (<b>Padrão de fábrica</b> preenche os do manual) e
+clique em <b>Transmitir e executar</b>: a IDE compila, conecta e roda o programa. As entradas vêm
+do CLP e as saídas do programa vão para ele. <b>Testar</b> identifica o CLP sem escrever nada;
+<b>RUN</b>/<b>STOP</b> mudam o modo do CLP.</p>
+<p><img src="img/18_clp_real.png" width="{W}"></p>
+<p>Os dois fabricantes só gravam o programa dentro do CLP com o próprio software (Clic02 Edit e
+CX-Programmer), por um formato que os manuais não publicam. Por isso o programa LADDER roda na IDE e
+o CLP trabalha como cartão de E/S. No CLIC-02, grave uma vez o <i>programa ponte</i> (M01 → Q01 ...
+M08 → Q08) e configure REMOTE I/O = N. No CP1E, deixe o CLP sem programa e a porta RS-232C em Host
+Link. Ao desconectar, a IDE desliga as saídas do CLP.</p>
+<p><b>Módulos de expansão</b> (<i>Programa &gt; Módulos de expansão</i>, ou <b>Encaixar módulos...</b>
+na aba CLP real): acrescente até 3 módulos ao CLIC-02 (CLW-02/8ER-D, 8ET-D...) ou ao CP1E de 30/40
+pontos e NA20 (CP1W-8ED, 20EDR1, 16ER...). As entradas e saídas dos módulos vêm depois das do CPU no
+programa; a janela mostra o endereço de cada uma na IDE e no CLP (X01/Y01 no CLIC-02, canais CIO no
+CP1E), e o desenho mostra os módulos encaixados ao lado do CPU.</p>
 
 <h2><a name="placa"></a>6. Placa ESP32 / Arduino</h2>
 <p>A placa simulada roda no PC o mesmo firmware C do CLP e conversa com a IDE pelo mesmo

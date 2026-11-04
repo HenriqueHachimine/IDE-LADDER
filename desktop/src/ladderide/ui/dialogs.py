@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
                                QVBoxLayout, QWidget)
 
 from ..core import isa
+from ..model import expansions
 from ..model.controllers import apply_controller, controller_by_id, default_controller, load_controllers
 from ..model.project import (COMPARE_KINDS, MATH_KINDS, Coil, CompareBox, Contact, CounterBox, MathBox,
                              Project, ResetBox, TimerBox, default_operands)
@@ -255,7 +256,13 @@ def _controller_combo(selected: str) -> QComboBox:
 def _controller_text(ctrl) -> str:
     if ctrl is None:
         return "Controlador desconhecido nesta instalação: valem os limites gerais da IDE."
-    kind = "Placa real com firmware do projeto." if ctrl.hardware else "Sem placa: somente simulação."
+    if ctrl.hardware:
+        kind = "Placa real com firmware do projeto."
+    elif ctrl.link:
+        kind = ("CLP real pela serial (aba Processo > CLP real): o programa roda na IDE e comanda as entradas "
+                "e saídas do CLP.")
+    else:
+        kind = "Sem placa: somente simulação."
     ports = f"\nPortas de comunicação: {ctrl.ports}." if ctrl.ports else ""
     return f"{ctrl.description}\n\nLimites: {ctrl.summary()}.{ports}\n{kind}"
 
@@ -369,7 +376,7 @@ class ProjectDialog(QDialog):
         self.controller_info.setObjectName("muted")
         form.addRow("Controlador:", self.controller)
         self.n_inputs = self._spin(1, isa.IDE_MAX_INPUTS, io.n_inputs)
-        self.n_outputs = self._spin(1, isa.MAX_OUTPUTS, io.n_outputs)
+        self.n_outputs = self._spin(1, isa.IDE_MAX_OUTPUTS, io.n_outputs)
         self.n_markers = self._spin(0, isa.MAX_MARKERS, io.n_markers)
         self.n_words = self._spin(0, isa.MAX_WORDS, io.n_words)
         self.period = self._spin(1, 1000, io.scan_period_ms)
@@ -410,18 +417,25 @@ class ProjectDialog(QDialog):
         Entradas e saidas sao exatamente as do controlador, como num CLP real, em que a
         quantidade de E/S e da CPU/modulo: os campos ficam travados (menos no Personalizado)."""
         ctrl = controller_by_id(self.controller.currentData())
-        self.controller_info.setText(_controller_text(ctrl))
+        modules = expansions.valid_modules(ctrl, self.project.target.expansions) if ctrl else []
+        self.modules = [m.id for m in modules]
+        text = _controller_text(ctrl)
+        if modules:
+            text += "\nMódulos de expansão: " + ", ".join(m.catalog for m in modules) + "."
+        self.controller_info.setText(text)
         fixed = ctrl is not None and not ctrl.custom
+        n_in, n_out = expansions.total_io(ctrl, modules) if ctrl else (isa.IDE_MAX_INPUTS, isa.IDE_MAX_OUTPUTS)
         if fixed:
-            self.n_inputs.setMaximum(ctrl.inputs)
-            self.n_outputs.setMaximum(ctrl.outputs)
-            self.n_inputs.setValue(ctrl.inputs)
-            self.n_outputs.setValue(ctrl.outputs)
+            self.n_inputs.setMaximum(n_in)
+            self.n_outputs.setMaximum(n_out)
+            self.n_inputs.setValue(n_in)
+            self.n_outputs.setValue(n_out)
         for spin in (self.n_inputs, self.n_outputs):
             spin.setEnabled(not fixed)
-            spin.setToolTip("Definido pelo controlador (escolha Personalizado para mudar)" if fixed else "")
-        limits = ((self.n_inputs, ctrl.inputs if ctrl else isa.IDE_MAX_INPUTS),
-                  (self.n_outputs, ctrl.outputs if ctrl else isa.MAX_OUTPUTS),
+            spin.setToolTip("Definido pelo controlador e pelos módulos de expansão (escolha Personalizado para "
+                            "mudar)" if fixed else "")
+        limits = ((self.n_inputs, n_in if ctrl else isa.IDE_MAX_INPUTS),
+                  (self.n_outputs, n_out if ctrl else isa.IDE_MAX_OUTPUTS),
                   (self.n_markers, ctrl.markers if ctrl else isa.MAX_MARKERS),
                   (self.n_words, ctrl.words if ctrl else isa.MAX_WORDS))
         for spin, limit in limits:
@@ -444,6 +458,7 @@ class ProjectDialog(QDialog):
         p.version = self.version.text().strip()
         p.description = self.description.toPlainText()
         p.target.device = self.controller.currentData()
+        p.target.expansions = list(self.modules)           # os que servem no controlador escolhido
         p.io.n_inputs = self.n_inputs.value()
         p.io.n_outputs = self.n_outputs.value()
         p.io.n_markers = self.n_markers.value()
