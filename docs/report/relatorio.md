@@ -248,49 +248,40 @@ Fonte: Elaborado pelos autores (2026).
 
 ## 12 DIVISÃO DAS TAREFAS
 
-O trabalho foi desenvolvido por um único integrante, responsável por todas as etapas: especificação, implementação do Desktop e do firmware, testes, documentação e relatório. O Quadro 4 resume essa divisão e o Quadro 5 lista os componentes na ordem em que foram construídos.
+O trabalho foi desenvolvido por um único integrante, responsável por todas as etapas. O Quadro 4 separa o trabalho por componente, na ordem em que cada um foi construído. Cada etapa terminou com código, testes, documentação e registro no Git, de modo que a seguinte partiu de uma base verificada.
 
-Quadro 4 – Divisão das tarefas
+Quadro 4 – Divisão das tarefas por componente
 
-| Integrante | Responsabilidades | Principais entregas |
-|---|---|---|
-| Henrique Ogata Hachimine | Todas as etapas: especificação da ISA e do protocolo, Desktop (editor, compilador, simulador, comunicação e interface), firmware do ESP32, ambientes de simulação, integração com o Factory IO, testes, instalador e documentação | IDE LADDER completa para Windows e Linux, firmware interpretador para o ESP32, dispositivo virtual, suíte de testes automatizados, instalador do Windows, manual do usuário e este relatório |
-
-Fonte: Elaborado pelos autores (2026).
-
-### 12.1 Componentes desenvolvidos, passo a passo
-
-Cada etapa terminou com código, testes, documentação e registro no Git, de modo que a etapa seguinte partiu de uma base verificada.
-
-Quadro 5 – Componentes desenvolvidos, em ordem de construção
-
-| Etapa | Componente | O que faz | Onde está |
+| Componente | Integrante | Comentário | Onde está |
 |---|---|---|---|
-| 1 | Especificação da ISA e do protocolo | Define as instruções, os operandos, o formato binário LDRB e o protocolo LDP, em JSON, como fonte única para o Desktop e o firmware | `shared/specifications`, `docs/ladder-specification.md` |
-| 2 | Formato LDRB e montador LIL | Gera e valida a imagem binária do programa (cabeçalho, CRC, constantes) e a listagem textual LIL | `desktop/src/ladderide/core` |
-| 3 | Máquinas virtuais em Python e em C | Executam o *bytecode* com o mesmo resultado; a versão em C é a usada no firmware | `core/vm.py`, `firmware/lib/ladder_vm` |
-| 4 | Vetores de teste compartilhados | Contrato executável: os mesmos programas e resultados esperados testam as duas VMs | `shared/test-vectors` |
-| 5 | Modelo de projeto | Projeto versionado (`.ladproj`) com redes em árvore série/paralelo, símbolos e operações de edição com desfazer | `desktop/src/ladderide/model` |
-| 6 | Compilador | Valida o diagrama, aponta erros e avisos por rede e elemento e gera o LDRB, sem nunca produzir programa inválido | `desktop/src/ladderide/compiler` |
-| 7 | Editor gráfico | Diagrama com arrastar e soltar, ramos paralelos, paleta de instruções, símbolos, zoom e comentários | `desktop/src/ladderide/ui` |
-| 8 | Simulador | Execução contínua, por varredura e passo a passo, com fluxo de energia, entradas virtuais e tempo virtual | `desktop/src/ladderide/sim` |
-| 9 | Firmware do ESP32 | Estados STOP/RUN/PROGRAM_LOADING/FAULT, varredura de 10 ms, watchdog, estado seguro e Modbus RTU | `firmware/src`, `firmware/lib/plc_core` |
-| 10 | Protocolo LDP e transferência | Comunicação USB com quadros e CRC; carga transacional, em que uma falha preserva o programa anterior | `desktop/src/ladderide/comm`, `firmware/lib/plc_core` |
-| 11 | Monitor online | Anima o diagrama com o estado lido do ESP32, detecta perda de comunicação e reconecta | `comm/monitor.py`, `ui/device_panel.py` |
-| 12 | Dispositivo virtual | O firmware em C rodando no PC, para testes e aulas sem a placa | `firmware/test/host`, `comm/virtual.py` |
-| 13 | Ambientes de simulação | Processos animados (silo, semáforo, portão, elevador, garrafas, ar comprimido, misturador, simulador de E/S) carregados como plugins | `desktop/src/ladderide/envs` |
-| 14 | Verificação para ESP32 e blocos de instrução | Executa o programa no código C do firmware e compara com o simulador; mostra a lista de instruções por rede | `desktop/src/ladderide/verify` |
-| 15 | Tema escuro e organização da tela | Tema claro, escuro ou do sistema, painéis reorganizados e layout que pode ser travado | `ui/theme.py`, `ui/main_window.py` |
-| 16 | Código C++ e gravação na placa | Traduz o diagrama para C++ legível e grava direto no ESP32 ou no Arduino | `desktop/src/ladderide/codegen`, `comm/cpp_upload.py` |
-| 17 | Simulador da placa | Desenho da ESP32 (1 a 8 relés), do Arduino UNO e do Mega com o firmware rodando no PC | `ui/esp32_panel.py`, `comm/board_profiles.py` |
-| 18 | Blocos de comparação e matemática | Instruções EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, MEQ, ADD, SUB, MUL, DIV, SQR, NEG, TOD e FRD com registradores de 32 bits (LDRB 2.0) | `core`, `compiler`, `firmware/lib/ladder_vm` |
-| 19 | Escolha do controlador | Lista de processadores por família (placa do projeto, Arduino, Allen-Bradley), que limita E/S, memória e os ambientes disponíveis | `model/controllers.py`, `ui/dialogs.py` |
-| 20 | Instalador e gravação do firmware | Instalador do Windows em um único arquivo, sem administrador, e gravação do firmware pela IDE | `installer`, `scripts/build_installer.py`, `comm/flasher.py` |
-| 21 | Velocidade da simulação | Tempo simulado de 0,01× a 1000× ou na velocidade máxima do PC | `ui/speed_control.py`, `sim/simulator.py` |
-| 22 | Integração com o Factory IO | Liga a simulação a cenas 3D pelo driver Modbus TCP/IP Server | `sim/factoryio.py`, `comm/modbus_tcp.py`, `ui/factoryio_panel.py` |
-| 23 | Ajuda integrada | Guia do usuário ilustrado e mapa ao vivo da comunicação dentro da IDE | `ui/user_guide.py`, `ui/comm_guide.py` |
-| 24 | Revisão de interface | Correções visuais e de usabilidade a partir de uma auditoria das telas | `desktop/src/ladderide/ui` |
-| 25 | Documentação e relatório | Arquitetura, padrões de projeto, ADRs, manual, roteiros de teste e este relatório | `docs` |
+| 1. Especificação da ISA e do protocolo | Henrique Ogata Hachimine | Definição das instruções, dos operandos, do formato binário LDRB e do protocolo LDP em JSON. Foi escrita antes do código e serve de fonte única para o Desktop e o firmware; os cabeçalhos em C são gerados a partir dela. | `shared/specifications`, `docs/ladder-specification.md` |
+| 2. Formato LDRB e montador LIL | Henrique Ogata Hachimine | Geração e validação da imagem binária do programa (cabeçalho, CRC e tabela de constantes) e da listagem textual LIL, usada também para importar e exportar programas. | `desktop/src/ladderide/core` |
+| 3. Máquinas virtuais em Python e em C | Henrique Ogata Hachimine | Duas implementações do interpretador de *bytecode* com o mesmo comportamento. A versão em C é a que roda no ESP32; a em Python serve de referência no PC. | `core/vm.py`, `firmware/lib/ladder_vm` |
+| 4. Vetores de teste compartilhados | Henrique Ogata Hachimine | Programas com os resultados esperados, executados pelas duas máquinas virtuais. Funcionam como contrato: qualquer divergência entre PC e firmware aparece nos testes. | `shared/test-vectors` |
+| 5. Modelo de projeto | Henrique Ogata Hachimine | Projeto versionado (`.ladproj`) com as redes em árvore série/paralelo, a tabela de símbolos e as operações de edição com desfazer e refazer. | `desktop/src/ladderide/model` |
+| 6. Compilador | Henrique Ogata Hachimine | Valida o diagrama, aponta erros e avisos por rede e por elemento e gera o LDRB. Por construção, nunca produz um programa inválido para o CLP. | `desktop/src/ladderide/compiler` |
+| 7. Editor gráfico | Henrique Ogata Hachimine | Diagrama LADDER com arrastar e soltar, ramos paralelos, paleta de instruções, símbolos, zoom e comentários nas redes. | `desktop/src/ladderide/ui` |
+| 8. Simulador | Henrique Ogata Hachimine | Execução contínua, por varredura e passo a passo, com fluxo de energia no diagrama, entradas virtuais e tempo virtual, sem precisar da placa. | `desktop/src/ladderide/sim` |
+| 9. Firmware do ESP32 | Henrique Ogata Hachimine | Estados STOP, RUN, PROGRAM_LOADING e FAULT, varredura de 10 ms, *watchdog*, estado seguro das saídas e Modbus RTU somente leitura. | `firmware/src`, `firmware/lib/plc_core` |
+| 10. Protocolo LDP e transferência | Henrique Ogata Hachimine | Comunicação USB com quadros e CRC. A carga do programa é transacional: se falhar no meio, o programa anterior continua gravado. | `desktop/src/ladderide/comm`, `firmware/lib/plc_core` |
+| 11. Monitor online | Henrique Ogata Hachimine | Anima o diagrama com o estado lido do ESP32, compara o valor lógico com o comandado, detecta perda de comunicação e reconecta. | `comm/monitor.py`, `ui/device_panel.py` |
+| 12. Dispositivo virtual | Henrique Ogata Hachimine | O mesmo firmware em C compilado para o PC. Permite testar a transferência e o monitor em aula e nos testes automatizados sem a placa. | `firmware/test/host`, `comm/virtual.py` |
+| 13. Ambientes de simulação | Henrique Ogata Hachimine | Processos animados (silo, semáforo, portão, elevador, garrafas, ar comprimido, misturador e simulador de E/S) com física e alarmes de erro de lógica, carregados como *plugins*. | `desktop/src/ladderide/envs` |
+| 14. Verificação para ESP32 e blocos de instrução | Henrique Ogata Hachimine | Executa o programa no código C do firmware e compara com o simulador varredura a varredura; mostra a lista de instruções de cada rede ligada ao diagrama. | `desktop/src/ladderide/verify` |
+| 15. Tema escuro e organização da tela | Henrique Ogata Hachimine | Tema claro, escuro ou do sistema trocado em tempo de execução, painéis reorganizados e opção de travar o *layout*. | `ui/theme.py`, `ui/main_window.py` |
+| 16. Código C++ e gravação na placa | Henrique Ogata Hachimine | Tradução do diagrama para C++ legível enquanto se edita e gravação direta no ESP32 ou no Arduino, conferida por teste contra o simulador. | `desktop/src/ladderide/codegen`, `comm/cpp_upload.py` |
+| 17. Simulador da placa | Henrique Ogata Hachimine | Desenho da ESP32 (1 a 8 relés), do Arduino UNO e do Mega com o firmware do CLP rodando no PC, incluindo registradores, pinos e monitor serial. | `ui/esp32_panel.py`, `comm/board_profiles.py` |
+| 18. Blocos de comparação e matemática | Henrique Ogata Hachimine | Instruções EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, MEQ, ADD, SUB, MUL, DIV, SQR, NEG, TOD e FRD com registradores de 32 bits, que exigiram a versão 2.0 do LDRB. | `core`, `compiler`, `firmware/lib/ladder_vm` |
+| 19. Escolha do controlador | Henrique Ogata Hachimine | Lista de processadores por família no novo projeto. O controlador limita E/S, memória e tamanho do programa, e a simulação e os ambientes seguem esses limites. | `model/controllers.py`, `ui/dialogs.py` |
+| 20. Instalador e gravação do firmware | Henrique Ogata Hachimine | Instalador do Windows em um único arquivo, sem administrador, e gravação do firmware na placa pela própria IDE, sem instalar o PlatformIO. | `installer`, `scripts/build_installer.py`, `comm/flasher.py` |
+| 21. Velocidade da simulação | Henrique Ogata Hachimine | Tempo simulado de 0,01× a 1000× ou na velocidade máxima do PC, com o mesmo resultado lógico em qualquer velocidade. | `ui/speed_control.py`, `sim/simulator.py` |
+| 22. Integração com o Factory IO | Henrique Ogata Hachimine | Liga a simulação a cenas 3D pelo driver Modbus TCP/IP Server, com os sensores nas entradas I e os atuadores nas saídas Q. | `sim/factoryio.py`, `comm/modbus_tcp.py`, `ui/factoryio_panel.py` |
+| 23. Ajuda integrada | Henrique Ogata Hachimine | Guia do usuário ilustrado com as telas da IDE e mapa ao vivo de como a comunicação acontece. | `ui/user_guide.py`, `ui/comm_guide.py` |
+| 24. Controladores WEG e Omron | Henrique Ogata Hachimine | Inclusão dos modelos WEG CLIC-02 e Omron CP1E na lista de controladores, com as quantidades de E/S de cada variante dos manuais. | `shared/specifications/controllers.json` |
+| 25. Ligação com CLP real (em andamento) | Henrique Ogata Hachimine | O programa roda na IDE e um CLIC-02 ou CP1E real entra como cartão de E/S pela serial (Modbus RTU ou Host Link), com o equipamento desenhado no painel. | `comm/plc_serial.py`, `sim/plc_link.py`, `ui/plc_panel.py` |
+| 26. Módulos de expansão (em andamento) | Henrique Ogata Hachimine | Encaixe de módulos de E/S no CLP do projeto, com os endereços na IDE e no CLP e as regras de cada fabricante. | `model/expansions.py`, `ui/expansion_dialog.py` |
+| 27. Revisão de interface | Henrique Ogata Hachimine | Auditoria das telas e correções: abas duplicadas, paleta cortada, comandos repetidos, ícones, legendas e ambientes filtrados pelo controlador. | `desktop/src/ladderide/ui` |
+| 28. Testes e documentação | Henrique Ogata Hachimine | Suíte automatizada com mais de 400 testes, arquitetura, padrões de projeto, ADRs, manual, roteiros de ensaio na placa e este relatório. | `desktop/tests`, `docs` |
 
 Fonte: Elaborado pelos autores (2026).
 
