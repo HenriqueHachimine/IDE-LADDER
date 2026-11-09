@@ -82,6 +82,20 @@ contadores, <code>T0.DN</code>/<code>C0.DN</code> bit de concluído, <code>N0</c
 nome. Renomear um símbolo atualiza todos os elementos que o usam.</p>
 <p><img src="img/05_simbolos.png" width="{W}"></p>
 
+<h3><a name="variaveis"></a>Variáveis de memória</h3>
+<p>Na aba <b>Variáveis</b>, ao lado de Símbolos, clique em <b>Adicionar variável</b> e informe o
+nome, o tipo (<b>Boolean</b>, <b>Inteira</b> ou <b>Float</b>) e o valor inicial. O endereço é
+escolhido pela IDE. No diagrama, use o nome como operando:</p>
+<ul>
+<li><b>Boolean:</b> em contatos e bobinas.</li>
+<li><b>Inteira e Float:</b> em blocos de comparação e matemática. Para guardar um valor, use o
+bloco <b>MOV</b> da paleta Matemática, que converte entre inteiro e float. Constantes float têm
+ponto decimal: <code>1.5</code>, <code>0.25</code>, <code>2e3</code>.</li>
+</ul>
+<p>Os valores voltam ao valor inicial a cada partida da simulação ou da placa. Durante a simulação,
+acompanhe-os em <b>Monitor de variáveis</b>, no painel Simulador. Programas gerados nesta versão
+exigem o firmware atual: grave-o na placa antes de transferir.</p>
+
 <h2><a name="codigo"></a>4. Código C++ e blocos de instrução</h2>
 <h3><a name="cpp"></a>Código C++ (Ctrl+F7)</h3>
 <p>Mostra o diagrama traduzido para C++ antes mesmo de compilar, refeito a cada edição: contatos em

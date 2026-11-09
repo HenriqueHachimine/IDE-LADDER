@@ -1,4 +1,4 @@
-# Especificação semântica LADDER — v2.0 (normativa)
+# Especificação semântica LADDER — v2.1 (normativa)
 
 Este documento é a **referência** para o simulador do Desktop
 (`desktop/src/ladderide/core/vm.py`) e para o interpretador do firmware

@@ -230,7 +230,7 @@ inteiros de 32 bits:
 - **Comparação** (EQU =, NEQ ≠, LES <, GRT >, LEQ ≤, GEQ ≥, LIM faixa, MEQ
   máscara) fica na condição da rede, como um contato: conduz quando a
   comparação é verdadeira. Pode ficar em série e em ramos paralelos.
-- **Matemática** (ADD, SUB, MUL, DIV, SQR raiz, NEG troca o sinal, TOD inteiro
+- **Matemática** (ADD, SUB, MUL, DIV, SQR raiz, NEG troca o sinal, MOV guarda um valor, TOD inteiro
   → BCD, FRD BCD → inteiro) fica na coluna de saídas e só executa quando a rede
   conduz.
 
@@ -263,10 +263,9 @@ retenção ou, marcando "Botões pulsadores", momentâneos. O tempo é virtual
 (cada varredura avança o período configurado em Propriedades do projeto).
 
 **Velocidade:** controle de velocidade na barra de ferramentas (ao lado de
-Parar) e no painel Simulador. Escolha uma predefinição (0,1× a 100× ou
+Parar). Escolha uma predefinição (0,1× a 100× ou
 **Máxima**, o mais rápido que o PC conseguir), digite qualquer valor de 0,01×
-a 1000× (ex.: `3`, `0,5` ou `2,5x`; `max` para a máxima) ou arraste a barra do
-painel. Ctrl+. e Ctrl+, passam para a predefinição seguinte/anterior e Ctrl+;
+a 1000× (ex.: `3`, `0,5` ou `2,5x`; `max` para a máxima). Ctrl+. e Ctrl+, passam para a predefinição seguinte/anterior e Ctrl+;
 volta ao tempo real. Acelerar não muda o
 resultado: temporizadores e ambiente veem os mesmos passos de tempo, só que
 mais deles por segundo. A linha **Velocidade real** mostra quanto o tempo

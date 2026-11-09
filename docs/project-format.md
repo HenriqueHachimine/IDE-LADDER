@@ -6,7 +6,7 @@ Arquivo JSON UTF-8, legível e versionável no Git. Implementação:
 ```json
 {
   "format": "ladderide-project",
-  "format_version": 1,
+  "format_version": 2,
   "name": "Demonstracao",
   "description": "texto livre",
   "version": "1.0.0",
@@ -16,6 +16,7 @@ Arquivo JSON UTF-8, legível e versionável no Git. Implementação:
   "target": {"device": "esp32-relay-x8", "transport": "serial", "port": "COM5", "baudrate": 115200,
              "host": "", "tcp_port": 5020},
   "symbols": [{"name": "Partida", "address": "I0.0", "comment": "botao NA"}],
+  "variables": [{"name": "Ganho", "type": "float", "initial": "1.5", "comment": ""}],
   "rungs": [
     {"comment": "Selo",
      "condition": [
@@ -43,7 +44,7 @@ Arquivo JSON UTF-8, legível e versionável no Git. Implementação:
 | `counter` | `kind`: `CTU`, `CTD`; `operand` (`Cn` ou símbolo); `preset` | saídas |
 | `reset` | `operand` (`Tn`/`Cn` ou símbolo) | saídas |
 | `compare` | `kind`: `EQU`, `NEQ`, `LES`, `GRT`, `LEQ`, `GEQ` (2 operandos), `LIM`, `MEQ` (3); `operands`: lista de textos | condição |
-| `math` | `kind`: `ADD`, `SUB`, `MUL`, `DIV` (A, B, destino), `SQR`, `NEG`, `TOD`, `FRD` (origem, destino); `operands` | saídas |
+| `math` | `kind`: `ADD`, `SUB`, `MUL`, `DIV` (A, B, destino), `SQR`, `NEG`, `MOV`, `TOD`, `FRD` (origem, destino); `operands` | saídas |
 
 Operandos aceitam endereço (`I0.0`, `M3.1`, `T0.DN`…), nome de símbolo, ou
 `Simbolo.CAMPO` quando o símbolo aponta para `Tn`/`Cn` (ex.: `Atraso.DN`).
@@ -53,9 +54,15 @@ endereço; comparação sem diferenciar maiúsculas.
 Os temporizadores e contadores não são declarados à parte: o tipo e o preset vêm
 da instrução TON/TOF/RTO/CTU/CTD que os aciona (exatamente uma por elemento).
 
+## Variáveis
+
+Cada item de `variables` tem `name`, `type` (`boolean`, `integer` ou `float`), `initial` (texto; vazio vale 0 ou falso) e
+`comment`. O endereço não é gravado: a IDE o calcula a partir do fim das áreas `M` e `N`/`F`, pulando o que os símbolos e o
+diagrama usam.
+
 ## Versões
 
-- **2**: `target.device` passa a ser o controlador escolhido (`docs/controllers.md`); `io.n_words` (registradores N) e os elementos `compare` e `math`. Arquivos da versão 1 abrem sem conversão (só faltam os campos novos, que recebem o padrão).
+- **2**: `target.device` passa a ser o controlador escolhido (`docs/controllers.md`); `io.n_words` (registradores N) e os elementos `compare` e `math`. Arquivos da versão 1 abrem sem conversão (só faltam os campos novos, que recebem o padrão). O campo `variables` é opcional: arquivos sem ele abrem com a tabela vazia.
 
 `format_version` é verificado ao abrir: versões futuras são recusadas com
 mensagem clara; versões antigas passam por `migrate()` (a 1 vira 2 sem alterar o conteúdo).

@@ -59,13 +59,13 @@ Princípios:
 | Pacote | Responsabilidade |
 |---|---|
 | `core` | ISA, formato LDRB, montador LIL, VM de referência, CRC |
-| `model` | Projeto `.ladproj` versionado; redes em árvore série/paralelo; operações de edição que preservam a validade |
+| `model` | Projeto `.ladproj` versionado; redes em árvore série/paralelo; operações de edição que preservam a validade; endereços automáticos das variáveis (`variables.py`) |
 | `compiler` | Validação (símbolos, operandos, faixas, acionamento único, estrutura), geração LDRB, mapa instrução↔elemento, importador LIL/LDRB |
 | `sim` | Simulador com tempo virtual: contínuo, por varredura, passo a passo; protocolo `Plant` para processos externos; ponte com o Factory IO (`factoryio.py`) |
 | `envs` | Ambientes de simulação (plugins com `@register`), adaptador `EnvironmentPlant`, física e desenho comuns |
 | `comm` | Quadros LDP, transportes (serial, TCP, processo), cliente com retransmissão, transferência transacional, monitor, equivalência no dispositivo, dispositivo virtual, cliente Modbus TCP (`modbus_tcp.py`) |
 | `codegen`, `verify` | Tradução do diagrama para C++; verificação do programa no código C do firmware |
-| `ui` | Janela, diagrama (Qt Graphics View), paleta, painéis de simulação, dispositivo, ambiente e Factory IO |
+| `ui` | Janela, diagrama (Qt Graphics View), paleta, tabelas de símbolos e variáveis, painéis de simulação, dispositivo, ambiente e Factory IO |
 | `cli` | Linha de comando para hardware e evidências |
 
 ### 2.1 Modelo de rede

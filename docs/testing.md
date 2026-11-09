@@ -27,6 +27,8 @@ usam `QT_QPA_PLATFORM=offscreen`.
 | Exemplos | `test_examples.py` | Todos os exemplos compilam sem avisos; teste de relés, espelho de entradas e roteiro da demonstração no simulador |
 | Interface | `test_ui.py`, `test_ui_device.py` | Inserir por clique e por arrastar, mover, desfazer, erros destacados, simulação; conectar ao dispositivo virtual, transferir, RUN, monitor animando o diagrama, STOP, perda de comunicação e reconexão |
 | Comunicação | `test_comm.py` | Quadros (lixo, divisão, CRC, timeout), autoteste C (parser + Modbus), e contra o dispositivo virtual: transferência, persistência após reinício, recusa em RUN, CRC errado, imagem inválida, blocos fora de ordem e repetidos, retransmissão idempotente, queda de energia no meio da carga, timeout de sessão, programa incompatível, watchdog/FAULT, flash corrompida, autorun, dispositivo desconectado, comandos inválidos, escrita de memória, **todos os vetores executados no dispositivo** |
+| Regressões | `test_regressions.py` | Um teste para cada bug corrigido na auditoria (`docs/bugs-corrigidos.md`) que pode ser reproduzido no PC |
+| Variáveis e float | `test_variables.py` | Semântica do float, tabela de variáveis, 40 programas aleatórios Python ≡ C, C++ gerado ≡ simulador, interface |
 | Firmware ESP32 | `pio run` (CI) | Compila sem avisos no código do projeto |
 | Hardware | `docs/hardware-test-procedure.md` | Ensaios H0–H14 — **pendentes** |
 
@@ -48,5 +50,7 @@ usam `QT_QPA_PLATFORM=offscreen`.
 | 2026-10-16 | Etapa 4 | + PySide6 6.12.0 (offscreen) | 176 testes aprovados |
 | 2026-10-16 | Etapas 5–7 | + PlatformIO 6.2.0, espressif32 6.9.0 | 207 testes aprovados; firmware compila sem avisos (RAM 13,7%, flash 23,8%); `cli --virtual equivalence`: 18/18 |
 | 2026-10-16 | Distribuição | PyInstaller 6.22.3 | `LadderIDE.exe --smoke-test`: compila a demonstração (build_id 0x3bab0b1e) e conversa com o dispositivo virtual embutido |
+| 2026-11-09 | Auditoria e variáveis | Windows 11, Python 3.11.9, gcc 6.3.0, PySide6 6.12.0 | 551 testes aprovados; firmware compila; float ainda não executado na placa |
+| 2026-11-09 | Distribuição | PyInstaller 6.22.3 | `LadderIDE.exe --smoke-test <arquivo> <projeto>`: compila a demonstração (build_id 0x97ceeba1) e um projeto com variável float, conversa com o dispositivo virtual embutido e encontra firmware e esptool; instalador gerado, não executado |
 | — | Hardware (H0–H14) | placa do grupo | **não executado** |
-| — | CI GitHub Actions | ubuntu/windows | **não executada** (repositório remoto ainda não criado) |
+| — | CI GitHub Actions | ubuntu/windows | não conferida nesta revisão |

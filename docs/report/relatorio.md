@@ -20,7 +20,7 @@ Convenções deste arquivo (lidas pelo gerador):
 
 ## RESUMO
 
-Este trabalho apresenta uma plataforma completa para a programação de um Controlador Lógico Programável (CLP) didático baseado no microcontrolador ESP32, com oito saídas a relé. A plataforma é composta por um ambiente de desenvolvimento integrado (IDE) para computador, com editor gráfico da linguagem LADDER, compilador, simulador e monitor online, e por um firmware interpretador para a placa. O diagrama é compilado para um código intermediário compacto (formato LDRB), executado por duas máquinas virtuais, uma em Python, no simulador, e outra em C, no firmware, que seguem uma única especificação formal e são comparadas varredura a varredura por testes diferenciais. A transferência do programa é transacional, com verificação de integridade e validação no dispositivo antes da ativação, de modo que uma falha nunca deixa a placa sem programa válido. A lógica do dispositivo foi escrita em C portátil sobre uma camada de abstração de hardware, o que permitiu testá-la no computador por meio de um dispositivo virtual. O simulador controla processos animados internos e cenas 3D do software Factory IO, por meio do protocolo Modbus TCP. O código foi organizado segundo padrões de projeto consagrados, como Adapter, Strategy, Template Method e Composite. A suíte automatizada reúne 338 testes aprovados. [PREENCHER: uma frase com o resultado dos ensaios na placa real.]
+Este trabalho apresenta uma plataforma completa para a programação de um Controlador Lógico Programável (CLP) didático baseado no microcontrolador ESP32, com oito saídas a relé. A plataforma é composta por um ambiente de desenvolvimento integrado (IDE) para computador, com editor gráfico da linguagem LADDER, compilador, simulador e monitor online, e por um firmware interpretador para a placa. O diagrama é compilado para um código intermediário compacto (formato LDRB), executado por duas máquinas virtuais, uma em Python, no simulador, e outra em C, no firmware, que seguem uma única especificação formal e são comparadas varredura a varredura por testes diferenciais. A transferência do programa é transacional, com verificação de integridade e validação no dispositivo antes da ativação, de modo que uma falha nunca deixa a placa sem programa válido. A lógica do dispositivo foi escrita em C portátil sobre uma camada de abstração de hardware, o que permitiu testá-la no computador por meio de um dispositivo virtual. O simulador controla processos animados internos e cenas 3D do software Factory IO, por meio do protocolo Modbus TCP. O código foi organizado segundo padrões de projeto consagrados, como Adapter, Strategy, Template Method e Composite. A suíte automatizada reúne 551 testes aprovados. [PREENCHER: uma frase com o resultado dos ensaios na placa real.]
 
 **Palavras-chave:** controlador lógico programável; LADDER; ESP32; máquina virtual; Modbus; Factory IO.
 
@@ -64,7 +64,7 @@ Desenvolver uma plataforma que permita a estudantes criar programas em LADDER, v
 ### 1.2 Objetivos específicos
 
 - Implementar um editor gráfico LADDER com arrastar e soltar, ramos paralelos, símbolos e desfazer/refazer.
-- Oferecer as instruções NA, NF, bobina, SET, RESET, TON, TOF, RTO, CTU, CTD e RES, além de blocos de comparação e matemática.
+- Oferecer as instruções NA, NF, bobina, SET, RESET, TON, TOF, RTO, CTU, CTD e RES, além de blocos de comparação e matemática e de variáveis de memória dos tipos boolean, inteiro e float.
 - Garantir que a simulação seja idêntica à execução no hardware.
 - Transferir programas de forma segura, sem deixar a placa em estado inválido.
 - Permitir testar a lógica em processos simulados, inclusive no Factory IO.
@@ -235,7 +235,7 @@ Quadro 3 – Resultados dos testes
 
 | Conjunto | Resultado |
 |---|---|
-| Suíte automatizada (20/10/2026; Windows 11, Python 3.11.9, gcc 6.3.0) | 338 testes aprovados |
+| Suíte automatizada (09/11/2026; Windows 11, Python 3.11.9, gcc 6.3.0) | 551 testes aprovados |
 | Equivalência entre as VMs em Python e em C (16/10/2026) | 18 vetores, 150 programas aleatórios com 80 varreduras e 300 imagens corrompidas, sem divergência |
 | Sensibilidade dos testes (16/10/2026) | Defeito injetado no TOF da VM em C detectado por 3 testes |
 | Falhas de comunicação no dispositivo virtual | CRC errado, imagem inválida, blocos fora de ordem, retransmissão, queda de energia na carga, timeout, watchdog e flash corrompida: comportamento conforme especificado |
@@ -283,7 +283,7 @@ Quadro 4 – Divisão das tarefas por componente
 | 27. Revisão de interface | Henrique Ogata Hachimine | Auditoria das telas e correções: abas duplicadas, paleta cortada, comandos repetidos, ícones, legendas e ambientes filtrados pelo controlador. | `desktop/src/ladderide/ui` |
 | 28. Variáveis de memória | Henrique Ogata Hachimine | Tabela de variáveis boolean, inteira e float com endereço automático e valor inicial, bloco MOV e aritmética em float idêntica no simulador, no firmware e no C++ gerado. | `model/variables.py`, `ui/variables_panel.py`, `core/vm.py`, `firmware/lib/ladder_vm` |
 | 29. Auditoria e correção de bugs | Henrique Ogata Hachimine | Revisão de todas as ferramentas, com o problema, a causa e a solução de cada bug registrados. | `docs/bugs-corrigidos.md`, `desktop/tests/test_regressions.py` |
-| 30. Testes e documentação | Henrique Ogata Hachimine | Suíte automatizada com mais de 400 testes, arquitetura, padrões de projeto, ADRs, manual, roteiros de ensaio na placa e este relatório. | `desktop/tests`, `docs` |
+| 30. Testes e documentação | Henrique Ogata Hachimine | Suíte automatizada com mais de 550 testes, arquitetura, padrões de projeto, ADRs, manual, roteiros de ensaio na placa e este relatório. | `desktop/tests`, `docs` |
 
 Fonte: Elaborado pelos autores (2026).
 
