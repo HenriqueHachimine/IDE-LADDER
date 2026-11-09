@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Union
@@ -20,7 +21,7 @@ PROJECT_FORMAT = "ladderide-project"
 PROJECT_FORMAT_VERSION = 2
 # Nome de simbolo valido e o que se parece com endereco (o compilador usa os mesmos).
 SYMBOL_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,31}$")
-ADDRESS_LIKE = re.compile(r"^([IQMS]\d+\.\d+|[TC]\d+(\.\w+)?|N\d+|[IQ]W\d+|K\d+)$", re.IGNORECASE)
+ADDRESS_LIKE = re.compile(r"^([IQMS]\d+\.\d+|[TC]\d+(\.\w+)?|[NF]\d+|[IQ]W\d+|K\d+)$", re.IGNORECASE)
 
 # Blocos de comparacao (vao na condicao, como contatos) e de matematica (vao nas
 # saidas). Cada tipo tem uma lista fixa de operandos; o nome aparece no editor.
@@ -35,11 +36,12 @@ MATH_KINDS: dict[str, tuple[str, ...]] = {
     "DIV": ("A", "B", "Destino"),
     "SQR": ("Origem", "Destino"), "NEG": ("Origem", "Destino"),
     "TOD": ("Origem", "Destino"), "FRD": ("Origem", "Destino"),
+    "MOV": ("Origem", "Destino"),
 }
 DEFAULT_OPERANDS: dict[str, list[str]] = {
     "LIM": ["0", "N0", "100"], "MEQ": ["N0", "0xFF", "0"],
     "ADD": ["N0", "1", "N0"], "SUB": ["N0", "1", "N0"], "MUL": ["N0", "2", "N1"], "DIV": ["N0", "2", "N1"],
-    "SQR": ["N0", "N1"], "NEG": ["N0", "N1"], "TOD": ["N0", "N1"], "FRD": ["N0", "N1"],
+    "SQR": ["N0", "N1"], "NEG": ["N0", "N1"], "TOD": ["N0", "N1"], "FRD": ["N0", "N1"], "MOV": ["0", "N0"],
 }
 
 
@@ -161,6 +163,18 @@ class TargetConfig:
     expansions: list[str] = field(default_factory=list)   # modulos de expansao (model/expansions.py), em ordem
 
 
+VARIABLE_TYPES = {"boolean": "Boolean", "integer": "Inteira", "float": "Float"}
+
+
+@dataclass
+class Variable:
+    """Variavel de memoria da tabela Variaveis: o endereco e automatico (model/variables.py)."""
+    name: str
+    type: str = "integer"        # boolean | integer | float
+    initial: str = ""            # valor a cada partida; vazio = 0 / falso
+    comment: str = ""
+
+
 @dataclass
 class Project:
     name: str = "Novo projeto"
@@ -175,6 +189,7 @@ class Project:
     environment: str = ""          # ambiente de simulacao associado (ladderide.envs), opcional
     created: str = field(default_factory=lambda: _now())
     modified: str = field(default_factory=lambda: _now())
+    variables: list[Variable] = field(default_factory=list)
 
     # ------------------------------------------------------------ busca
     def walk(self) -> Iterator[tuple[int, Node, list]]:
@@ -234,6 +249,16 @@ class Project:
                 node.operands = values
         return changed
 
+    def check_symbol_name(self, name: str, current: "Symbol | Variable | None") -> None:
+        """ValueError se `name` for invalido ou ja usado por outro simbolo."""
+        if not SYMBOL_NAME.match(name) or ADDRESS_LIKE.match(name):
+            raise ValueError(f"'{name}' nao e um nome valido (letras, numeros e _, sem parecer endereco)")
+        other = next((s for s in self.symbols if s.name.upper() == name.upper() and s is not current), None)
+        if other is not None:
+            raise ValueError(f"O nome '{name}' ja e usado em {other.address}")
+        if any(v.name.upper() == name.upper() and v is not current for v in self.variables):
+            raise ValueError(f"O nome '{name}' ja e usado por uma variavel")
+
     def set_symbol_name(self, address: str, name: str, comment: str = "") -> None:
         """Da (ou tira, com `name` vazio) o nome do endereco e atualiza o programa.
 
@@ -243,11 +268,7 @@ class Project:
         address, name = address.strip().upper(), name.strip()
         current = next((s for s in self.symbols if s.address.strip().upper() == address), None)
         if name:
-            if not SYMBOL_NAME.match(name) or ADDRESS_LIKE.match(name):
-                raise ValueError(f"'{name}' nao e um nome valido (letras, numeros e _, sem parecer endereco)")
-            other = next((s for s in self.symbols if s.name.upper() == name.upper() and s is not current), None)
-            if other is not None:
-                raise ValueError(f"O nome '{name}' ja e usado em {other.address}")
+            self.check_symbol_name(name, current)
         if current is None:
             if name:
                 self.symbols.append(Symbol(name, address, comment))
@@ -272,6 +293,7 @@ class Project:
             "io": vars(self.io).copy(),
             "target": {**vars(self.target), "expansions": list(self.target.expansions)},
             "symbols": [vars(s).copy() for s in self.symbols],
+            "variables": [vars(v).copy() for v in self.variables],
             "rungs": [_rung_to_dict(r) for r in self.rungs],
             "history": list(self.history),
             "build": dict(self.build),
@@ -280,6 +302,15 @@ class Project:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Project":
+        try:
+            p = cls._from_dict(data)
+            _check_types(p)
+        except (AttributeError, TypeError, KeyError, IndexError, RecursionError) as exc:
+            raise ProjectFormatError(f"arquivo de projeto corrompido ({type(exc).__name__}: {exc})") from None
+        return p
+
+    @classmethod
+    def _from_dict(cls, data: dict) -> "Project":
         data = migrate(data)
         p = cls(
             name=data.get("name", "Sem nome"),
@@ -288,6 +319,7 @@ class Project:
             io=IOConfig(**data.get("io", {})),
             target=TargetConfig(**data.get("target", {})),
             symbols=[Symbol(**s) for s in data.get("symbols", [])],
+            variables=[Variable(**v) for v in data.get("variables", [])],
             rungs=[_rung_from_dict(r) for r in data.get("rungs", [])],
             history=list(data.get("history", [])),
             build=dict(data.get("build", {})),
@@ -301,15 +333,42 @@ class Project:
         self.modified = _now()
         self.history.append({"date": self.modified, "action": note, "rungs": len(self.rungs)})
         del self.history[:-50]
-        Path(path).write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        text = json.dumps(self.to_dict(), indent=2, ensure_ascii=False)
+        temp = Path(f"{path}.tmp")              # falha na escrita nao pode deixar o projeto vazio
+        try:
+            temp.write_text(text, encoding="utf-8")
+            os.replace(temp, path)
+        finally:
+            temp.unlink(missing_ok=True)
 
     @classmethod
     def load(cls, path: str | Path) -> "Project":
         try:
-            data = json.loads(Path(path).read_text(encoding="utf-8"))
+            data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
         except json.JSONDecodeError as exc:
             raise ProjectFormatError(f"arquivo nao e JSON valido: {exc}") from None
+        except RecursionError:
+            raise ProjectFormatError("arquivo de projeto corrompido (aninhamento excessivo)") from None
         return cls.from_dict(data)
+
+
+def _check_types(p: Project) -> None:
+    """Valores de tipo errado passariam na carga e derrubariam a compilacao depois."""
+    for config in (p.io, p.target):
+        expected = type(config)()
+        for f in fields(config):
+            if type(getattr(config, f.name)) is not type(getattr(expected, f.name)):
+                raise ProjectFormatError(f"campo {f.name} com tipo inválido no projeto")
+    if not all(isinstance(s.name, str) and isinstance(s.address, str) and isinstance(s.comment, str)
+               for s in p.symbols):
+        raise ProjectFormatError("símbolo com tipo inválido no projeto")
+    if not all(isinstance(v.name, str) and v.type in VARIABLE_TYPES and isinstance(v.initial, str)
+               and isinstance(v.comment, str) for v in p.variables):
+        raise ProjectFormatError("variável inválida no projeto")
+    if not all(isinstance(r.comment, str) for r in p.rungs):
+        raise ProjectFormatError("comentário de rede com tipo inválido no projeto")
+    if any(isinstance(node, Parallel) and not node.branches for _, node, _ in p.walk()):
+        raise ProjectFormatError("ramo paralelo vazio no projeto")
 
 
 class ProjectFormatError(ValueError):

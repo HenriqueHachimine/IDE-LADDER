@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (QCheckBox, QGridLayout, QGroupBox, QHeaderView, Q
 
 from ..core.asm import format_operand, parse_operand
 from ..core.isa import WORD_READ_AREAS, Area
+from ..model import variables
 from ..model.project import Project
 
 from . import theme
@@ -178,13 +179,19 @@ class IOPanel(QWidget):
                 self.elements.setItem(row, col, QTableWidgetItem("-"))
         # variaveis: simbolos de bit + memorias usadas no programa
         refs: dict[tuple[int, int], str] = {}
+        limits = {Area.I: io.n_inputs, Area.Q: io.n_outputs, Area.M: io.n_markers, Area.N: io.n_words, Area.F: io.n_words}
         for s in project.symbols:
             try:
                 ref = parse_operand(s.address)
             except ValueError:
                 continue
-            if ref[0] in (Area.I, Area.Q, Area.M, Area.N):
+            limit = limits.get(ref[0], 0)
+            if ref[1] < limit:                  # endereco fora da faixa nao existe na simulacao
                 refs[ref] = s.name
+        table = variables.addresses(project)
+        for v in project.variables:             # variaveis da tabela, com o valor no tipo certo
+            if table.get(v.name):
+                refs[parse_operand(table[v.name])] = v.name
         if result is not None and result.ok:
             for ref in result.element_operand.values():
                 if ref[0] == Area.M:
@@ -270,4 +277,4 @@ class IOPanel(QWidget):
             self.elements.item(row, 3).setText(bits)
         for row, ref in enumerate(self.var_rows):
             v = (word(*ref) if word is not None else None) if ref[0] in WORD_READ_AREAS else read(*ref)
-            self.variables.item(row, 2).setText("-" if v is None else str(int(v)))
+            self.variables.item(row, 2).setText("-" if v is None else f"{v:.6g}" if isinstance(v, float) else str(int(v)))

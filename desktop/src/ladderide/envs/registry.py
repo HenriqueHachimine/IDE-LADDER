@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import sys
 import pkgutil
 from pathlib import Path
 
@@ -45,8 +46,10 @@ def discover(extra_dirs: list[Path] | None = None) -> None:
             try:
                 spec = importlib.util.spec_from_file_location(f"ladderide_env_{path.stem}", path)
                 module = importlib.util.module_from_spec(spec)
+                sys.modules[spec.name] = module         # @dataclass consulta o modulo em sys.modules
                 spec.loader.exec_module(module)
             except Exception as exc:  # noqa: BLE001 - um plugin com erro nao derruba a IDE
+                sys.modules.pop(f"ladderide_env_{path.stem}", None)
                 load_errors.append(f"{path.name}: {type(exc).__name__}: {exc}")
     _LOADED = True
 

@@ -82,6 +82,10 @@ typedef struct {
     ldp_parser_t parser;
     int last_seq;
     uint8_t last_type;
+    uint32_t last_req_crc; /* payload do pedido: seq repetido com outro conteudo e comando novo */
+    uint16_t last_req_len;
+    uint32_t req_crc;
+    uint16_t req_len;
     size_t last_resp_len;
     uint8_t last_resp[LDP_MAX_PAYLOAD + LDP_OVERHEAD];
     uint8_t payload[LDP_MAX_PAYLOAD];

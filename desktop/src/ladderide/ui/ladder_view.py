@@ -13,7 +13,7 @@ from PySide6.QtGui import QAction, QColor, QDrag, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QApplication, QGraphicsItem, QGraphicsLineItem, QGraphicsRectItem,
                                QGraphicsScene, QGraphicsView, QMenu)
 
-from ..core.asm import parse_constant
+from ..core.asm import parse_constant, parse_float_constant
 from ..model.project import (COMPARE_KINDS, MATH_KINDS, Coil, CompareBox, Contact, CounterBox, MathBox, NotOp,
                              Parallel, Project, ResetBox, TimerBox)
 from .layout import RUNG_HEAD, RUNG_PAD, Layout, PlacedElem, Slot, build_layout
@@ -51,6 +51,7 @@ BLOCK_TIPS = {
     "DIV": "DIV - divisão inteira: destino = A \u00f7 B (truncada; divisão por zero liga S0.4)",
     "SQR": "SQR - raiz quadrada (arredondada)", "NEG": "NEG - troca o sinal: destino = -origem",
     "TOD": "TOD - converte inteiro para BCD", "FRD": "FRD - converte BCD para inteiro",
+    "MOV": "MOV - guarda um valor: destino = origem (converte entre inteiro e float)",
 }
 
 
@@ -152,11 +153,11 @@ class ElementItem(QGraphicsItem):
                 shown = name
             value = values[k] if values is not None and k < len(values) else None
             try:
-                is_const = parse_constant(text) is not None
+                is_const = parse_constant(text) is not None or parse_float_constant(text) is not None
             except ValueError:
                 is_const = False
             if value is not None and not is_const:
-                shown = f"{shown}={value}"
+                shown = f"{shown}={value:.6g}" if isinstance(value, float) else f"{shown}={value}"
             rows.append((short, shown))
         self.state.rows = tuple(rows)
 

@@ -67,8 +67,11 @@ def find_firmware() -> FirmwareBundle:
     """Arquivos do firmware: os empacotados com a IDE ou a ultima compilacao do PlatformIO."""
     manifest = BUNDLE_DIR / "flash.json"
     if manifest.exists():
-        data = json.loads(manifest.read_text(encoding="utf-8"))
-        files = [(int(off), BUNDLE_DIR / name) for off, name in data["parts"]]
+        try:
+            data = json.loads(manifest.read_text(encoding="utf-8"))
+            files = [(int(off), BUNDLE_DIR / name) for off, name in data["parts"]]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise FlashError(f"instalação danificada: flash.json inválido ({exc})") from None
         missing = [p.name for _, p in files if not p.exists()]
         if missing:
             raise FlashError(f"instalação incompleta: faltam {', '.join(missing)}")

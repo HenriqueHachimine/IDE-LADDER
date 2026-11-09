@@ -204,8 +204,8 @@ class FactoryIOLink:
     def start(self) -> None:
         if self.running:
             return
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._run, name="factoryio-link", daemon=True)
+        self._stop = threading.Event()          # um por thread: uma anterior que nao encerrou nao revive
+        self._thread = threading.Thread(target=self._run, args=(self._stop,), name="factoryio-link", daemon=True)
         self._thread.start()
 
     def stop(self, timeout: float = 2.0) -> None:
@@ -258,28 +258,28 @@ class FactoryIOLink:
         self.connected = False
         self.error = message
 
-    def _run(self) -> None:
+    def _run(self, stop: threading.Event) -> None:
         client = self._factory(self.config)
         period = self.config.poll_ms / 1000
         try:
-            while not self._stop.is_set():
+            while not stop.is_set():
                 if not client.connected:
                     try:
                         client.connect()
                     except ModbusError as exc:
                         self._lost(client, str(exc))
-                        self._stop.wait(RETRY_S)
+                        stop.wait(RETRY_S)
                         continue
                 t0 = time.monotonic()
                 try:
                     self.exchange(client)
                 except ModbusError as exc:
                     self._lost(client, str(exc))
-                    self._stop.wait(RETRY_S)
+                    stop.wait(RETRY_S)
                     continue
                 self.connected = True
                 self.error = None
-                self._stop.wait(max(0.0, period - (time.monotonic() - t0)))
+                stop.wait(max(0.0, period - (time.monotonic() - t0)))
         finally:
             c = self.config
             if client.connected:

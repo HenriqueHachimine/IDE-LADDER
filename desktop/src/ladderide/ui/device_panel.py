@@ -14,7 +14,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QSpinBox, QStackedWidget, QVBoxLayout, QWidget)
 
-from ..comm import (CommError, DeviceClient, DeviceError, ProcessTransport, SerialTransport, TcpTransport,
+from ..comm import (CommError, TransferRefused, DeviceClient, DeviceError, ProcessTransport, SerialTransport, TcpTransport,
                     TransportError, list_serial_ports)
 from ..comm.protocol import FAULT_TEXT, DevState
 from ..comm.virtual import BuildError, start_virtual_device, virtual_storage_path
@@ -61,6 +61,8 @@ class DeviceSession(QObject):
             try:
                 result = fn()
                 self.jobDone.emit(tag, result)
+            except TransferRefused as exc:      # recusa: a comunicacao continua boa
+                self.jobFailed.emit(tag, str(exc))
             except (CommError, TransportError) as exc:
                 self._lost(str(exc))
                 self.jobFailed.emit(tag, str(exc))
@@ -68,6 +70,8 @@ class DeviceSession(QObject):
                 self.jobFailed.emit(tag, str(exc))
             except (BuildError, OSError, ValueError) as exc:
                 self.jobFailed.emit(tag, str(exc))
+            except Exception as exc:  # noqa: BLE001 - resposta inesperada nao pode matar a fila da sessao
+                self.jobFailed.emit(tag, f"{type(exc).__name__}: {exc}")
             finally:
                 if tag == "poll":
                     self._poll_pending.clear()
@@ -111,6 +115,19 @@ class DeviceSession(QObject):
     def close(self) -> None:
         self.auto_reconnect = False
         self.submit("close", lambda: self._lost("desconectado pelo usuário"))
+
+    def close_and_wait(self, timeout: float = 3.0) -> None:
+        """Fecha e espera a porta ser liberada (antes de gravar com outro programa na mesma COM)."""
+        self.auto_reconnect = False
+        closed = threading.Event()
+
+        def job():
+            try:
+                self._lost("desconectado pelo usuário")
+            finally:
+                closed.set()
+        self.submit("close", job)
+        closed.wait(timeout)
 
     def run_on_client(self, tag: str, fn: Callable[[DeviceClient], object]) -> None:
         def job():

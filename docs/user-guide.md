@@ -160,7 +160,7 @@ para as próximas aberturas.
 define as entradas, as saídas e quantas memórias, temporizadores, contadores e
 registradores o projeto pode usar. ESP32 Relay X8 é a placa do projeto (8
 entradas, 8 relés); "Somente simulação" oferece 16 E/S sem placa; "Personalizado"
-deixa escolher as quantidades. Para trocar depois: Programa → Propriedades.
+deixa escolher as quantidades. Para trocar depois: Editar → Propriedades do projeto.
 Detalhes e como acrescentar controladores: `docs/controllers.md`.
 
 
@@ -235,7 +235,7 @@ inteiros de 32 bits:
   conduz.
 
 Operandos: constantes (`100`, `-5`, `0x1F`), registradores `N0`…`N31` (a
-quantidade fica em Programa → Propriedades), `T0.ACC`/`T0.PRE`,
+quantidade fica em Editar → Propriedades do projeto), `T0.ACC`/`T0.PRE`,
 `C0.ACC`/`C0.PRE`, `IW0` (entradas como número) e `QW0` (saídas como número).
 Destino: `N` ou `QW0`. Dê nomes aos registradores na aba Símbolos (ex.:
 `Total` = `N2`). Resultados fora de 32 bits saturam; divisão por zero, raiz de
@@ -461,3 +461,17 @@ python -m ladderide.cli factoryio 127.0.0.1 --count 0      # testa a ligacao com
 Este equipamento não é um CLP de segurança. Defina o estado seguro das saídas
 (Propriedades do projeto) conforme a carga; desenergizar nem sempre é seguro.
 Use cargas de baixa tensão nas aulas.
+
+## Variáveis de memória
+
+Na aba **Variáveis**, ao lado de Símbolos, clique em **Adicionar variável** e informe o nome, o tipo (Boolean, Inteira ou Float)
+e o valor inicial. O endereço é escolhido pela IDE. No diagrama, use o nome como operando:
+
+- **Boolean:** em contatos e bobinas, como um bit `M`.
+- **Inteira e Float:** em blocos de comparação e matemática. Para guardar um valor, use o bloco **MOV** da paleta Matemática
+  (`MOV 1.5, Ganho`). Constantes float têm ponto decimal: `1.5`, `0.25`, `2e3`.
+
+Os valores voltam ao valor inicial a cada partida da simulação ou da placa. Durante a simulação, acompanhe-os em
+**Monitor de variáveis**, no painel Simulador.
+
+Programas com float exigem o firmware atual: use **Dispositivo > Gravar firmware na placa** antes de transferir.

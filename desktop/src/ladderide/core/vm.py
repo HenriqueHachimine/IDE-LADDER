@@ -10,6 +10,7 @@ desde a varredura anterior. Assim a simulacao e deterministica e reproduzivel.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 from . import isa
@@ -103,6 +104,8 @@ def math_result(op: int, a: int, b: int = 0) -> tuple[int | None, bool]:
         r = a * b
     elif op == Op.NEG:
         r = -a
+    elif op == Op.MOV:
+        r = a
     elif op == Op.DIV:
         if b == 0:
             return (isa.INT32_MAX if a >= 0 else isa.INT32_MIN), True
@@ -130,6 +133,47 @@ def math_result(op: int, a: int, b: int = 0) -> tuple[int | None, bool]:
     if r < isa.INT32_MIN:
         return isa.INT32_MIN, True
     return r, False
+
+
+def round_float(value: float) -> tuple[float, bool]:
+    """Precisao de 32 bits; o que nao cabe satura em +-FLOAT_MAX e liga MATH_OV."""
+    try:
+        return isa.bits_to_float(isa.float_to_bits(value)), False
+    except OverflowError:
+        return math.copysign(isa.FLOAT_MAX, value), True
+
+
+def float_math(op: int, a: float, b: float = 0.0) -> tuple[float, bool]:
+    """(resultado, estouro) das instrucoes matematicas em float."""
+    if op == Op.ADD:
+        r, overflow = a + b, False
+    elif op == Op.SUB:
+        r, overflow = a - b, False
+    elif op == Op.MUL:
+        r, overflow = a * b, False
+    elif op == Op.DIV:
+        if b == 0:
+            return (isa.FLOAT_MAX if a >= 0 else -isa.FLOAT_MAX), True
+        r, overflow = a / b, False
+    elif op == Op.SQR:
+        r, overflow = math.sqrt(abs(a)), a < 0
+    elif op == Op.NEG:
+        r, overflow = -a, False
+    elif op == Op.MOV:
+        r, overflow = a, False
+    else:
+        raise ValueError(f"nao e instrucao de float: {op}")
+    value, rounded_overflow = round_float(r)
+    return value, overflow or rounded_overflow
+
+
+def float_to_int(value: float) -> tuple[int, bool]:
+    """Inteiro mais proximo (metade afasta de zero), saturado em 32 bits."""
+    if value >= 2147483647.5:
+        return isa.INT32_MAX, True
+    if value <= -2147483648.5:
+        return isa.INT32_MIN, True
+    return (int(value + 0.5) if value >= 0 else -int(-value + 0.5)), False
 
 
 class LadderVM:
@@ -213,9 +257,13 @@ class LadderVM:
     def _write_bit(self, area: int, index: int, value: bool) -> None:
         (self.q if area == Area.Q else self.m)[index] = value
 
-    def read_word(self, area: int, index: int) -> int:
+    def read_word(self, area: int, index: int) -> int | float:
         if area == Area.N:
             return self.n[index]
+        if area == Area.F:
+            return isa.bits_to_float(self.n[index])
+        if area == Area.KF:
+            return isa.bits_to_float(self.program.constants[index])
         if area == Area.K:
             return self.program.constants[index]
         if area == Area.T_ACC:
@@ -227,9 +275,9 @@ class LadderVM:
         if area == Area.C_PRE:
             return self.program.counters[index].preset
         if area == Area.IW:
-            return sum(1 << k for k, v in enumerate(self.i) if v)
+            return _to_i32(sum(1 << k for k, v in enumerate(self.i) if v))
         if area == Area.QW:
-            return self.outputs
+            return _to_i32(self.outputs)         # com 32 saidas, o bit 31 e o sinal (int32 da ISA)
         raise ValueError(f"area nao e palavra: {area}")
 
     def _write_word(self, area: int, index: int, value: int) -> bool:
@@ -332,11 +380,15 @@ class LadderVM:
         """Comparacao ou matematica; os demais operandos estao nas instrucoes ARG seguintes."""
         n_args = len(isa.ARG_CLASSES[ins.op])
         refs = [(ins.area, ins.index)] + [(a.area, a.index) for a in self.code[self.pc + 1:self.pc + 1 + n_args]]
+        floating = any(area in isa.FLOAT_AREAS for area, _ in refs)
+        read = self._read_float if floating else self.read_word
         if ins.op in isa.COMPARE_OPS:
-            values = [self.read_word(*r) for r in refs]
-            self.rlo = self.rlo and compare(ins.op, *values)
+            self.rlo = self.rlo and compare(ins.op, *[read(*r) for r in refs])
             return
         if not self.rlo:
+            return
+        if floating:
+            self._float_result(ins.op, [read(*r) for r in refs[:-1]], refs[-1])
             return
         result, overflow = math_result(ins.op, *[self.read_word(*r) for r in refs[:-1]])
         if result is None:
@@ -344,6 +396,20 @@ class LadderVM:
             return
         overflow |= self._write_word(*refs[-1], result)
         self.math_ov, self.math_zero, self.math_sign = overflow, result == 0, result < 0
+
+    def _read_float(self, area: int, index: int) -> float:
+        value = self.read_word(area, index)
+        return value if area in isa.FLOAT_AREAS else round_float(float(value))[0]
+
+    def _float_result(self, op: int, values: list[float], dst: tuple[int, int]) -> None:
+        result, overflow = float_math(op, *values)
+        if dst[0] == Area.F:
+            self.n[dst[1]] = isa.float_to_bits(result)
+            stored = result
+        else:                                    # destino inteiro: arredonda
+            stored, saturated = float_to_int(result)
+            overflow = self._write_word(*dst, stored) or overflow or saturated
+        self.math_ov, self.math_zero, self.math_sign = overflow, stored == 0, stored < 0
 
     def _timer(self, op: int, t: TimerState, pre: int) -> None:
         rlo = self.rlo

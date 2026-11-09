@@ -1,4 +1,4 @@
-# Formato intermediário — LDRB v2.0 e listagem LIL
+# Formato intermediário — LDRB v2.1 e listagem LIL
 
 O compilador do Desktop gera uma **imagem binária LDRB** (*Ladder Binary*),
 transferida ao ESP32 e executada pelas duas VMs. A forma textual equivalente,
@@ -101,6 +101,15 @@ operando de área `K` com índice `k` vale `constantes[k]`. Sem restrições de 
 palavra legível = 13–20; palavra gravável = 13 e 20. IW e QW só têm o índice 0.
 Operando "nenhum" exige área 0 e índice 0 (exceto `SOR`).
 
+### Adições da versão 2.1
+
+- Áreas `F` (21, tamanho `n_words`: os 32 bits de `Nk` como float) e `KF` (22, tamanho `n_constants`: os 32 bits da constante
+  como float). O cabeçalho e a tabela de constantes não mudam.
+- Instrução `MOV` (113, operando `word_read`, `ARG` `word_write`).
+- Classes de operando `int_read` e `int_write`, sem `F` e `KF`, usadas por `MEQ`, `TOD` e `FRD`.
+
+Firmware anterior a 2.1 recusa a imagem com `UNSUPPORTED_VERSION`: grave o firmware novo na placa.
+
 ## 4. Validação (ordem normativa)
 
 Desktop (`image.py::decode`) e firmware (`lv_image.c::lv_image_validate`)
@@ -108,7 +117,7 @@ executam **exatamente esta sequência** e param no primeiro erro, de modo que a
 mesma imagem é rejeitada com o mesmo código nos dois lados (verificado pelos
 casos de `shared/test-vectors/image-errors.json` e pelo fuzzing de mutações).
 
-1. `len < 32` → `TOO_SHORT`
+1. `len < 36` → `TOO_SHORT`
 2. `magic` → `BAD_MAGIC`
 3. `fmt_major ≠ 2` ou `fmt_minor > suportada` → `UNSUPPORTED_VERSION`
 4. `header_size ≠ 36` → `BAD_HEADER_SIZE`

@@ -28,11 +28,11 @@ DONE_OFF = themed((203, 213, 225), (71, 85, 105))
 COMPARE_HEAD = (themed((204, 251, 241), (19, 78, 74)), themed((15, 118, 110), (153, 246, 228)))
 MATH_HEAD = (themed((243, 232, 255), (76, 29, 149)), themed((107, 33, 168), (233, 213, 255)))
 COMPARE_KINDS = ("EQU", "NEQ", "LES", "GRT", "LEQ", "GEQ", "LIM", "MEQ")
-MATH_KINDS = ("ADD", "SUB", "MUL", "DIV", "SQR", "NEG", "TOD", "FRD")
+MATH_KINDS = ("ADD", "SUB", "MUL", "DIV", "SQR", "NEG", "TOD", "FRD", "MOV")
 BLOCK_TITLE = {"EQU": "A = B", "NEQ": "A \u2260 B", "LES": "A < B", "GRT": "A > B", "LEQ": "A \u2264 B",
                "GEQ": "A \u2265 B", "LIM": "faixa", "MEQ": "máscara", "ADD": "A + B", "SUB": "A \u2212 B",
                "MUL": "A \u00d7 B", "DIV": "A \u00f7 B", "SQR": "\u221a", "NEG": "\u2212x", "TOD": "\u2192 BCD",
-               "FRD": "BCD \u2192"}
+               "FRD": "BCD \u2192", "MOV": "\u2192"}
 
 
 @dataclass

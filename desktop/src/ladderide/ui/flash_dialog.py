@@ -66,7 +66,7 @@ class FlashDialog(QDialog):
             self.flash_btn.setEnabled(False)
 
     def refresh_ports(self) -> None:
-        current = self.port.currentText()
+        current = self.port.currentText().strip()
         self.port.clear()
         for device, description in list_serial_ports():
             self.port.addItem(f"{device}  {description}", device)
@@ -74,10 +74,13 @@ class FlashDialog(QDialog):
             index = self.port.findData(current.split()[0])
             if index >= 0:
                 self.port.setCurrentIndex(index)
+            else:
+                self.port.setEditText(current)       # porta digitada que nao esta na lista
 
     def selected_port(self) -> str:
-        data = self.port.currentData()
-        return data if data else self.port.currentText().split()[0] if self.port.currentText().strip() else ""
+        # o texto manda: currentData() ainda e o item da lista quando a porta foi digitada
+        parts = self.port.currentText().split()
+        return parts[0] if parts else ""
 
     def start(self) -> None:
         port = self.selected_port()
@@ -99,11 +102,16 @@ class FlashDialog(QDialog):
         self.process.setProcessChannelMode(QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self._output)
         self.process.finished.connect(self._finished)
-        self.process.errorOccurred.connect(lambda _e: self.log.appendPlainText(
-            f"Não foi possível iniciar o esptool: {self.process.errorString()}"))
+        self.process.errorOccurred.connect(self._process_error)
         self.flash_btn.setEnabled(False)
         self.close_btn.setEnabled(False)
         self.process.start(cmd[0], cmd[1:])
+
+    def _process_error(self, error) -> None:
+        self.log.appendPlainText(f"Não foi possível iniciar o esptool: {self.process.errorString()}")
+        if error == QProcess.FailedToStart:     # nesse caso o sinal finished nao vem
+            self.flash_btn.setEnabled(True)
+            self.close_btn.setEnabled(True)
 
     def _output(self) -> None:
         text = bytes(self.process.readAllStandardOutput()).decode("utf-8", "replace").replace("\r", "\n")

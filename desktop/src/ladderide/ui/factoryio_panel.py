@@ -124,6 +124,7 @@ class PortsDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.RestoreDefaults | QDialogButtonBox.Close)
         defaults = buttons.button(QDialogButtonBox.RestoreDefaults)
         defaults.setText("Padrão")
+        defaults.setEnabled(panel.link is None)     # com a troca ligada as portas nao mudam
         defaults.setToolTip("Volta as opções e portas ao padrão da IDE (8 Inputs, 8 Coils, sem registradores), "
                             "mantendo IP, porta e Slave ID")
         defaults.clicked.connect(panel.restore_defaults)

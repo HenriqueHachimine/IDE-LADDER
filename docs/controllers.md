@@ -114,7 +114,7 @@ do lado da placa continua em 16), e os controladores com placa (ESP32, Arduino)
 continuam com no máximo 16.
 
 As entradas e saídas do projeto são sempre exatamente as do controlador (o CLP
-real tem a quantidade da CPU ou do módulo): em Programa → Propriedades esses
+real tem a quantidade da CPU ou do módulo): em Editar → Propriedades do projeto esses
 campos ficam travados, trocar o controlador troca as E/S, e um projeto salvo
 com outras quantidades é ajustado ao abrir (a barra de status avisa; salve para
 manter). Só o *Personalizado* deixa escolher as quantidades. O Simulador de E/S

@@ -60,6 +60,7 @@ void setup()
     esp_log_level_set("*", ESP_LOG_NONE);
 
     Serial.setRxBufferSize(4096);
+    Serial.setTxBufferSize(2048); /* cabe a maior resposta LDP: hal_send nao bloqueia com plc_lock preso */
     Serial.begin(LDP_BAUD);
     Serial.setDebugOutput(false);
 

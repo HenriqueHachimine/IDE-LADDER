@@ -142,8 +142,8 @@ class PlcLink:
     def start(self) -> None:
         if self.running:
             return
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._run, name="plc-link", daemon=True)
+        self._stop = threading.Event()          # um por thread: uma anterior que nao encerrou nao revive
+        self._thread = threading.Thread(target=self._run, args=(self._stop,), name="plc-link", daemon=True)
         self._thread.start()
 
     def stop(self, timeout: float = 3.0) -> None:
@@ -184,11 +184,11 @@ class PlcLink:
         self.connected = False
         self.error = message
 
-    def _run(self) -> None:
+    def _run(self, stop: threading.Event) -> None:
         driver: PlcDriver | None = None
         period = self.config.poll_ms / 1000
         try:
-            while not self._stop.is_set():
+            while not stop.is_set():
                 if driver is None:
                     try:
                         driver = open_driver(self.config, self._line_factory)
@@ -199,7 +199,7 @@ class PlcLink:
                     except PlcError as exc:
                         self._lost(driver, str(exc))
                         driver = None
-                        self._stop.wait(RETRY_S)
+                        stop.wait(RETRY_S)
                         continue
                 t0 = time.monotonic()
                 try:
@@ -213,11 +213,11 @@ class PlcLink:
                 except PlcError as exc:
                     self._lost(driver, str(exc))
                     driver = None
-                    self._stop.wait(RETRY_S)
+                    stop.wait(RETRY_S)
                     continue
                 self.connected = True
                 self.error = None
-                self._stop.wait(max(0.0, period - (time.monotonic() - t0)))
+                stop.wait(max(0.0, period - (time.monotonic() - t0)))
         finally:
             if driver is not None:
                 try:

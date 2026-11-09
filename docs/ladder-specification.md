@@ -14,13 +14,14 @@ Os códigos numéricos (opcodes, áreas, erros) estão em
 | Entradas | `I0.0`…`I1.7` | `n_inputs` ≤ 16 | não | Imagem congelada no início da varredura |
 | Saídas | `Q0.0`…`Q1.7` | `n_outputs` ≤ 16 | sim | Imagem; copiada para os relés no fim da varredura |
 | Marcadores | `M0.0`…`M31.7` | `n_markers` ≤ 256 | sim | Memória interna, não retentiva |
-| Sistema | `S0.0`…`S0.3` | 4 | não | Ver §1.1 |
+| Sistema | `S0.0`…`S0.6` | 7 | não | Ver §1.1 |
 | Temporizadores | `Tn`, `Tn.EN`, `Tn.TT`, `Tn.DN`, `Tn.ACC` | ≤ 32 | por instrução | ACC em ms |
 | Contadores | `Cn`, `Cn.DN`, `Cn.OV`, `Cn.UN`, `Cn.ACC` | ≤ 32 | por instrução | ACC inteiro de 32 bits com sinal |
 | Registradores | `N0`…`N63` | `n_words` ≤ 64 | por instrução matemática | Inteiro de 32 bits com sinal, não retentivo |
 | Palavras somente leitura | `Tn.ACC`, `Tn.PRE`, `Cn.ACC`, `Cn.PRE`, `IW0` | — | não | `IW0`: bit k = `Ik` |
 | Saídas como palavra | `QW0` | 1 | por instrução matemática | bit k = `Qk` |
-| Constantes | `123`, `-5`, `0x1F`, `0b101` | ≤ 128 distintas | não | Tabela de constantes da imagem |
+| Registradores float | `F0`…`F63` | `n_words` ≤ 64 | por instrução matemática | `Fk` é o registrador `Nk` lido como float de 32 bits |
+| Constantes | `123`, `-5`, `0x1F`, `0b101`, `1.5`, `2e3` | ≤ 128 distintas | não | Tabela de constantes da imagem |
 
 Endereço `X<byte>.<bit>` corresponde ao índice linear `byte*8 + bit`.
 
@@ -288,3 +289,32 @@ a última da varredura (o compilador avisa quando há bobinas em Q no mesmo
 programa).
 
 Vetores: `shared/test-vectors/scan/words.json`.
+
+## Variáveis de memória e float
+
+**Tabela de variáveis.** O painel Variáveis declara nome, tipo e valor inicial. O endereço é automático, do fim de cada área
+para o início, pulando o que os símbolos e o diagrama já usam:
+
+| Tipo | Área | Valor inicial aceito |
+|---|---|---|
+| Boolean | bit `M` | `0`, `1`, `verdadeiro`, `falso` |
+| Inteira | registrador `N` (32 bits com sinal) | `42`, `-1`, `0x1F` |
+| Float | registrador `F` (32 bits IEEE 754) | `1.5`, `1,5`, `2e3` |
+
+A cada partida (STOP → RUN, Executar ou Reiniciar) as áreas são zeradas e as variáveis voltam ao valor inicial. O compilador
+gera a atribuição no início da rede 0, só na primeira varredura (`BST | XIC S0.0 | atribuições | NXB | BND`).
+
+**`Nk` e `Fk` são o mesmo registrador**, lido como inteiro ou como float. Use a tabela para evitar misturar os dois.
+
+**Bloco MOV.** `destino = origem`. Converte entre inteiro e float.
+
+**Modo float.** Comparações e matemática passam a float quando algum operando, inclusive o destino, é `F` ou constante float;
+operandos inteiros são convertidos antes. `MEQ`, `TOD` e `FRD` só aceitam inteiros.
+
+| Situação | Resultado |
+|---|---|
+| Destino inteiro | arredonda para o inteiro mais próximo (metade afasta de zero) e satura em 32 bits, ligando `MATH_OV` |
+| Resultado fora da faixa do float | satura em ±3,4028235e38 e liga `MATH_OV` |
+| Divisão por zero | ±3,4028235e38 conforme o sinal de A, liga `MATH_OV` |
+| `SQR` de negativo | usa o módulo e liga `MATH_OV` |
+| Registrador com infinito ou NaN | lê 0 |

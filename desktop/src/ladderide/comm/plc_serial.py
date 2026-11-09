@@ -62,6 +62,14 @@ HOSTLINK_END_CODES = {"01": "não executável em RUN", "02": "não executável e
                       "A3": "FCS errado na transmissão", "A8": "tamanho de dados errado"}
 
 
+def _hex(text: str) -> int:
+    """Campo hexadecimal da resposta; resposta malformada vira PlcError, que a ponte trata."""
+    try:
+        return int(text, 16)
+    except ValueError:
+        raise PlcError(f"resposta inválida do CLP: {text!r}") from None
+
+
 class PlcError(Exception):
     pass
 
@@ -175,6 +183,8 @@ class ClicModbus(PlcDriver):
             rest = _read_exact(self.line, 3, deadline)
             body = head + rest
             self._check_crc(body)
+            if body[0] != self.unit or body[1] != (pdu[0] | 0x80):
+                raise PlcError("resposta de outro escravo ou de outro comando")
             code = rest[0] if rest else 0
             raise PlcError(f"CLIC-02 recusou o comando: {CLIC_EXCEPTIONS.get(code, f'exceção 0x{code:02X}')}")
         if expected is None:                      # leitura: o 3o byte diz quantos dados vem
@@ -188,6 +198,8 @@ class ClicModbus(PlcDriver):
         self._check_crc(body)
         if body[0] != self.unit or body[1] != pdu[0]:
             raise PlcError("resposta de outro escravo ou de outro comando")
+        if expected is not None and body[:6] != frame[:6]:        # FC06/FC16 ecoam endereco e valor/quantidade
+            raise PlcError("o CLIC-02 confirmou um endereço ou valor diferente do enviado")
         return body[1:-2]
 
     @staticmethod
@@ -298,7 +310,7 @@ class OmronHostLink(PlcDriver):
         data = self.command("RR", f"{word:04d}{count:04d}")
         if len(data) != 4 * count:
             raise PlcError("quantidade de dados errada na resposta do CP1E")
-        return [int(data[4 * i:4 * i + 4], 16) for i in range(count)]
+        return [_hex(data[4 * i:4 * i + 4]) for i in range(count)]
 
     def write_cio(self, word: int, values: list[int]) -> None:
         self.command("WR", f"{word:04d}" + "".join(f"{v & 0xFFFF:04X}" for v in values))
@@ -344,7 +356,7 @@ class OmronHostLink(PlcDriver):
         self.command("SC", HOSTLINK_MODES["monitor" if run else "program"])
 
     def mode(self) -> str:
-        status = int(self.command("MS")[:2], 16)
+        status = _hex(self.command("MS")[:2])
         return {0: "PROGRAM", 2: "RUN", 3: "MONITOR"}.get(status & 0x03, "?")
 
     def identify(self) -> str:

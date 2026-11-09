@@ -105,7 +105,7 @@ class CppUploadDialog(QDialog):
         self.board.setEnabled(not running)
 
     def refresh_ports(self) -> None:
-        current = self.port.currentText()
+        current = self.port.currentText().strip()
         self.port.clear()
         for device, description in list_serial_ports():
             self.port.addItem(f"{device}  {description}", device)
@@ -113,10 +113,13 @@ class CppUploadDialog(QDialog):
             index = self.port.findData(current.split()[0])
             if index >= 0:
                 self.port.setCurrentIndex(index)
+            else:
+                self.port.setEditText(current)       # porta digitada que nao esta na lista
 
     def selected_port(self) -> str:
-        data = self.port.currentData()
-        return data if data else self.port.currentText().split()[0] if self.port.currentText().strip() else ""
+        # o texto manda: currentData() ainda e o item da lista quando a porta foi digitada
+        parts = self.port.currentText().split()
+        return parts[0] if parts else ""
 
     # ----------------------------------------------------------- execucao
     def command(self, upload: bool) -> list[str]:
@@ -130,7 +133,7 @@ class CppUploadDialog(QDialog):
             return
         try:
             cmd = self.command(upload)
-        except UploadError as exc:
+        except (UploadError, OSError) as exc:
             self.log.appendPlainText(str(exc))
             return
         if upload and self.before_upload is not None:

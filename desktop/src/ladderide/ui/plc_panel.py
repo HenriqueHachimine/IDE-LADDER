@@ -288,9 +288,8 @@ class PlcPanel(QWidget):
                 self.port.setEditText(current)
 
     def port_name(self) -> str:
-        data = self.port.currentData()
-        text = self.port.currentText().split(" ")[0].strip()
-        return data if data and self.port.currentText().startswith(data) else text
+        parts = self.port.currentText().split()     # o texto manda: COM10 digitado com COM1 na lista
+        return parts[0] if parts else ""
 
     # ------------------------------------------------------------ projeto
     def set_project(self, n_inputs: int, n_outputs: int, controller=None, modules=None) -> None:
@@ -304,11 +303,13 @@ class PlcPanel(QWidget):
         else:
             self.modules_label.setText(f"Nenhum módulo. Este CPU aceita até {limit}." if limit else
                                        "O controlador do projeto não aceita módulos de expansão.")
-        self.modules_btn.setEnabled(bool(limit) and self.link is None)
+        self.accepts_modules = bool(limit)
+        self.modules_btn.setEnabled(self.accepts_modules and self.link is None)
         link = getattr(controller, "link", "") if controller is not None else ""
         if link and link != self.controller_link and self.link is None:
             self.driver.setCurrentIndex(max(0, self.driver.findData(link)))
-        self.controller_link = link
+        if self.link is None:                       # conectado: o protocolo so muda ao desconectar
+            self.controller_link = link
         self.face.set_state(n_in=n_inputs, n_out=n_outputs,
                             catalog=getattr(controller, "catalog", "") if controller is not None else "",
                             modules=[(m.catalog, m.inputs, m.outputs) for m in self.modules])
@@ -319,7 +320,7 @@ class PlcPanel(QWidget):
 
     def _update_header(self, controller) -> None:
         sub = theme.colors["SUBTLE"]
-        if controller is not None and getattr(controller, "link", ""):
+        if controller is not None and getattr(controller, "link", "") in DRIVERS:
             protocol = DRIVERS[controller.link][0].split("(")[-1].rstrip(")")
             self.header.setText(f"<span style='font-size:13pt; font-weight:600'>{controller.name}</span><br>"
                                 f"<span style='color:{sub}'>{self.n_in} entradas · {self.n_out} saídas · "
@@ -386,8 +387,9 @@ class PlcPanel(QWidget):
 
     def _set_editing(self, editing: bool) -> None:
         for w in (self.driver, self.port, self.refresh_btn, self.baud, self.framing, self.unit, self.poll,
-                  self.defaults_btn, self.test_btn, self.modules_btn):
+                  self.defaults_btn, self.test_btn):
             w.setEnabled(editing)
+        self.modules_btn.setEnabled(editing and getattr(self, "accepts_modules", False))
         self.connect_btn.setText("Conectar" if editing else "Desconectar")
         self.transfer_btn.setEnabled(editing)
 

@@ -95,8 +95,12 @@ class VerifyReport:
     def summary(self) -> str:
         if self.errors:
             return f"{len(self.errors)} erro(s): o programa NÃO deve ser enviado ao ESP32."
+        pending = sum(c.status == SKIP for c in self.checks)
+        note = f" {pending} item(ns) não verificado(s)." if pending else ""
         if self.warnings:
-            return f"Pronto para o ESP32, com {len(self.warnings)} aviso(s)."
+            return f"Pronto para o ESP32, com {len(self.warnings)} aviso(s).{note}"
+        if pending:
+            return f"Pronto para o ESP32: nenhum problema encontrado.{note}"
         return "Pronto para o ESP32: todas as verificações passaram."
 
     def as_text(self) -> str:

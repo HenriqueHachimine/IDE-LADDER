@@ -3,7 +3,7 @@
   "format": {
     "magic": "LDRB",
     "major": 2,
-    "minor": 0,
+    "minor": 1,
     "header_size": 36,
     "timer_entry_size": 8,
     "counter_entry_size": 8,
@@ -155,6 +155,18 @@
       "name": "QW",
       "kind": "word",
       "size": 1
+    },
+    {
+      "code": 21,
+      "name": "F",
+      "kind": "word",
+      "size": "n_words"
+    },
+    {
+      "code": 22,
+      "name": "KF",
+      "kind": "constant",
+      "size": "n_constants"
     }
   ],
   "system_bits": [
@@ -201,8 +213,10 @@
     "timer": "area=TIMER e index < n_timers",
     "counter": "area=COUNTER e index < n_counters",
     "timer_or_counter": "area em {TIMER,COUNTER} e index valido",
-    "word_read": "area em {N,K,T_ACC,T_PRE,C_ACC,C_PRE,IW,QW} e index < tamanho da area (T_*/C_* exigem elemento declarado)",
-    "word_write": "area em {N,QW} e index < tamanho da area",
+    "word_read": "area em {N,K,T_ACC,T_PRE,C_ACC,C_PRE,IW,QW,F,KF} e index < tamanho da area (T_*/C_* exigem elemento declarado)",
+    "word_write": "area em {N,QW,F} e index < tamanho da area",
+    "int_read": "como word_read, sem F e KF (instrucoes so de inteiros: MEQ, TOD, FRD)",
+    "int_write": "area em {N,QW} e index < tamanho da area",
     "arg": "operando adicional da instrucao anterior; a classe vem da lista 'args' dessa instrucao"
   },
   "opcodes": [
@@ -392,10 +406,10 @@
     {
       "code": 103,
       "name": "MEQ",
-      "operand": "word_read",
+      "operand": "int_read",
       "args": [
-        "word_read",
-        "word_read"
+        "int_read",
+        "int_read"
       ],
       "description": "Comparacao com mascara (origem, mascara, comparar): (origem AND mascara) == (comparar AND mascara)"
     },
@@ -460,18 +474,18 @@
     {
       "code": 110,
       "name": "TOD",
-      "operand": "word_read",
+      "operand": "int_read",
       "args": [
-        "word_write"
+        "int_write"
       ],
       "description": "Destino = origem convertida para BCD (0 a 99999999)"
     },
     {
       "code": 111,
       "name": "FRD",
-      "operand": "word_read",
+      "operand": "int_read",
       "args": [
-        "word_write"
+        "int_write"
       ],
       "description": "Destino = origem em BCD convertida para inteiro"
     },
@@ -481,6 +495,15 @@
       "operand": "arg",
       "args": [],
       "description": "Operando adicional da instrucao anterior; sozinho nao faz nada (RLO inalterado)"
+    },
+    {
+      "code": 113,
+      "name": "MOV",
+      "operand": "word_read",
+      "args": [
+        "word_write"
+      ],
+      "description": "Destino = origem (converte entre inteiro e float, arredondando para o inteiro mais proximo)"
     }
   ],
   "timer_types": [

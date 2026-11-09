@@ -281,7 +281,9 @@ Quadro 4 – Divisão das tarefas por componente
 | 25. Ligação com CLP real (em andamento) | Henrique Ogata Hachimine | O programa roda na IDE e um CLIC-02 ou CP1E real entra como cartão de E/S pela serial (Modbus RTU ou Host Link), com o equipamento desenhado no painel. | `comm/plc_serial.py`, `sim/plc_link.py`, `ui/plc_panel.py` |
 | 26. Módulos de expansão (em andamento) | Henrique Ogata Hachimine | Encaixe de módulos de E/S no CLP do projeto, com os endereços na IDE e no CLP e as regras de cada fabricante. | `model/expansions.py`, `ui/expansion_dialog.py` |
 | 27. Revisão de interface | Henrique Ogata Hachimine | Auditoria das telas e correções: abas duplicadas, paleta cortada, comandos repetidos, ícones, legendas e ambientes filtrados pelo controlador. | `desktop/src/ladderide/ui` |
-| 28. Testes e documentação | Henrique Ogata Hachimine | Suíte automatizada com mais de 400 testes, arquitetura, padrões de projeto, ADRs, manual, roteiros de ensaio na placa e este relatório. | `desktop/tests`, `docs` |
+| 28. Variáveis de memória | Henrique Ogata Hachimine | Tabela de variáveis boolean, inteira e float com endereço automático e valor inicial, bloco MOV e aritmética em float idêntica no simulador, no firmware e no C++ gerado. | `model/variables.py`, `ui/variables_panel.py`, `core/vm.py`, `firmware/lib/ladder_vm` |
+| 29. Auditoria e correção de bugs | Henrique Ogata Hachimine | Revisão de todas as ferramentas, com o problema, a causa e a solução de cada bug registrados. | `docs/bugs-corrigidos.md`, `desktop/tests/test_regressions.py` |
+| 30. Testes e documentação | Henrique Ogata Hachimine | Suíte automatizada com mais de 400 testes, arquitetura, padrões de projeto, ADRs, manual, roteiros de ensaio na placa e este relatório. | `desktop/tests`, `docs` |
 
 Fonte: Elaborado pelos autores (2026).
 

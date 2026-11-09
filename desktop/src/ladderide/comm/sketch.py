@@ -73,9 +73,10 @@ def build_sketch(name: str, rebuild: bool = False) -> Path:
             old.unlink()
         except OSError:
             pass                                    # em uso: fica para a proxima vez
-    cmd = [_cxx(), "-std=gnu++11", "-O1", "-Wall", "-DARDUINO=10819", "-DARDUINO_SIM=1",
+    static = ["-static"] if sys.platform == "win32" else []      # a IDE instalada nao tem as DLLs do MinGW no PATH
+    cmd = [_cxx(), "-std=gnu++11", "-O1", "-Wall", *static, "-DARDUINO=10819", "-DARDUINO_SIM=1",
            f"-I{SIM_DIR}", f"-I{FIRMWARE / 'src'}", f"-I{folder}", *map(str, sources), "-o", str(exe)]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+    proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")   # o g++ fala UTF-8
     if proc.returncode != 0:
         raise BuildError(proc.stderr.strip() or proc.stdout.strip())
     return exe
@@ -104,21 +105,30 @@ class SketchProcess:
         threading.Thread(target=self._pump, daemon=True).start()
 
     def _pump(self) -> None:
-        for raw in iter(self._proc.stdout.readline, b""):
-            line = raw.decode("ascii", "replace").strip()
-            if line == "BOOT":
-                self.booted.set()
-            elif line.startswith("SER "):
-                try:
-                    self.on_serial(bytes.fromhex(line[4:]))
-                except ValueError:
-                    pass
-            elif line.startswith("BRD "):
-                parts = line.split()
-                if len(parts) == 6:
-                    self.on_board(BoardState(int(parts[1], 16), int(parts[2]), int(parts[3], 16),
-                                             int(parts[4], 16), int(parts[5])))
-        self.on_exit(self._proc.wait())
+        try:
+            for raw in iter(self._proc.stdout.readline, b""):
+                line = raw.decode("ascii", "replace").strip()
+                if line == "BOOT":
+                    self.booted.set()
+                elif line.startswith("SER "):
+                    try:
+                        self.on_serial(bytes.fromhex(line[4:]))
+                    except ValueError:
+                        pass
+                elif line.startswith("BRD "):
+                    parts = line.split()
+                    if len(parts) == 6:
+                        try:
+                            state = BoardState(int(parts[1], 16), int(parts[2]), int(parts[3], 16),
+                                               int(parts[4], 16), int(parts[5]))
+                        except ValueError:          # linha truncada: ignora, como em SER
+                            continue
+                        self.on_board(state)
+        except Exception:
+            self._proc.kill()                       # sem leitor o programa ficaria preso na saida
+            raise
+        finally:
+            self.on_exit(self._proc.wait())
 
     def _send(self, text: str) -> None:
         with self._lock:
@@ -142,11 +152,15 @@ class SketchProcess:
         return self._proc.poll() is None
 
     def close(self) -> None:
-        with self._lock:
+        if not self._lock.acquire(timeout=0.3):     # escrita presa com o pipe cheio: nao espera por ela
+            self._proc.kill()
+        else:
             try:
                 self._proc.stdin.close()            # o sketch encerra ao perder a entrada
             except OSError:
                 pass
+            finally:
+                self._lock.release()
         try:
             self._proc.wait(timeout=1.0)
         except subprocess.TimeoutExpired:

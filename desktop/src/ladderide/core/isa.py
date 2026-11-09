@@ -7,6 +7,7 @@ valores como enums e constantes Python.
 from __future__ import annotations
 
 import json
+import struct
 import os
 import sys
 from enum import IntEnum
@@ -87,8 +88,23 @@ BIT_READ_AREAS = frozenset(
 )
 BIT_WRITE_AREAS = frozenset({Area.Q, Area.M})
 WORD_READ_AREAS = frozenset(
-    {Area.N, Area.K, Area.T_ACC, Area.T_PRE, Area.C_ACC, Area.C_PRE, Area.IW, Area.QW}
+    {Area.N, Area.K, Area.T_ACC, Area.T_PRE, Area.C_ACC, Area.C_PRE, Area.IW, Area.QW, Area.F, Area.KF}
 )
-WORD_WRITE_AREAS = frozenset({Area.N, Area.QW})
+WORD_WRITE_AREAS = frozenset({Area.N, Area.QW, Area.F})
+FLOAT_AREAS = frozenset({Area.F, Area.KF})      # F e KF reinterpretam 32 bits de N e das constantes como float
+INT_READ_AREAS = WORD_READ_AREAS - FLOAT_AREAS
+INT_WRITE_AREAS = WORD_WRITE_AREAS - FLOAT_AREAS
+FLOAT_MAX: float = struct.unpack("<f", b"\xff\xff\x7f\x7f")[0]
 COMPARE_OPS = frozenset({Op.EQU, Op.NEQ, Op.LES, Op.GRT, Op.LEQ, Op.GEQ, Op.LIM, Op.MEQ})
-MATH_OPS = frozenset({Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.SQR, Op.NEG, Op.TOD, Op.FRD})
+MATH_OPS = frozenset({Op.ADD, Op.SUB, Op.MUL, Op.DIV, Op.SQR, Op.NEG, Op.TOD, Op.FRD, Op.MOV})
+
+
+def bits_to_float(bits: int) -> float:
+    """32 bits como float IEEE 754; infinito e NaN leem 0 (a ISA nunca os produz)."""
+    raw = bits & UINT32_MASK
+    return 0.0 if raw >> 23 & 0xFF == 0xFF else struct.unpack("<f", struct.pack("<I", raw))[0]
+
+
+def float_to_bits(value: float) -> int:
+    """Float como inteiro de 32 bits com sinal (o formato guardado em N e nas constantes)."""
+    return struct.unpack("<i", struct.pack("<f", value))[0]

@@ -33,8 +33,10 @@ static uint32_t area_size(const lv_program_t *p, uint8_t area)
     case LV_AREA_C_PRE: return p->n_counters;
     case LV_AREA_T_ACC:
     case LV_AREA_T_PRE: return p->n_timers;
-    case LV_AREA_N: return p->n_words;
-    case LV_AREA_K: return p->n_constants;
+    case LV_AREA_N:
+    case LV_AREA_F: return p->n_words;
+    case LV_AREA_K:
+    case LV_AREA_KF: return p->n_constants;
     case LV_AREA_IW:
     case LV_AREA_QW: return 1;
     default: return 0;
@@ -63,9 +65,15 @@ static int operand_ok(const lv_program_t *p, lv_operand_class_t cls, uint8_t op,
         allowed = area == LV_AREA_TIMER || area == LV_AREA_COUNTER;
         break;
     case LV_OPERAND_WORD_READ:
-        allowed = area >= LV_AREA_N && area <= LV_AREA_QW;
+        allowed = area >= LV_AREA_N && area <= LV_AREA_KF;
         break;
     case LV_OPERAND_WORD_WRITE:
+        allowed = area == LV_AREA_N || area == LV_AREA_QW || area == LV_AREA_F;
+        break;
+    case LV_OPERAND_INT_READ:
+        allowed = area >= LV_AREA_N && area <= LV_AREA_QW;
+        break;
+    case LV_OPERAND_INT_WRITE:
         allowed = area == LV_AREA_N || area == LV_AREA_QW;
         break;
     default:

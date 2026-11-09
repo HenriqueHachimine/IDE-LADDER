@@ -213,6 +213,8 @@ static void send_frame(plc_t *plc, uint8_t type, uint8_t seq, uint8_t flags, con
                                     seq, flags, data, len);
     plc->last_seq = seq;
     plc->last_type = type;
+    plc->last_req_crc = plc->req_crc;
+    plc->last_req_len = plc->req_len;
     plc->hal.send(plc->hal.ctx, plc->last_resp, plc->last_resp_len);
 }
 
@@ -343,7 +345,7 @@ static void cmd_load_chunk(plc_t *plc, const ldp_frame_t *f)
     uint32_t offset = get32(f->payload);
     uint32_t n = f->len - 4u;
     plc->load_last_ms = now_ms(plc);
-    if (offset + n > plc->load_size)
+    if (offset > plc->load_size || n > plc->load_size - offset) /* sem somar: offset vem do PC e a soma estouraria */
         return reply_error(plc, f, LDP_ERR_BAD_OFFSET, 0, 0);
     if (offset == plc->load_received) {
         memcpy(plc->staging + offset, f->payload + 4, n);
@@ -427,7 +429,10 @@ static void dispatch(plc_t *plc, const ldp_frame_t *f)
 {
     if (f->flags & LDP_ERROR_FLAG || f->type & LDP_RESPONSE_FLAG)
         return; /* nao e um pedido */
-    if (f->seq == plc->last_seq && f->type == plc->last_type && plc->last_resp_len) {
+    plc->req_crc = lv_crc32(0, f->payload, f->len);
+    plc->req_len = f->len;
+    if (f->seq == plc->last_seq && f->type == plc->last_type && plc->last_resp_len
+        && plc->req_len == plc->last_req_len && plc->req_crc == plc->last_req_crc) {
         plc->hal.send(plc->hal.ctx, plc->last_resp, plc->last_resp_len); /* retransmissao */
         return;
     }

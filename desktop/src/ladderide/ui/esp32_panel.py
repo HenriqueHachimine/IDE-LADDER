@@ -1279,8 +1279,9 @@ class Esp32Panel(QWidget):
         self._update_buttons()
 
     def _sketch_built(self, exe, error: str) -> None:
+        stale = not self._building              # Desligar durante a compilacao: nao inicia o sketch
         self._building = False
-        if not self.sketch_mode or self.mode.currentData() != self.sketch_name:
+        if stale or not self.sketch_mode or self.mode.currentData() != self.sketch_name:
             self._update_buttons()
             return
         if exe is None:

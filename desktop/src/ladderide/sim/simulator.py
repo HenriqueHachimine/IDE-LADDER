@@ -54,7 +54,9 @@ class Simulator:
         self.inputs = 0
         self.virtual_ms = 0
         self._budget = 0.0
-        self.actual_speed = 0.0          # media movel do tempo simulado / tempo real
+        self.actual_speed = 0.0          # tempo simulado / tempo real, medido em janelas
+        self._speed_wall = 0.0
+        self._speed_scans = 0
         self.limited = False             # True se o PC nao acompanhou a velocidade pedida
         self.last_error: str | None = None
         self.plant: Plant | None = None
@@ -97,6 +99,8 @@ class Simulator:
                 self.plant.reset()
         self.state = SimState.RUNNING
         self.actual_speed = 0.0
+        self._speed_wall = 0.0
+        self._speed_scans = 0
         self.limited = False
 
     def pause(self) -> None:
@@ -185,14 +189,14 @@ class Simulator:
         unlimited = math.isinf(speed)
         if not unlimited:
             self._budget += wall_ms * speed
-        n = 0
-        if self.vm.first_scan and not self.vm.in_scan:
+        n = first = 0
+        if self.vm.first_scan and not self.vm.in_scan:      # fora do orcamento e da medida de velocidade
             self.scan_once()
-            n += 1
+            n = first = 1
         cut = False
         while unlimited or self._budget >= self.period_ms:
-            if n >= self.MAX_SCANS_PER_ADVANCE or (deadline is not None and n % 8 == 0
-                                                   and time.perf_counter() >= deadline):
+            if (deadline is None and n >= self.MAX_SCANS_PER_ADVANCE) or (
+                    deadline is not None and n % 8 == 0 and time.perf_counter() >= deadline):
                 cut = True
                 break
             self.scan_once()
@@ -203,8 +207,14 @@ class Simulator:
             self._budget = 0.0
         self.limited = cut and not unlimited
         if wall_ms > 0:
-            inst = n * self.period_ms / wall_ms
-            self.actual_speed = inst if self.actual_speed == 0 else self.actual_speed * 0.8 + inst * 0.2
+            # janela com varias varreduras: em velocidade baixa, uma por tique faria o valor oscilar
+            self._speed_wall += wall_ms
+            self._speed_scans += n - first
+            window = 1000.0 if unlimited else max(1000.0, 4 * self.period_ms / speed)
+            if self.actual_speed == 0 or self._speed_wall >= window:
+                self.actual_speed = self._speed_scans * self.period_ms / self._speed_wall
+                if self._speed_wall >= window:
+                    self._speed_wall, self._speed_scans = 0.0, 0
         return n
 
     # ------------------------------------------------------------ consulta

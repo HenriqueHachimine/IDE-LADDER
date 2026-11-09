@@ -5,7 +5,7 @@
 
 #define LV_FMT_MAGIC "LDRB"
 #define LV_FMT_MAJOR 2u
-#define LV_FMT_MINOR 0u
+#define LV_FMT_MINOR 1u
 #define LV_HEADER_SIZE 36u
 #define LV_TIMER_ENTRY_SIZE 8u
 #define LV_COUNTER_ENTRY_SIZE 8u
@@ -51,6 +51,8 @@
 #define LV_AREA_C_PRE 18u
 #define LV_AREA_IW 19u
 #define LV_AREA_QW 20u
+#define LV_AREA_F 21u
+#define LV_AREA_KF 22u
 
 /* Bits de sistema (area S) */
 #define LV_SYS_FIRST_SCAN 0u
@@ -96,6 +98,7 @@
 #define LV_OP_TOD 110u
 #define LV_OP_FRD 111u
 #define LV_OP_ARG 112u
+#define LV_OP_MOV 113u
 
 /* Tipos de temporizador e contador */
 #define LV_TIMER_TON 0u
@@ -136,6 +139,8 @@ typedef enum {
     LV_OPERAND_WORD_READ = 6,
     LV_OPERAND_WORD_WRITE = 7,
     LV_OPERAND_ARG = 8,
+    LV_OPERAND_INT_READ = 9,
+    LV_OPERAND_INT_WRITE = 10,
     LV_OPERAND_INVALID = -1
 } lv_operand_class_t;
 
@@ -166,16 +171,17 @@ static inline lv_operand_class_t lv_operand_class(unsigned opcode)
     case LV_OP_LEQ: return LV_OPERAND_WORD_READ;
     case LV_OP_GEQ: return LV_OPERAND_WORD_READ;
     case LV_OP_LIM: return LV_OPERAND_WORD_READ;
-    case LV_OP_MEQ: return LV_OPERAND_WORD_READ;
+    case LV_OP_MEQ: return LV_OPERAND_INT_READ;
     case LV_OP_ADD: return LV_OPERAND_WORD_READ;
     case LV_OP_SUB: return LV_OPERAND_WORD_READ;
     case LV_OP_MUL: return LV_OPERAND_WORD_READ;
     case LV_OP_DIV: return LV_OPERAND_WORD_READ;
     case LV_OP_SQR: return LV_OPERAND_WORD_READ;
     case LV_OP_NEG: return LV_OPERAND_WORD_READ;
-    case LV_OP_TOD: return LV_OPERAND_WORD_READ;
-    case LV_OP_FRD: return LV_OPERAND_WORD_READ;
+    case LV_OP_TOD: return LV_OPERAND_INT_READ;
+    case LV_OP_FRD: return LV_OPERAND_INT_READ;
     case LV_OP_ARG: return LV_OPERAND_ARG;
+    case LV_OP_MOV: return LV_OPERAND_WORD_READ;
     default: return LV_OPERAND_INVALID;
     }
 }
@@ -200,6 +206,7 @@ static inline unsigned lv_arg_count(unsigned opcode)
     case LV_OP_NEG: return 1u;
     case LV_OP_TOD: return 1u;
     case LV_OP_FRD: return 1u;
+    case LV_OP_MOV: return 1u;
     default: return 0u;
     }
 }
@@ -215,15 +222,16 @@ static inline lv_operand_class_t lv_arg_class(unsigned opcode, unsigned k)
     case LV_OP_LEQ: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_GEQ: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_LIM: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ, LV_OPERAND_WORD_READ}; return k < 2u ? c[k] : LV_OPERAND_INVALID; }
-    case LV_OP_MEQ: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ, LV_OPERAND_WORD_READ}; return k < 2u ? c[k] : LV_OPERAND_INVALID; }
+    case LV_OP_MEQ: { static const lv_operand_class_t c[] = {LV_OPERAND_INT_READ, LV_OPERAND_INT_READ}; return k < 2u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_ADD: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ, LV_OPERAND_WORD_WRITE}; return k < 2u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_SUB: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ, LV_OPERAND_WORD_WRITE}; return k < 2u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_MUL: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ, LV_OPERAND_WORD_WRITE}; return k < 2u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_DIV: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_READ, LV_OPERAND_WORD_WRITE}; return k < 2u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_SQR: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_WRITE}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
     case LV_OP_NEG: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_WRITE}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
-    case LV_OP_TOD: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_WRITE}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
-    case LV_OP_FRD: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_WRITE}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
+    case LV_OP_TOD: { static const lv_operand_class_t c[] = {LV_OPERAND_INT_WRITE}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
+    case LV_OP_FRD: { static const lv_operand_class_t c[] = {LV_OPERAND_INT_WRITE}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
+    case LV_OP_MOV: { static const lv_operand_class_t c[] = {LV_OPERAND_WORD_WRITE}; return k < 1u ? c[k] : LV_OPERAND_INVALID; }
     default: return LV_OPERAND_INVALID;
     }
 }
@@ -265,6 +273,7 @@ static inline const char *lv_opcode_name(unsigned opcode)
     case LV_OP_TOD: return "TOD";
     case LV_OP_FRD: return "FRD";
     case LV_OP_ARG: return "ARG";
+    case LV_OP_MOV: return "MOV";
     default: return "?";
     }
 }

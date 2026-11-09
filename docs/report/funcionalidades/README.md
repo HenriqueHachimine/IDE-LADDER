@@ -89,7 +89,7 @@ Símbolos dão nomes aos endereços, para o diagrama ser lido como o processo (`
 
 ![Novo projeto com a escolha do controlador](img/05_novo_projeto.png)
 
-A ESP32 Relay X8 tem 8 entradas e 8 saídas. A opção *Somente simulação* tem 16 E/S e serve para cenas maiores do Factory IO. O controlador pode ser trocado depois em Programa → Propriedades.
+A ESP32 Relay X8 tem 8 entradas e 8 saídas. A opção *Somente simulação* tem 16 E/S e serve para cenas maiores do Factory IO. O controlador pode ser trocado depois em Editar → Propriedades do projeto.
 
 ## 3. Simulador
 

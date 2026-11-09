@@ -248,6 +248,14 @@ class CommMap(QWidget):
         self._timer.timeout.connect(self._tick)
         self._timer.start(40)
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._timer.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._timer.stop()                  # fechado: nao fica redesenhando
+
     def sizeHint(self) -> QSize:
         return QSize(int(self.W), int(self.H))
 
@@ -571,6 +579,14 @@ class CommGuideDialog(QDialog):
         self.refresh()
 
     # ------------------------------------------------------------- abas
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._timer.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._timer.stop()                  # fechado: nao fica redesenhando
+
     def _overview_tab(self) -> QWidget:
         self.map = CommMap()
         self.details = _browser("")

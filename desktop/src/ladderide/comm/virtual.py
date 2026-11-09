@@ -45,8 +45,8 @@ def host_tool(name: str, rebuild: bool = False) -> Path:
     BUILD.mkdir(parents=True, exist_ok=True)
     cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-O2",
            f"-I{FIRMWARE / 'lib' / 'ladder_vm'}", f"-I{FIRMWARE / 'lib' / 'plc_core'}",
-           *map(str, sources), "-o", str(exe)]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+           *map(str, sources), "-o", str(exe), "-lm"]
+    proc = subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace")   # o g++ fala UTF-8
     if proc.returncode != 0:
         raise BuildError(proc.stderr)
     return exe

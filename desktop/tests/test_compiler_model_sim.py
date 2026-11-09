@@ -299,7 +299,7 @@ def test_speed_changes_wall_clock_not_result():
     assert lines[0] == lines[1]
     sim = Simulator(r, period_ms=10)
     sim.start()
-    assert sim.advance(30, 100.0) == 301 and sim.actual_speed == pytest.approx(100.3, abs=0.1)
+    assert sim.advance(30, 100.0) == 301 and sim.actual_speed == pytest.approx(100.0, abs=0.1)
     assert not sim.limited
 
 

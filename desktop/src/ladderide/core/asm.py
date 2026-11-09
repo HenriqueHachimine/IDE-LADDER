@@ -48,6 +48,7 @@ _ELEM_BIT = re.compile(r"^([TC])(\d+)\.(EN|TT|DN|OV|UN)$")
 _ELEM = re.compile(r"^([TC])(\d+)$")
 _ELEM_WORD = re.compile(r"^([TC])(\d+)\.(ACC|PRE)$")
 _WORD = re.compile(r"^N(\d+)$")
+_FLOAT_WORD = re.compile(r"^F(\d+)$")
 _IO_WORD = re.compile(r"^([IQ])W(\d+)$")
 _ELEM_WORD_AREAS = {("T", "ACC"): Area.T_ACC, ("T", "PRE"): Area.T_PRE,
                     ("C", "ACC"): Area.C_ACC, ("C", "PRE"): Area.C_PRE}
@@ -63,13 +64,26 @@ def parse_constant(text: str) -> int | None:
     """Constante inteira (123, -5, 0x1F, 0b101) como int32, ou None se nao for constante.
 
     Valores de 2^31 a 2^32-1 (mascaras em hexadecimal) viram o padrao de bits com sinal."""
-    t = text.strip().replace("_", "")
-    if not re.fullmatch(r"[+-]?(0[xX][0-9A-Fa-f]+|0[bB][01]+|\d+)", t):
+    t = text.strip()                             # "_" so entre digitos: _5 e nome de simbolo
+    if not re.fullmatch(r"[+-]?(0[xX][0-9A-Fa-f_]+|0[bB][01_]+|\d[\d_]*)", t):
         return None
-    value = int(t, 0)
-    if not isa.INT32_MIN <= value <= isa.UINT32_MASK:
+    digits = t.replace("_", "")
+    is_mask = bool(re.search(r"0[xXbB]", digits))
+    value = int(digits, 0 if is_mask else 10)
+    if not isa.INT32_MIN <= value <= (isa.UINT32_MASK if is_mask else isa.INT32_MAX):
         raise ValueError(f"constante fora de 32 bits: {text}")
     return value - (1 << 32) if value > isa.INT32_MAX else value
+
+
+def parse_float_constant(text: str) -> float | None:
+    """Constante float (1.5, -0.25, 2e3), ja em precisao de 32 bits, ou None se nao for uma."""
+    t = text.strip()
+    if not re.fullmatch(r"[+-]?(\d+\.\d*|\.\d+)([eE][+-]?\d+)?|[+-]?\d+[eE][+-]?\d+", t):
+        return None
+    try:
+        return isa.bits_to_float(isa.float_to_bits(float(t)))
+    except OverflowError:
+        raise ValueError(f"constante fora da faixa do float: {text}") from None
 
 
 def parse_operand(text: str) -> tuple[int, int]:
@@ -88,6 +102,8 @@ def parse_operand(text: str) -> tuple[int, int]:
         return _ELEM_WORD_AREAS[(m[1], m[3])], int(m[2])
     if m := _WORD.match(t):
         return Area.N, int(m[1])
+    if m := _FLOAT_WORD.match(t):
+        return Area.F, int(m[1])
     if m := _IO_WORD.match(t):
         return (Area.IW if m[1] == "I" else Area.QW), int(m[2])
     raise ValueError(f"operando invalido: {text!r}")
@@ -99,6 +115,13 @@ def format_operand(area: int, index: int, constants: list[int] | None = None) ->
         return f"{area.name}{index // 8}.{index % 8}"
     if area == Area.N:
         return f"N{index}"
+    if area == Area.F:
+        return f"F{index}"
+    if area == Area.KF:
+        if constants is None or index >= len(constants):
+            return f"KF{index}"
+        text = format(isa.bits_to_float(constants[index]), ".9g")
+        return text if "." in text or "e" in text else text + ".0"
     if area == Area.K:
         return str(constants[index]) if constants is not None and index < len(constants) else f"K{index}"
     if area in (Area.IW, Area.QW):
@@ -121,12 +144,15 @@ def assemble(source: str) -> Program:
     counters: dict[int, CounterDef] = {}
 
     def operand(text: str) -> tuple[int, int]:
-        value = parse_constant(text)
+        value, area = parse_constant(text), Area.K
         if value is None:
-            return parse_operand(text)
+            number = parse_float_constant(text)
+            if number is None:
+                return parse_operand(text)
+            value, area = isa.float_to_bits(number), Area.KF
         if value not in p.constants:
             p.constants.append(value)
-        return Area.K, p.constants.index(value)
+        return area, p.constants.index(value)
 
     for lineno, raw in enumerate(source.splitlines(), start=1):
         line = re.split(r"[;#]", raw, maxsplit=1)[0].strip()
@@ -179,13 +205,20 @@ def _directive(p: Program, timers: dict, counters: dict, head: str, args: list[s
         if head == ".TIMER":
             if area != Area.TIMER:
                 raise ValueError("nome de temporizador deve ser Tn")
-            timers[index] = TimerDef(TimerType[args[1].upper()], _parse_int(args[2]))
+            timers[index] = TimerDef(_enum_value(TimerType, args[1]), _parse_int(args[2]))
         else:
             if area != Area.COUNTER:
                 raise ValueError("nome de contador deve ser Cn")
-            counters[index] = CounterDef(CounterType[args[1].upper()], _parse_int(args[2]))
+            counters[index] = CounterDef(_enum_value(CounterType, args[1]), _parse_int(args[2]))
     else:
         raise ValueError(f"diretiva desconhecida: {head}")
+
+
+def _enum_value(enum, name: str):
+    try:
+        return enum[name.upper()]
+    except KeyError:
+        raise ValueError(f"tipo desconhecido: {name}") from None
 
 
 def disassemble(p: Program) -> str:

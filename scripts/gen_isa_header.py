@@ -16,7 +16,7 @@ SPEC_PATH = ROOT / "shared" / "specifications" / "isa.json"
 HEADER_PATH = ROOT / "firmware" / "lib" / "ladder_vm" / "ladder_isa.h"
 
 OPERAND_CLASSES = ["none", "bit_read", "bit_write", "timer", "counter", "timer_or_counter", "word_read",
-                   "word_write", "arg"]
+                   "word_write", "arg", "int_read", "int_write"]
 
 
 def render(spec: dict) -> str:

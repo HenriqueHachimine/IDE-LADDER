@@ -202,6 +202,25 @@ def test_out_of_order_and_repeated_chunks(device):
     assert c.status().has_program
 
 
+def test_chunk_offset_near_32_bit_limit_is_refused(device):
+    c = device()
+    image = demo_image()
+    c.request(Cmd.LOAD_BEGIN, struct.pack("<II", len(image), crc32(image)))
+    for offset, size in ((0xFFFFFFF0, 16), (0xFFFFFFFF, 1)):   # offset + tamanho estouraria 32 bits
+        with pytest.raises(DeviceError) as e:
+            c.request(Cmd.LOAD_CHUNK, struct.pack("<I", offset) + image[:size])
+        assert e.value.code == ProtoError.BAD_OFFSET
+
+
+def test_new_command_with_repeated_sequence_is_executed(device):
+    c = device()
+    c.request(Cmd.LOAD_BEGIN, struct.pack("<II", 200, 0))
+    seq = c.seq
+    assert struct.unpack("<I", c.request(Cmd.LOAD_CHUNK, struct.pack("<I", 0) + b"abcd"))[0] == 4
+    c.seq = seq                                                 # mesmo seq e tipo, outro conteudo: comando novo
+    assert struct.unpack("<I", c.request(Cmd.LOAD_CHUNK, struct.pack("<I", 4) + b"efgh"))[0] == 8
+
+
 def test_retransmission_is_idempotent(device):
     c = device()
     image = demo_image()

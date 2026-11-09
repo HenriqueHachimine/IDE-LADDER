@@ -87,7 +87,9 @@ class ElevatorEnvironment(Environment):
         super().press(key, down)
         if down and key.startswith("CALL"):
             k = int(key[-1]) - 1
-            self.pending.setdefault(k, self.time_ms)
+            floor, off = self.floor_offset()
+            if not (k == floor and abs(off) <= ZONE and self.door >= 0.95):    # ja atendida: porta aberta aqui
+                self.pending.setdefault(k, self.time_ms)
 
     def step(self, dt_ms: int, out: dict[str, bool]) -> None:
         dt = dt_ms / 1000.0

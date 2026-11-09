@@ -32,7 +32,7 @@ Type=Application
 Name=LadderIDE
 GenericName=IDE LADDER para CLP com ESP32
 Comment=Editor, simulador e transferencia de programas LADDER
-Exec={exec} %f
+Exec="{exec}" %f
 Icon={icon}
 Terminal=false
 Categories=Development;Education;Electronics;
@@ -45,7 +45,7 @@ set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 APPS="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 mkdir -p "$APPS"
-sed -e "s#@EXEC@#$DIR/LadderIDE#" -e "s#@ICON@#$DIR/ladderide.png#" "$DIR/ladderide.desktop.in" \\
+sed -e "s|@EXEC@|$DIR/LadderIDE|" -e "s|@ICON@|$DIR/ladderide.png|" "$DIR/ladderide.desktop.in" \\
     > "$APPS/ladderide.desktop"
 chmod +x "$DIR/LadderIDE"
 command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS" || true

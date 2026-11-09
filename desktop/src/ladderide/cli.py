@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import struct
 import sys
 import time
 from datetime import datetime
@@ -55,6 +56,20 @@ def _bits(mask: int, n: int) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Erro de uso ou de arquivo vira mensagem e codigo 2, sem traceback."""
+    for stream in (sys.stdout, sys.stderr):     # nome de projeto fora da pagina de codigo do console
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+    try:
+        return _main(argv)
+    except KeyboardInterrupt:
+        return 130
+    except (OSError, ValueError, RuntimeError, struct.error) as exc:
+        print(f"ERRO: {exc}", file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="ladderide.cli", description="Ferramentas do CLP LADDER ESP32")
     ap.add_argument("--port", help="porta serial (ex.: COM5 no Windows, /dev/ttyUSB0 no Linux)")
     ap.add_argument("--baud", type=int, default=115200)
@@ -230,6 +245,9 @@ def _device_command(client: DeviceClient, args) -> int:
             time.sleep(args.interval)
     elif args.cmd == "equivalence":
         cases = load_scan_vectors(Path(args.vectors))
+        if not cases:
+            print(f"ERRO: nenhum vetor encontrado em {args.vectors}", file=sys.stderr)
+            return 2
         failed = 0
         for case in cases:
             r = run_vector_on_device(client, case)

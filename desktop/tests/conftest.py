@@ -63,7 +63,7 @@ def _compile_runner() -> Path:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
     exe = BUILD_DIR / ("lv_host_runner.exe" if sys.platform == "win32" else "lv_host_runner")
     sources = sorted(str(p) for p in VM_DIR.glob("*.c")) + [str(RUNNER_SRC)]
-    cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-O2", f"-I{VM_DIR}", *sources, "-o", str(exe)]
+    cmd = [cc, "-std=c99", "-Wall", "-Wextra", "-Werror", "-O2", f"-I{VM_DIR}", *sources, "-o", str(exe), "-lm"]
     subprocess.run(cmd, check=True, capture_output=True, text=True)
     return exe
 
@@ -83,3 +83,19 @@ def c_vm(tmp_path_factory) -> CVM:
 
 def load_json(relative: str):
     return json.loads((VECTORS / relative).read_text(encoding="utf-8"))
+
+
+def pytest_sessionfinish(session, exitstatus):
+    session.config._final_exitstatus = int(exitstatus)
+
+
+def pytest_unconfigure(config):
+    """No Windows, o PySide6 6.12 pode derrubar o processo ao destruir janelas e threads no encerramento,
+    com todos os testes aprovados: o resultado ja foi impresso, entao sai sem passar por essa destruicao."""
+    status = getattr(config, "_final_exitstatus", None)
+    if sys.platform == "win32" and status is not None:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        import ctypes                           # os._exit ainda descarrega as DLLs do Qt, onde ocorre a falha
+        ctypes.windll.kernel32.TerminateProcess(ctypes.c_void_p(-1), status)   # -1 = o proprio processo
+

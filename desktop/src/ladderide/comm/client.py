@@ -21,6 +21,10 @@ class CommError(Exception):
     """Falha de comunicacao (timeout, porta, desconexao)."""
 
 
+class TransferRefused(CommError):
+    """Transferencia recusada antes de comecar; a comunicacao continua boa."""
+
+
 class DeviceError(Exception):
     """O dispositivo respondeu com erro."""
 
@@ -140,13 +144,13 @@ class DeviceClient:
         info = info or self.info()
         prog = decode(image)  # nunca envia imagem invalida
         if info.fmt_major != isa.FORMAT_MAJOR or info.fmt_minor < isa.FORMAT_MINOR:
-            raise CommError(f"firmware suporta LDRB {info.fmt_major}.{info.fmt_minor}; "
+            raise TransferRefused(f"firmware suporta LDRB {info.fmt_major}.{info.fmt_minor}; "
                             f"a IDE gera {isa.FORMAT_MAJOR}.{isa.FORMAT_MINOR}. Atualize o firmware.")
         if prog.n_inputs > info.n_inputs or prog.n_outputs > info.n_outputs:
-            raise CommError(f"o programa usa {prog.n_inputs} entradas/{prog.n_outputs} saídas; "
+            raise TransferRefused(f"o programa usa {prog.n_inputs} entradas/{prog.n_outputs} saídas; "
                             f"o dispositivo tem {info.n_inputs}/{info.n_outputs}")
         if len(image) > info.max_image:
-            raise CommError("programa maior que a memória do dispositivo")
+            raise TransferRefused("programa maior que a memória do dispositivo")
         return info
 
     def download(self, image: bytes, progress: Callable[[int, int], None] | None = None,
@@ -156,13 +160,15 @@ class DeviceClient:
         st = self.status()
         if st.state == DevState.RUN:
             if not stop_if_running:
-                raise CommError("o dispositivo esta em RUN; coloque em STOP antes de transferir")
+                raise TransferRefused("o dispositivo esta em RUN; coloque em STOP antes de transferir")
             self.set_mode(False)
         elif st.state == DevState.FAULT:
-            raise CommError("o dispositivo esta em FAULT; limpe a falha antes de transferir")
+            raise TransferRefused("o dispositivo esta em FAULT; limpe a falha antes de transferir")
         retries_before = self.retry_count
         reply = self.request(Cmd.LOAD_BEGIN, struct.pack("<II", len(image), crc32(image)))
         chunk = min(struct.unpack("<H", reply)[0], info.max_chunk)
+        if chunk <= 0:
+            raise CommError("o dispositivo informou tamanho de bloco inválido")
         sent = chunks = 0
         try:
             while sent < len(image):

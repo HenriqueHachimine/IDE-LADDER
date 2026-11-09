@@ -47,10 +47,13 @@ def start_menu_dir() -> Path:
 
 def desktop_dir() -> Path:
     try:
-        out = subprocess.run(["powershell", "-NoProfile", "-Command", "[Environment]::GetFolderPath('Desktop')"],
-                             capture_output=True, text=True, timeout=20, creationflags=_NO_WINDOW)
-        if out.stdout.strip():
-            return Path(out.stdout.strip())
+        # em UTF-8: na pagina de codigo do console, "Area" com acento viria errado
+        script = "[Console]::OutputEncoding=[Text.Encoding]::UTF8;[Environment]::GetFolderPath('Desktop')"
+        out = subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True, encoding="utf-8",
+                             errors="replace", timeout=20, creationflags=_NO_WINDOW)
+        folder = out.stdout.strip().lstrip("\ufeff")
+        if folder:
+            return Path(folder)
     except (OSError, subprocess.SubprocessError):
         pass
     return Path.home() / "Desktop"
@@ -67,9 +70,12 @@ def payload_info() -> dict:
 # ------------------------------------------------------------------ atalhos
 def make_shortcut(lnk: Path, target: Path, description: str) -> None:
     lnk.parent.mkdir(parents=True, exist_ok=True)
-    script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{lnk}');"
-              f"$s.TargetPath='{target}';$s.WorkingDirectory='{target.parent}';"
-              f"$s.IconLocation='{target},0';$s.Description='{description}';$s.Save()")
+    def ps(value) -> str:                       # apostrofo (C:\\Users\\D'Avila) dentro de string do PowerShell
+        return str(value).replace("'", "''")
+
+    script = (f"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{ps(lnk)}');"
+              f"$s.TargetPath='{ps(target)}';$s.WorkingDirectory='{ps(target.parent)}';"
+              f"$s.IconLocation='{ps(target)},0';$s.Description='{ps(description)}';$s.Save()")
     subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
                    check=True, capture_output=True, timeout=60, creationflags=_NO_WINDOW)
 
@@ -136,15 +142,13 @@ def _notify_shell() -> None:
 
 # ---------------------------------------------------------------- instalar
 def is_running(install_dir: Path) -> bool:
-    """A IDE aberta trava o executavel: tenta renomear para saber."""
+    """A IDE aberta impede abrir o executavel para escrita (renomear o Windows permite)."""
     exe = install_dir / EXE
     if not exe.exists():
         return False
-    probe = exe.with_suffix(".exe.verifica")
     try:
-        exe.rename(probe)
-        probe.rename(exe)
-        return False
+        with open(exe, "r+b"):
+            return False
     except OSError:
         return True
 
@@ -236,7 +240,8 @@ def uninstall(install_dir: Path) -> None:
     if getattr(sys, "frozen", False) and me.parent.resolve() == install_dir.resolve():
         # o proprio desinstalador so pode ser apagado depois de terminar
         subprocess.Popen(f'cmd /c ping 127.0.0.1 -n 3 >nul & del /f /q "{me}" & rmdir /s /q "{install_dir}"',
-                         creationflags=_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0), close_fds=True)
+                         creationflags=_NO_WINDOW | getattr(subprocess, "DETACHED_PROCESS", 0), close_fds=True,
+                         cwd=tempfile.gettempdir())     # dentro da pasta, o rmdir nao conseguiria remove-la
     else:
         shutil.rmtree(install_dir, ignore_errors=True)
 

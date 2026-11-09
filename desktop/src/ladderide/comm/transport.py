@@ -110,7 +110,8 @@ class ProcessTransport(Transport):
         self.description = "dispositivo virtual"
         try:
             self._proc = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                          stderr=subprocess.DEVNULL, bufsize=0)
+                                          stderr=subprocess.DEVNULL, bufsize=0,
+                                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         except OSError as exc:
             raise TransportError(f"não foi possível iniciar {argv[0]}: {exc}") from exc
         self._q: queue.Queue[bytes] = queue.Queue()

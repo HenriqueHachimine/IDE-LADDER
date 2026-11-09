@@ -363,7 +363,7 @@
       "scan_period_ms": 10,
       "hardware": false,
       "expansion_bus": "cp1w",
-      "max_expansions": 3
+      "max_expansions": 0
     },
     {
       "id": "cp1e-e14dr-a",
@@ -432,7 +432,7 @@
       "scan_period_ms": 10,
       "hardware": false,
       "expansion_bus": "cp1w",
-      "max_expansions": 3
+      "max_expansions": 0
     },
     {
       "id": "cp1e-e20dr-a",
@@ -501,7 +501,7 @@
       "scan_period_ms": 10,
       "hardware": false,
       "expansion_bus": "cp1w",
-      "max_expansions": 3
+      "max_expansions": 0
     },
     {
       "id": "cp1e-e30dr-a",
@@ -711,7 +711,7 @@
       "hardware": false,
       "link": "hostlink",
       "expansion_bus": "cp1w",
-      "max_expansions": 3
+      "max_expansions": 0
     },
     {
       "id": "cp1e-e20sdr-a",
@@ -783,7 +783,7 @@
       "hardware": false,
       "link": "hostlink",
       "expansion_bus": "cp1w",
-      "max_expansions": 3
+      "max_expansions": 0
     },
     {
       "id": "cp1e-e30sdr-a",
@@ -999,7 +999,7 @@
       "hardware": false,
       "link": "hostlink",
       "expansion_bus": "cp1w",
-      "max_expansions": 3
+      "max_expansions": 0
     },
     {
       "id": "cp1e-n20dr-a",
@@ -1071,7 +1071,7 @@
       "hardware": false,
       "link": "hostlink",
       "expansion_bus": "cp1w",
-      "max_expansions": 3
+      "max_expansions": 0
     },
     {
       "id": "cp1e-n30dr-a",

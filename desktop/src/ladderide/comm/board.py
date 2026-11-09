@@ -11,8 +11,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_DEFINE = re.compile(r'^\s*#define\s+([A-Z_][A-Z0-9_]*)\s+("[^"]*"|-?\d+)\s*(?:/\*(.*?)\*/)?\s*$')
-_ARRAY = re.compile(r'^\s*static\s+const\s+\w+\s+([A-Z_][A-Z0-9_]*)\s*\[\d*\]\s*=\s*\{([^}]*)\}\s*;')
+_DEFINE = re.compile(r'^\s*#define\s+([A-Z_][A-Z0-9_]*)\s+("[^"]*"|-?(?:0[xX][0-9A-Fa-f]+|\d+))[uUlL]*\s*'
+                     r'(?:(?:/\*|//)(.*?)(?:\*/)?)?\s*$')
+_ARRAY = re.compile(r'^\s*static\s+const\s+\w+\s+([A-Z_][A-Z0-9_]*)\s*\[[^\]]*\]\s*=\s*\{([^}]*)\}\s*;')
 
 # grupo e explicacao de cada definicao conhecida
 KNOWN = {
@@ -44,6 +45,11 @@ GROUP_ORDER = ["Identificacao", "Registradores de deslocamento", "Polaridade", "
                "CLP", "Outros"]
 
 
+def _to_int(text: str) -> int:
+    text = text.strip()
+    return int(text, 16 if text.lower().lstrip("-").startswith("0x") else 10)
+
+
 @dataclass
 class BoardItem:
     name: str
@@ -69,10 +75,10 @@ class BoardConfig:
             return default
         v = item.value
         if v.startswith("{"):
-            return [int(x) for x in v.strip("{}").split(",") if x.strip()]
+            return [_to_int(x) for x in v.strip("{}").split(",") if x.strip()]
         if v.startswith('"'):
             return v.strip('"')
-        return int(v)
+        return _to_int(v)
 
     # -------------------------------------------------- atalhos usados na placa
     @property

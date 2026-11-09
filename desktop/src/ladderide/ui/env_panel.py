@@ -116,6 +116,8 @@ class EnvironmentPanel(QWidget):
         self.combo.addItem("(nenhum - usar apenas o painel de E/S)", "")
         self._needs: dict[tuple, tuple[int, int]] = {}      # (id, E/S do projeto) -> entradas e saidas usadas
         for cls in available():
+            if not self._usable(cls):
+                continue
             self.combo.addItem(cls.name, cls.id)
             self.combo.setItemData(self.combo.count() - 1, cls.name, Qt.UserRole + 1)
         self.combo.currentIndexChanged.connect(self._combo_changed)
@@ -195,14 +197,28 @@ class EnvironmentPanel(QWidget):
             self.plantChanged.emit()
         self._update_fit()
 
+    def _usable(self, cls: type[Environment]) -> bool:
+        """Plugin que falha ao criar fica fora da lista e aparece nos erros, sem derrubar a IDE."""
+        try:
+            cls().configure(*self.io)
+        except Exception as exc:  # noqa: BLE001 - codigo de plugin
+            message = f"{cls.id}: {type(exc).__name__}: {exc}"
+            if message not in load_errors:
+                load_errors.append(message)
+            return False
+        return True
+
     def needs(self, env_id: str) -> tuple[int, int]:
         """Entradas e saidas que o ambiente usa com as E/S atuais do projeto."""
         key = (env_id, self.io)
         if key not in self._needs:
-            env = create(env_id)
-            env.configure(*self.io)
-            used = [[parse_operand(pt.address)[1] + 1 for pt in pts] for pts in (env.inputs, env.outputs)]
-            self._needs[key] = (max(used[0], default=0), max(used[1], default=0))
+            try:
+                env = create(env_id)
+                env.configure(*self.io)
+                used = [[parse_operand(pt.address)[1] + 1 for pt in pts] for pts in (env.inputs, env.outputs)]
+                self._needs[key] = (max(used[0], default=0), max(used[1], default=0))
+            except Exception:  # noqa: BLE001 - codigo de plugin nao pode derrubar o refresh da janela
+                self._needs[key] = (0, 0)
         return self._needs[key]
 
     def _missing(self, env_id: str) -> str:

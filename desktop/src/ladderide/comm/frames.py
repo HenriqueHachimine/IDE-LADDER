@@ -39,7 +39,8 @@ class FrameParser:
         now = self._clock()
         if self._buf and (now - self._last) * 1000 > FRAME_TIMEOUT_MS:
             self._buf.clear()
-        self._last = now
+        if data:                                 # leitura vazia nao renova o prazo do quadro parcial
+            self._last = now
         self._buf += data
         frames = []
         while True:

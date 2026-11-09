@@ -21,7 +21,8 @@ from ..model import edit
 from ..model import expansions
 from ..model.controllers import controller_for, match_controller_io
 from ..model.project import (CompareBox, Contact, CounterBox, MathBox, Project, ProjectFormatError, ResetBox,
-                             Symbol, TimerBox, Coil)
+                             Symbol, TimerBox, Coil, Variable, VARIABLE_TYPES)
+from ..model import variables as model_variables
 
 EDITABLE_ON_INSERT = (Contact, Coil, TimerBox, CounterBox, ResetBox, CompareBox, MathBox)
 from ..sim.factoryio import FactoryIOConfig
@@ -41,6 +42,7 @@ from .factoryio_panel import FactoryIOPanel
 from .plc_panel import PlcPanel
 from .il_panel import ILPanel
 from .user_guide import UserGuideDialog
+from .variables_panel import VariablesPanel
 from .verify_dialog import VerifyDialog
 from . import theme
 from .ladder_view import COND_TOOLS, OUTPUT_TOOLS, LadderView
@@ -53,7 +55,7 @@ QWIDGETSIZE_MAX = (1 << 24) - 1     # limite de tamanho de widget do Qt (nao exp
 
 
 class MainWindow(QMainWindow):
-    LAYOUT_VERSION = 6          # mude ao reorganizar os painéis: invalida layouts salvos antigos
+    LAYOUT_VERSION = 7          # mude ao reorganizar os painéis: invalida layouts salvos antigos
 
     def __init__(self, project: Project | None = None, path: str | None = None, persist_layout: bool = False):
         super().__init__()
@@ -74,6 +76,9 @@ class MainWindow(QMainWindow):
         self._create_actions()
         self._create_docks()
         self._create_menus()
+        for key in ("delete", "edit"):          # Delete e Enter so valem no diagrama, nao nos campos de texto
+            self.actions_[key].setShortcutContext(Qt.WidgetWithChildrenShortcut)
+            self.view.addAction(self.actions_[key])
         self.view.dropRequested.connect(self.on_drop)
         self.view.actionRequested.connect(self.on_view_action)
         self.view.editRequested.connect(self.edit_element)
@@ -368,6 +373,12 @@ class MainWindow(QMainWindow):
         self.msgs_dock = self._dock("Mensagens", self.messages, Qt.BottomDockWidgetArea, "dock_msgs")
         self.symbols_dock = self._dock("Símbolos", sym_box, Qt.BottomDockWidgetArea, "dock_symbols")
         self.tabifyDockWidget(self.msgs_dock, self.symbols_dock)
+        self.variables_panel = VariablesPanel()
+        self.variables_panel.edited.connect(self.on_variable_edited)
+        self.variables_panel.addRequested.connect(self.variable_add)
+        self.variables_panel.removeRequested.connect(self.variable_remove)
+        self.variables_dock = self._dock("Variáveis", self.variables_panel, Qt.BottomDockWidgetArea, "dock_variables")
+        self.tabifyDockWidget(self.symbols_dock, self.variables_dock)
 
         self.session = DeviceSession(self)
         self.comm_guide: CommGuideDialog | None = None
@@ -494,14 +505,19 @@ class MainWindow(QMainWindow):
     def _save_layout(self) -> None:
         s = self._settings()
         s.setValue("ui/geometry", self.saveGeometry())
+        hidden_by_mode = not self._was_editing and self._palette_was_visible
+        if hidden_by_mode:                      # a paleta some so na simulacao: o layout salvo a mantem
+            self.palette_dock.show()
         s.setValue("ui/state", self.saveState(self.LAYOUT_VERSION))
+        if hidden_by_mode:
+            self.palette_dock.hide()
 
     DOCK_FEATURES = (QDockWidget.DockWidgetMovable | QDockWidget.DockWidgetFloatable
                      | QDockWidget.DockWidgetClosable)
 
     def _docks(self) -> tuple[QDockWidget, ...]:
         return (self.palette_dock, self.sim_dock, self.device_dock, self.il_dock, self.cpp_dock,
-                self.process_dock, self.msgs_dock, self.symbols_dock)
+                self.process_dock, self.msgs_dock, self.symbols_dock, self.variables_dock)
 
     def set_layout_locked(self, locked: bool, save: bool = True) -> None:
         """Layout travado: paineis e barras nao podem ser movidos, desacoplados, fechados
@@ -542,10 +558,11 @@ class MainWindow(QMainWindow):
         for dock in self._docks():
             if frozen and dock.isVisible() and not dock.isFloating():
                 area = self.dockWidgetArea(dock)
+                group = [dock, *self.tabifiedDockWidgets(dock)]     # aba oculta guarda um tamanho antigo
                 if area in (Qt.LeftDockWidgetArea, Qt.RightDockWidgetArea):
-                    dock.setFixedWidth(dock.width())
+                    dock.setFixedWidth(max(d.width() for d in group))
                 else:
-                    dock.setFixedHeight(dock.height())
+                    dock.setFixedHeight(max(d.height() for d in group))
             else:
                 dock.setMinimumSize(0, 0)
                 dock.setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX)
@@ -559,8 +576,8 @@ class MainWindow(QMainWindow):
         self.restoreState(self._default_layout, self.LAYOUT_VERSION)
         self._apply_default_sizes()
         self._palette_was_visible = True
-        self._was_editing = not (self.sim is not None and self.sim.active)
-        self.palette_dock.setVisible(self._was_editing and not self.monitoring)
+        self._was_editing = not (self.sim is not None and self.sim.active) and not self.monitoring
+        self.palette_dock.setVisible(self._was_editing)
         self.sim_dock.raise_()
         self.msgs_dock.raise_()
 
@@ -569,6 +586,7 @@ class MainWindow(QMainWindow):
         self.view.rebuild(self.project)
         self.view.set_errors({d.element_id for d in (self.result.errors if self.result else []) if d.element_id})
         self._fill_symbols()
+        self.variables_panel.load(self.project)
         self.sim_panel.io.configure(self.project, self.sim.result if self.sim else self.result)
         self.device_panel.io.configure(self.project, self.result)
         self._device_io_build = self.result.build_id if self.result and self.result.ok else None
@@ -596,7 +614,7 @@ class MainWindow(QMainWindow):
     def _update_actions(self) -> None:
         a = self.actions_
         sim_active = self.sim is not None and self.sim.active
-        editing = not sim_active
+        editing = not sim_active and not self.monitoring
         for k in ("undo", "redo", "delete", "edit", "rung_add", "project", "expansions", "import", "new", "open"):
             a[k].setEnabled(editing)
         a["undo"].setEnabled(editing and bool(self.undo_stack))
@@ -606,10 +624,11 @@ class MainWindow(QMainWindow):
         a["sim_pause"].setEnabled(running)
         a["sim_stop"].setEnabled(sim_active)
         a["sim_reset"].setEnabled(sim_active)
-        self.view.readonly = sim_active
-        self._apply_work_mode(editing and not getattr(self, "monitoring", False))
+        self.view.readonly = not editing
+        self._apply_work_mode(editing)
         self.palette.set_enabled(editing)
         self.symbols.setEnabled(editing)
+        self.variables_panel.set_editable(editing)
         self.fio_panel.set_symbols_editable(editing)
         for b in self.symbol_buttons:
             b.setEnabled(editing)
@@ -633,6 +652,8 @@ class MainWindow(QMainWindow):
         if editing != self._was_editing:
             if editing:
                 self.palette_dock.setVisible(self._palette_was_visible)
+                if self.layout_locked:          # a paleta voltou: tambem fica travada
+                    self._freeze_sizes(True)
             else:
                 self._palette_was_visible = self.palette_dock.isVisible()
                 self.palette_dock.hide()
@@ -685,7 +706,8 @@ class MainWindow(QMainWindow):
         if self.plc_panel.link is not None:     # parada/pausa: o CLP fica com as saidas no estado seguro
             self.plc_panel.link.show_outputs(self.sim.physical_outputs if self.sim is not None else 0)
         if self.fio_panel.link is not None:     # parada/pausa tambem chegam a cena (estado seguro)
-            self.fio_panel.link.show_outputs(self.sim.physical_outputs if self.sim is not None else 0)
+            active = self.sim is not None and self._plant() is self.fio_panel.link   # um processo por vez
+            self.fio_panel.link.show_outputs(self.sim.physical_outputs if active else 0)
             self.fio_panel.link.show_words(self.sim.vm.n if sim_on else [])
         if self.il_dock.isVisible():
             vm = self.sim.vm if sim_on else None
@@ -701,16 +723,21 @@ class MainWindow(QMainWindow):
         if self.sim is not None and self.sim.active:
             self.statusBar().showMessage("Pare a simulação (Shift+F5) para editar o programa.", 4000)
             return False
+        if self.monitoring:
+            self.statusBar().showMessage("Desligue o monitor online para editar o programa.", 4000)
+            return False
         return True
 
     # ================================================================ edicao
-    def push_undo(self) -> None:
-        self.undo_stack.append(self.project.to_dict())
+    def push_undo(self, snapshot: dict | None = None) -> None:
+        self.undo_stack.append(snapshot if snapshot is not None else self.project.to_dict())
         del self.undo_stack[:-100]
         self.redo_stack.clear()
 
     def _restore(self, data: dict) -> None:
+        environment = self.project.environment  # a escolha do ambiente nao entra no desfazer
         self.project = Project.from_dict(data)
+        self.project.environment = environment
         self.view.selection = None
         self.modified()
 
@@ -727,12 +754,15 @@ class MainWindow(QMainWindow):
     def apply_edit(self, fn) -> bool:
         if not self._can_edit():
             return False
+        redo, dirty = list(self.redo_stack), self.dirty
         self.push_undo()
         try:
             fn()
         except edit.EditError as exc:
             # Desfaz qualquer alteracao parcial restaurando o instantaneo anterior.
             self._restore(self.undo_stack.pop())
+            self.redo_stack, self.dirty = redo, dirty      # edicao recusada nao conta como edicao
+            self._update_title()
             self.statusBar().showMessage(str(exc), 5000)
             return False
         self.modified()
@@ -771,7 +801,7 @@ class MainWindow(QMainWindow):
         rung_index = len(self.project.rungs) - 1
         hit = self.project.find(sel) if isinstance(sel, str) else None
         if isinstance(sel, tuple):
-            rung_index = sel[1]
+            rung_index = min(sel[1], len(self.project.rungs) - 1)
         elif hit:
             rung_index = hit[0]
         rung = self.project.rungs[rung_index]
@@ -852,6 +882,7 @@ class MainWindow(QMainWindow):
             self.on_view_action("delete", sel)
         elif isinstance(sel, tuple):
             self.on_view_action("rung_delete", sel[1])
+        self.view.select(None)                  # o alvo nao existe mais
 
     def edit_element(self, element_id, record_undo: bool = True) -> None:
         if not isinstance(element_id, str) or not self._can_edit():
@@ -861,9 +892,12 @@ class MainWindow(QMainWindow):
             return
         dlg = ElementDialog(hit[1], self.project, self, ports=self.fio_panel.port_names())
         if dlg.exec():
-            if record_undo:
-                self.push_undo()
+            before = self.project.to_dict()
             dlg.apply()
+            if self.project.to_dict() == before:     # OK sem alterar nada nao e edicao
+                return
+            if record_undo:
+                self.push_undo(before)
             self.modified()
             self.view.select(element_id)
 
@@ -888,6 +922,8 @@ class MainWindow(QMainWindow):
         return popup
 
     def edit_expansions(self) -> None:
+        if self._plc_link_blocks_edit():
+            return
         """Modulos de expansao do CLP: as E/S do projeto passam a ser as do CPU mais as dos modulos."""
         if not self._can_edit():
             return
@@ -904,8 +940,14 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Módulos de expansão: {len(dlg.ids())}. O projeto tem agora "
                                          f"{io.n_inputs} entradas e {io.n_outputs} saídas. Ctrl+Z desfaz.", 6000)
 
+    def _plc_link_blocks_edit(self) -> bool:
+        """Com o CLP real conectado, trocar controlador ou modulos deixaria a troca de dados errada."""
+        if self.plc_panel.linked:
+            self.statusBar().showMessage("Desconecte o CLP real antes de mudar o controlador ou os módulos.", 5000)
+        return self.plc_panel.linked
+
     def project_properties(self) -> None:
-        if not self._can_edit():
+        if not self._can_edit() or self._plc_link_blocks_edit():
             return
         dlg = ProjectDialog(self.project, self)
         if dlg.exec():
@@ -926,9 +968,21 @@ class MainWindow(QMainWindow):
     def on_symbol_changed(self, row: int, col: int) -> None:
         if row >= len(self.project.symbols):
             return
-        self.push_undo()
+        if not self._can_edit():                # editor fechado ao entrar em simulacao ou monitor
+            self._fill_symbols()
+            return
         s = self.project.symbols[row]
         value = self.symbols.item(row, col).text().strip()
+        if col == 0:
+            try:
+                self.project.check_symbol_name(value, s)
+            except ValueError as exc:                       # volta o nome anterior na celula
+                self.symbols.blockSignals(True)
+                self.symbols.item(row, col).setText(s.name)
+                self.symbols.blockSignals(False)
+                self.statusBar().showMessage(str(exc), 6000)
+                return
+        self.push_undo()
         if col == 0:
             self.project.rename_operands(s.name, value)     # o diagrama acompanha o novo nome
             s.name = value
@@ -950,12 +1004,51 @@ class MainWindow(QMainWindow):
             return
         self.statusBar().showMessage(f"{address} agora se chama {name}" if name else f"{address} ficou sem nome", 4000)
 
+    def variable_add(self) -> None:
+        used = {v.name.upper() for v in self.project.variables} | {s.name.upper() for s in self.project.symbols}
+        k = 1
+        while f"VAR{k}" in used:
+            k += 1
+        self.apply_edit(lambda: self.project.variables.append(Variable(f"Var{k}")))
+        self.variables_dock.show()
+        self.variables_dock.raise_()
+
+    def variable_remove(self, row: int) -> None:
+        if 0 <= row < len(self.project.variables):
+            self.apply_edit(lambda: self.project.variables.pop(row))
+
+    def on_variable_edited(self, row: int, field: str, value: str) -> None:
+        if row >= len(self.project.variables) or getattr(self.project.variables[row], field) == value:
+            return
+
+        def change() -> None:
+            v = self.project.variables[row]
+            try:
+                if field == "name":
+                    self.project.check_symbol_name(value, v)
+                    self.project.rename_operands(v.name, value)
+                elif field == "initial":
+                    model_variables.initial_value(Variable(v.name, v.type, value))
+                setattr(v, field, value)
+                if field == "type":                 # valor que nao serve para o novo tipo volta ao padrao
+                    try:
+                        model_variables.initial_value(v)
+                    except ValueError:
+                        v.initial = ""
+            except ValueError as exc:
+                raise edit.EditError(str(exc)) from None
+
+        self.apply_edit(change)
+
     def symbol_add(self) -> None:
         used = {s.name for s in self.project.symbols}
         k = 1
         while f"Var{k}" in used:
             k += 1
-        self.apply_edit(lambda: self.project.symbols.append(Symbol(f"Var{k}", "M0.0")))
+        taken = {s.address.strip().upper() for s in self.project.symbols}
+        address = next((a for a in (f"M{n // 8}.{n % 8}" for n in range(self.project.io.n_markers))
+                        if a not in taken), "M0.0")
+        self.apply_edit(lambda: self.project.symbols.append(Symbol(f"Var{k}", address)))
         self.symbols_dock.show()
         self.symbols_dock.raise_()
 
@@ -1002,6 +1095,7 @@ class MainWindow(QMainWindow):
 
     # ============================================================== simulacao
     def _ensure_sim(self) -> Simulator | None:
+        self.symbols.setCurrentCell(-1, -1)     # confirma a celula em edicao antes de compilar
         if self.sim is not None:
             return self.sim
         if not self.compile():
@@ -1084,11 +1178,11 @@ class MainWindow(QMainWindow):
         from .cpp_upload_dialog import CppUploadDialog
         ctrl = controller_for(self.project)
         board = ctrl.board if ctrl is not None and ctrl.board else self.esp32_panel.profile.id
-        CppUploadDialog(self.project, board, before_upload=self.session.close, parent=self).exec()
+        CppUploadDialog(self.project, board, before_upload=self.session.close_and_wait, parent=self).exec()
 
     def flash_firmware(self) -> None:
         from .flash_dialog import FlashDialog
-        FlashDialog(before_flash=self.session.close, parent=self).exec()
+        FlashDialog(before_flash=self.session.close_and_wait, parent=self).exec()
 
     def show_esp32(self) -> None:
         self.process_panel.show_page("board")
@@ -1139,6 +1233,7 @@ class MainWindow(QMainWindow):
             self.set_theme("system", save=False)
 
     def theme_changed(self) -> None:
+        self._update_actions()                  # selo de modo usa as cores do tema
         """Redesenha o que guarda cores ja calculadas (icones, cena, listas)."""
         for key, name in self._icon_names.items():
             self.actions_[key].setIcon(make_icon(name))
@@ -1199,6 +1294,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"{len(new)} simbolo(s) do ambiente '{env.name}' adicionados.", 5000)
 
     def open_example(self, rel: str) -> None:
+        if not self._can_edit():
+            return
         from ..core.isa import ISA_PATH
         path = ISA_PATH.parents[2] / "examples" / rel
         if not path.exists():
@@ -1435,6 +1532,8 @@ class MainWindow(QMainWindow):
             self._update_live()
 
     def device_transfer(self) -> None:
+        if self.progress_dialog is not None:    # transferencia em andamento
+            return
         if not self.device_panel.connected:
             QMessageBox.information(self, "Transferir", "Conecte-se a um dispositivo no painel Dispositivo.")
             self.device_dock.show()
@@ -1547,9 +1646,12 @@ class MainWindow(QMainWindow):
             path, _ = QFileDialog.getOpenFileName(self, "Abrir projeto", "", FILE_FILTER)
         if not path:
             return
+        previous = self.project, self.path, self.dirty
         try:
             self.set_project(Project.load(path), path)
-        except (OSError, ProjectFormatError, ValueError, TypeError, KeyError) as exc:
+        except (OSError, ProjectFormatError, ValueError, TypeError, KeyError, AttributeError, IndexError) as exc:
+            self.project, self.path, self.dirty = previous      # nada do arquivo ruim fica carregado
+            self.refresh()
             QMessageBox.critical(self, "Abrir projeto", f"Não foi possível abrir {path}:\n{exc}")
 
     def file_save(self) -> bool:
@@ -1570,8 +1672,12 @@ class MainWindow(QMainWindow):
                                               FILE_FILTER)
         if not path:
             return False
-        self.path = path
-        return self.file_save()
+        previous, self.path = self.path, path
+        if self.file_save():
+            return True
+        self.path = previous                    # destino que falhou nao vira o caminho do projeto
+        self._update_title()
+        return False
 
     def _compiled_or_warn(self) -> bool:
         if self.compile():
@@ -1585,7 +1691,7 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Exportar LIL", f"{self.project.name}.lil",
                                               "Listagem LIL (*.lil)")
         if path:
-            Path(path).write_text(self.result.lil, encoding="utf-8")
+            self._export(lambda: Path(path).write_text(self.result.lil, encoding="utf-8"), path)
 
     def export_bin(self) -> None:
         if not self._compiled_or_warn():
@@ -1593,7 +1699,13 @@ class MainWindow(QMainWindow):
         path, _ = QFileDialog.getSaveFileName(self, "Exportar LDRB", f"{self.project.name}.ldrb",
                                               "Imagem LDRB (*.ldrb)")
         if path:
-            Path(path).write_bytes(self.result.image)
+            self._export(lambda: Path(path).write_bytes(self.result.image), path)
+
+    def _export(self, write, path: str) -> None:
+        try:
+            write()
+        except OSError as exc:
+            QMessageBox.critical(self, "Exportar", f"Não foi possível gravar {path}:\n{exc}")
 
     def import_program(self) -> None:
         if not self.maybe_save():

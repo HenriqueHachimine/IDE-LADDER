@@ -110,7 +110,7 @@ STATUS      → o Desktop confirma build_id e CRC
 | 2 | BAD_LENGTH | payload com tamanho inválido |
 | 3 | BAD_STATE | comando não permitido no estado atual |
 | 4 | NO_PROGRAM | não há programa válido |
-| 5 | LOAD_TOO_LARGE | programa maior que 8 740 bytes |
+| 5 | LOAD_TOO_LARGE | programa maior que 9 256 bytes |
 | 6 | BAD_OFFSET | bloco fora de ordem / transferência incompleta |
 | 7 | IMAGE_CRC | CRC-32 do programa recebido não confere |
 | 8 | IMAGE_INVALID | validação LDRB falhou (detalhe: `u8 código LDRB, i32 índice`) |

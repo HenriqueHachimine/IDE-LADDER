@@ -37,6 +37,7 @@ GROUPS = [
                     ("DIV", "DIV", "Divisão inteira: destino = A \u00f7 B"),
                     ("SQR", "SQR", "Raiz quadrada (arredondada)"),
                     ("NEG", "NEG", "Troca o sinal: destino = -origem"),
+                    ("MOV", "MOV", "Guarda um valor: destino = origem (converte entre inteiro e float)"),
                     ("TOD", "TOD", "Converte inteiro para BCD"),
                     ("FRD", "FRD", "Converte BCD para inteiro")]),
 ]

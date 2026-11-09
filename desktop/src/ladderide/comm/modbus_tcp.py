@@ -73,8 +73,9 @@ class ModbusTcpClient:
         self.close()
         try:
             sock = socket.create_connection((self.host, self.port), timeout=self.timeout)
-        except OSError as exc:
-            raise ModbusError(f"sem conexão com {self.host}:{self.port} ({exc.strerror or exc})") from exc
+        except (OSError, ValueError) as exc:           # ValueError: host invalido (ex.: "fabrica..local")
+            detail = getattr(exc, "strerror", None) or exc
+            raise ModbusError(f"sem conexão com {self.host}:{self.port} ({detail})") from exc
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         sock.settimeout(self.timeout)
         self._sock = sock

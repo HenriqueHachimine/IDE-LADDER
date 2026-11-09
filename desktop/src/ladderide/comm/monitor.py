@@ -6,6 +6,7 @@ caso contrario os indices de instrucao nao correspondem ao diagrama.
 from __future__ import annotations
 
 from ..compiler.compiler import CompileResult
+from ..core import isa
 from ..core.isa import Area
 from .snapshot import Snapshot
 
@@ -49,6 +50,10 @@ class MonitorSource:
         s, prog = self.s, self.r.program
         if area == Area.N:
             return s.words[index] if index < len(s.words) else None
+        if area == Area.F:
+            return isa.bits_to_float(s.words[index]) if index < len(s.words) else None
+        if area == Area.KF:
+            return isa.bits_to_float(prog.constants[index]) if prog and index < len(prog.constants) else None
         if area == Area.K:
             return prog.constants[index] if prog and index < len(prog.constants) else None
         if area == Area.T_ACC and index < len(s.timers):

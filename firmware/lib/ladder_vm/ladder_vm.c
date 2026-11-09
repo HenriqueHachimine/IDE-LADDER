@@ -1,5 +1,7 @@
 #include "ladder_vm.h"
 
+#include <float.h>
+#include <math.h>
 #include <string.h>
 
 static void counter_reset(lv_counter_t *c, uint8_t type, int32_t preset)
@@ -85,8 +87,10 @@ int32_t lv_vm_read_word(const lv_vm_t *vm, uint8_t area, uint16_t index)
 {
     const lv_program_t *p = vm->prog;
     switch (area) {
-    case LV_AREA_N: return vm->n[index];
-    case LV_AREA_K: return p->constants[index];
+    case LV_AREA_N:
+    case LV_AREA_F: return vm->n[index]; /* F: os 32 bits crus do float */
+    case LV_AREA_K:
+    case LV_AREA_KF: return p->constants[index];
     case LV_AREA_T_ACC: return (int32_t)vm->timers[index].acc;
     case LV_AREA_T_PRE: return (int32_t)p->timer_preset[index];
     case LV_AREA_C_ACC: return vm->counters[index].acc;
@@ -171,6 +175,7 @@ static int math_result(uint8_t op, int32_t a, int32_t b, int32_t *out, uint8_t *
     case LV_OP_SUB: *out = saturate((int64_t)a - b, ov); return 1;
     case LV_OP_MUL: *out = saturate((int64_t)a * b, ov); return 1;
     case LV_OP_NEG: *out = saturate(-(int64_t)a, ov); return 1;
+    case LV_OP_MOV: *out = a; return 1;
     case LV_OP_DIV:
         if (b == 0) {
             *ov = 1;
@@ -210,6 +215,128 @@ static int math_result(uint8_t op, int32_t a, int32_t b, int32_t *out, uint8_t *
     }
 }
 
+/* ---------------------------------------------------------------- float
+ * F e KF reinterpretam 32 bits de N e das constantes. As contas passam por double
+ * para dar o mesmo resultado em todas as plataformas (core/vm.py faz o mesmo). */
+static int is_float_area(uint8_t area)
+{
+    return area == LV_AREA_F || area == LV_AREA_KF;
+}
+
+static float bits_to_float(int32_t bits)
+{
+    union { int32_t i; float f; } u;
+    u.i = bits;
+    return (((uint32_t)bits >> 23) & 0xFFu) == 0xFFu ? 0.0f : u.f; /* infinito e NaN leem 0 */
+}
+
+static int32_t float_to_bits(float value)
+{
+    union { int32_t i; float f; } u;
+    u.f = value;
+    return u.i;
+}
+
+static float read_float(const lv_vm_t *vm, uint8_t area, uint16_t index)
+{
+    int32_t raw = lv_vm_read_word(vm, area, index);
+    return is_float_area(area) ? bits_to_float(raw) : (float)(double)raw;
+}
+
+static float saturate_float(double r, uint8_t *ov)
+{
+    float f = (float)r;
+    if (f > FLT_MAX || f < -FLT_MAX) {
+        *ov = 1;
+        return r > 0 ? FLT_MAX : -FLT_MAX;
+    }
+    return f;
+}
+
+static float float_math(uint8_t op, float a, float b, uint8_t *ov)
+{
+    double x = a, y = b, r = x;
+    *ov = 0;
+    switch (op) {
+    case LV_OP_ADD: r = x + y; break;
+    case LV_OP_SUB: r = x - y; break;
+    case LV_OP_MUL: r = x * y; break;
+    case LV_OP_DIV:
+        if (b == 0.0f) {
+            *ov = 1;
+            return a >= 0.0f ? FLT_MAX : -FLT_MAX;
+        }
+        r = x / y;
+        break;
+    case LV_OP_SQR:
+        *ov = a < 0.0f;
+        r = sqrt(fabs(x));
+        break;
+    case LV_OP_NEG: r = -x; break;
+    default: break; /* MOV */
+    }
+    return saturate_float(r, ov);
+}
+
+/* Inteiro mais proximo (metade afasta de zero), saturado em 32 bits. */
+static int32_t float_to_int(float value, uint8_t *ov)
+{
+    double d = value;
+    if (d >= 2147483647.5) {
+        *ov = 1;
+        return INT32_MAX;
+    }
+    if (d <= -2147483648.5) {
+        *ov = 1;
+        return INT32_MIN;
+    }
+    return d >= 0 ? (int32_t)(int64_t)(d + 0.5) : (int32_t)(-(int64_t)(-d + 0.5));
+}
+
+static int compare_float(uint8_t op, float a, float b, float c)
+{
+    switch (op) {
+    case LV_OP_EQU: return a == b;
+    case LV_OP_NEQ: return a != b;
+    case LV_OP_LES: return a < b;
+    case LV_OP_GRT: return a > b;
+    case LV_OP_LEQ: return a <= b;
+    case LV_OP_GEQ: return a >= b;
+    case LV_OP_LIM: return a <= c ? (a <= b && b <= c) : (b >= a || b <= c);
+    default: return 0;
+    }
+}
+
+/* Comparacao ou matematica com algum operando float. */
+static void exec_float(lv_vm_t *vm, uint16_t pc, uint8_t op, unsigned n_ops, unsigned n_read)
+{
+    const lv_program_t *p = vm->prog;
+    float v[3] = {0.0f, 0.0f, 0.0f};
+    for (unsigned k = 0; k < n_read; k++)
+        v[k] = read_float(vm, lv_instr_area(p, (uint16_t)(pc + k)), lv_instr_index(p, (uint16_t)(pc + k)));
+    if (n_read == n_ops) {
+        vm->rlo = vm->rlo && compare_float(op, v[0], v[1], v[2]);
+        return;
+    }
+    if (!vm->rlo)
+        return;
+    uint8_t ov = 0;
+    float result = float_math(op, v[0], v[1], &ov);
+    uint16_t dst = (uint16_t)(pc + n_ops - 1u);
+    uint8_t area = lv_instr_area(p, dst);
+    if (area == LV_AREA_F) {
+        vm->n[lv_instr_index(p, dst)] = float_to_bits(result);
+        vm->math_zero = result == 0.0f;
+        vm->math_sign = result < 0.0f;
+    } else { /* destino inteiro: arredonda */
+        int32_t stored = float_to_int(result, &ov);
+        ov |= (uint8_t)write_word(vm, area, lv_instr_index(p, dst), stored);
+        vm->math_zero = stored == 0;
+        vm->math_sign = stored < 0;
+    }
+    vm->math_ov = ov;
+}
+
 /* Comparacao ou matematica; os demais operandos estao nas instrucoes ARG seguintes
  * (a validacao garante que existem). */
 static void exec_word(lv_vm_t *vm, uint16_t pc, uint8_t op)
@@ -218,6 +345,12 @@ static void exec_word(lv_vm_t *vm, uint16_t pc, uint8_t op)
     unsigned n_ops = 1u + lv_arg_count(op);
     int32_t v[3] = {0, 0, 0};
     unsigned n_read = (op >= LV_OP_EQU && op <= LV_OP_MEQ) ? n_ops : n_ops - 1u;
+    for (unsigned k = 0; k < n_ops; k++) {
+        if (is_float_area(lv_instr_area(p, (uint16_t)(pc + k)))) {
+            exec_float(vm, pc, op, n_ops, n_read);
+            return;
+        }
+    }
     for (unsigned k = 0; k < n_read; k++)
         v[k] = lv_vm_read_word(vm, lv_instr_area(p, (uint16_t)(pc + k)), lv_instr_index(p, (uint16_t)(pc + k)));
     if (n_read == n_ops) {
@@ -318,7 +451,7 @@ static void exec_counter(lv_vm_t *vm, uint8_t op, lv_counter_t *c, int32_t pre)
 static void execute(lv_vm_t *vm, uint16_t pc, uint8_t op, uint8_t area, uint16_t index)
 {
     const lv_program_t *p = vm->prog;
-    if (op >= LV_OP_EQU && op <= LV_OP_FRD) {
+    if ((op >= LV_OP_EQU && op <= LV_OP_FRD) || op == LV_OP_MOV) {
         exec_word(vm, pc, op);
         return;
     }

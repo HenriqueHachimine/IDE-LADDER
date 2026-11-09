@@ -38,15 +38,79 @@ _RUNTIME_NAMES = {"I", "Q", "M", "T", "C", "Timer", "Counter", "TON", "TOF", "RT
                   "TIMER_LABEL", "COUNTER_LABEL", "print_help", "print_state", "report_changes", "stamp",
                   "N", "MathResult", "MATH_OV", "MATH_ZERO", "MATH_SIGN", "sat32", "ADD", "SUB", "MUL", "DIV",
                   "SQR", "NEG", "TOD", "FRD", "LIM", "MEQ", "store", "store_QW", "set_math_flags", "IW", "QW",
-                  "int64_t", "uint64_t", "INT64_MAX"}
+                  "int64_t", "uint64_t", "INT64_MAX", "F_get", "F_set", "as_float", "fsat", "to_int", "store_f",
+                  "FResult"}
 # macros e nomes globais do Arduino/ESP32 (o arquivo tambem compila como sketch)
 _ARDUINO_NAMES = {"bit", "min", "max", "abs", "round", "constrain", "sq", "PI", "HEX", "DEC", "BIN",
                   "OCT", "LED_BUILTIN", "word", "byte", "boolean", "Serial", "Serial1", "Serial2",
                   "digitalRead", "digitalWrite", "pinMode", "micros", "radians", "degrees", "lowByte",
                   "highByte", "bitRead", "bitSet", "bitClear", "bitWrite", "interrupts", "noInterrupts",
-                  "CHANGE", "FALLING", "RISING", "INPUT_PULLUP", "io_board_begin", "io_board_transfer"}
-RESERVED = _CPP_KEYWORDS | _RUNTIME_NAMES | _ARDUINO_NAMES
+                  "CHANGE", "FALLING", "RISING", "INPUT_PULLUP", "io_board_begin", "io_board_transfer",
+                  "Serial3", "String", "Stream", "Print", "plc_printf_P", "init", "map", "random", "randomSeed",
+                  "tone", "noTone", "pulseIn", "shiftIn", "shiftOut", "analogRead", "analogWrite",
+                  "analogReference", "attachInterrupt", "detachInterrupt", "delayMicroseconds", "yield",
+                  "va_list"}
+# nomes globais da biblioteca C, visiveis na placa pelos includes do Arduino
+_LIBC_NAMES = set("""y0 y1 yn j0 j1 jn div ldiv exp log log10 pow sin cos tan asin acos atan atan2 sinh cosh tanh
+sqrt ceil floor fabs fmod rand srand abort exit atoi atol atof free malloc calloc realloc printf sprintf puts gets
+getc putc time clock index rindex strlen strcpy strcmp memcpy memset""".split())
+RESERVED = _CPP_KEYWORDS | _RUNTIME_NAMES | _ARDUINO_NAMES | _LIBC_NAMES
 _ARDUINO_BINARY = re.compile(r"^B[01]{1,8}$")      # constantes B0..B11111111 de binary.h
+# Macros e registradores das placas sao maiusculos e variam por placa (A0, PB0, ADC, SDA; T0..T9 sao os
+# pinos de toque do ESP32): todo nome maiusculo ganha "_", menos os enderecos do CLP (Q0_0).
+_UPPERCASE = re.compile(r"[A-Z]([A-Z0-9_]*[A-Z0-9])?$")   # sem "_" no fim: o nome ja renomeado nao colide
+_ADDRESS_NAME = re.compile(r"[IQM]\d+_\d+$")
+_C_TYPE_NAME = re.compile(r"\w+_t$")               # int16_t, size_t, uintptr_t...
+
+FLOAT_RUNTIME = r"""
+// ---------------------------------------------------------------------------
+// Float (32 bits): Fk e o registrador N[k] lido como float. O valor que nao cabe
+// satura e liga MATH_OV; para destino inteiro, arredonda (metade afasta de zero).
+// ---------------------------------------------------------------------------
+struct FResult {
+    float value;
+    bool ov;
+};
+static const float FLOAT_LIMIT = 3.40282346e38f;
+
+static inline float F_get(int i) {
+    uint32_t raw = (uint32_t)N[i];
+    if (((raw >> 23) & 0xFFu) == 0xFFu) return 0.0f;  // infinito e NaN leem 0
+    float f;
+    memcpy(&f, &raw, sizeof f);
+    return f;
+}
+static inline void F_set(int i, float f) { memcpy(&N[i], &f, sizeof f); }
+static inline float as_float(int32_t v) { return (float)(double)v; }
+static inline FResult fsat(double r, bool ov) {
+    float f = (float)r;
+    if (f > FLOAT_LIMIT || f < -FLOAT_LIMIT) return {r > 0 ? FLOAT_LIMIT : -FLOAT_LIMIT, true};
+    return {f, ov};
+}
+static inline FResult FADD(float a, float b) { return fsat((double)a + b, false); }
+static inline FResult FSUB(float a, float b) { return fsat((double)a - b, false); }
+static inline FResult FMUL(float a, float b) { return fsat((double)a * b, false); }
+static inline FResult FDIV(float a, float b) {
+    if (b == 0.0f) return {a >= 0.0f ? FLOAT_LIMIT : -FLOAT_LIMIT, true};
+    return fsat((double)a / b, false);
+}
+static inline FResult FSQR(float a) { return fsat(sqrt(fabs((double)a)), a < 0.0f); }
+static inline FResult FNEG(float a) { return fsat(-(double)a, false); }
+static inline FResult FMOV(float a) { return fsat(a, false); }
+static inline MathResult to_int(FResult r) {
+    double d = r.value;
+    if (d >= 2147483647.5) return {INT32_MAX, true, true};
+    if (d <= -2147483648.5) return {INT32_MIN, true, true};
+    return {d >= 0 ? (int32_t)(int64_t)(d + 0.5) : (int32_t)(-(int64_t)(-d + 0.5)), r.ov, true};
+}
+static inline void store_f(int i, FResult r) {
+    F_set(i, r.value);
+    MATH_OV = r.ov;
+    MATH_ZERO = r.value == 0.0f;
+    MATH_SIGN = r.value < 0.0f;
+}
+static inline bool LIM(float a, float b, float c) { return a <= c ? (a <= b && b <= c) : (b >= a || b <= c); }
+"""
 
 RUNTIME = r"""// ---------------------------------------------------------------------------
 // Runtime minimo: mesma semantica do interpretador do ESP32
@@ -158,6 +222,7 @@ static inline MathResult ADD(int32_t a, int32_t b) { return sat32((int64_t)a + b
 static inline MathResult SUB(int32_t a, int32_t b) { return sat32((int64_t)a - b); }
 static inline MathResult MUL(int32_t a, int32_t b) { return sat32((int64_t)a * b); }
 static inline MathResult NEG(int32_t a) { return sat32(-(int64_t)a); }
+static inline MathResult MOV(int32_t a) { return {a, false, true}; }
 // Divisao truncada em direcao a zero; por zero satura no sinal de A.
 static inline MathResult DIV(int32_t a, int32_t b) {
     if (b == 0) return {a >= 0 ? INT32_MAX : INT32_MIN, true, true};
@@ -313,6 +378,7 @@ class _Gen:
         if self.io_ok:
             c.check_controller()
             c.load_symbols()
+            c.load_variables()
             c.collect_drivers()
             c.compile_rungs()
             c.coil_warnings()
@@ -330,7 +396,7 @@ class _Gen:
     # ------------------------------------------------------------- nomes
     def _unique(self, base: str) -> str:
         name = base
-        while name in RESERVED or name in self.used_names or _ARDUINO_BINARY.match(name):
+        while name in self.used_names or _collides(name):
             name += "_"
         self.used_names.add(name)
         return name
@@ -338,10 +404,10 @@ class _Gen:
     def _name_symbols(self) -> None:
         io = self.p.io
         limits = {Area.I: io.n_inputs, Area.Q: io.n_outputs, Area.M: io.n_markers}
-        self.uses_words = bool(self.c.r.element_words) or any(
+        self.uses_words = bool(self.c.r.element_words) or any(kind != "boolean" for _, kind, _ in self.c.variable_inits) or any(
             ins.area == Area.S and ins.index >= isa.SYSTEM_BITS["MATH_OV"] for ins in self.c.code)
         for name, (area, index) in self.c.symbols.items():
-            sym = next(s.name.strip() for s in self.p.symbols if s.name.strip().upper() == name)
+            sym = next(s.name.strip() for s in [*self.p.symbols, *self.p.variables] if s.name.strip().upper() == name)
             if area in limits and index < limits[area]:
                 self.bit_names.setdefault((area, index), self._unique(sym))
             elif area == Area.N and index < io.n_words and self.uses_words:
@@ -371,6 +437,10 @@ class _Gen:
         """Expressao C++ de um operando numerico."""
         if area == Area.N:
             return self.word_names.get(index, f"N[{index}]")
+        if area == Area.F:
+            return f"F_get({index})"
+        if area == Area.KF:
+            return _float_literal(isa.bits_to_float(self.c.constants[index]))
         if area == Area.K:
             value = self.c.constants[index]
             return "INT32_MIN" if value == isa.INT32_MIN else str(value)
@@ -380,8 +450,12 @@ class _Gen:
             return f"{self.counter_names[index]}.{Area(area).name[2:].lower()}"
         return f"{Area(area).name}()"                     # IW() / QW()
 
+    def float_arg(self, ref) -> str:
+        return self.word(*ref) if ref[0] in isa.FLOAT_AREAS else f"as_float({self.word(*ref)})"
+
     def compare_expr(self, node, refs) -> _E | None:
-        args = [self.word(*r) for r in refs]
+        floating = any(r[0] in isa.FLOAT_AREAS for r in refs)
+        args = [self.float_arg(r) if floating else self.word(*r) for r in refs]
         if node.kind in _COMPARE_OPS and args[0] == args[1]:     # A com A: resultado ja conhecido
             return None if node.kind in ("EQU", "LEQ", "GEQ") else _FALSE
         if node.kind in _COMPARE_OPS:
@@ -402,6 +476,8 @@ class _Gen:
             elif isinstance(node, NotOp):
                 cur = _not(cur)
             elif isinstance(node, Parallel):
+                if not node.branches:                # como na VM: sem ramos, o valor de entrada segue
+                    continue
                 if not any(_has_not(b) for b in node.branches):
                     cur = _and(cur, _or([self.series(b, None, temps) for b in node.branches]))
                 else:                                # NOT no ramo: cada ramo parte do valor de entrada
@@ -436,6 +512,8 @@ class _Gen:
             refs = self.c.r.element_words[out.id]
             dst = refs[-1]
             names = {"MATH_OV", "MATH_ZERO", "MATH_SIGN"}
+            if dst[0] == Area.F:
+                return names | {"F_get"}
             if dst[0] == Area.QW:
                 return names | {"QW"} | {n for (a, _), n in self.bit_names.items() if a == Area.Q}
             return names | {self.word(*dst).split("[")[0]}
@@ -458,7 +536,7 @@ class _Gen:
         for out in rung.outputs:
             ins = self._ins(out)
             if ins is None:
-                lines.append(f"// {self._describe(out)}: nao gerado (corrija o erro acima)")
+                lines.append(f"// {_comment_text(self._describe(out))}: nao gerado (corrija o erro acima)")
                 continue
             if isinstance(out, Coil):
                 name = self.bit(ins.area, ins.index).text
@@ -471,9 +549,15 @@ class _Gen:
                                  else f"if ({text}) {name} = {value};  // {tag}")
             elif isinstance(out, MathBox):
                 refs = self.c.r.element_words[out.id]
-                call = f"{out.kind}({', '.join(self.word(*r) for r in refs[:-1])})"
-                stmt = (f"store_QW({call});" if refs[-1][0] == Area.QW
-                        else f"store({self.word(*refs[-1])}, {call});")
+                if any(r[0] in isa.FLOAT_AREAS for r in refs):
+                    call = f"F{out.kind}({', '.join(self.float_arg(r) for r in refs[:-1])})"
+                    stmt = (f"store_f({refs[-1][1]}, {call});" if refs[-1][0] == Area.F
+                            else f"store_QW(to_int({call}));" if refs[-1][0] == Area.QW
+                            else f"store({self.word(*refs[-1])}, to_int({call}));")
+                else:
+                    call = f"{out.kind}({', '.join(self.word(*r) for r in refs[:-1])})"
+                    stmt = (f"store_QW({call});" if refs[-1][0] == Area.QW
+                            else f"store({self.word(*refs[-1])}, {call});")
                 lines.append(stmt if cond is None else f"if ({text}) {stmt}")
             elif isinstance(out, TimerBox):
                 lines.append(f"{out.kind}({self.timer_names[ins.index]}, {text}, dt);")
@@ -490,6 +574,17 @@ class _Gen:
             return ["{"] + ["    " + ln for ln in lines] + ["}"]
         return lines
 
+    def _variable_init_lines(self) -> list[str]:
+        lines = []
+        for (area, index), kind, value in self.c.variable_inits:
+            if kind == "boolean":
+                lines.append(f"M[{index}] = true;")
+            elif kind == "float":
+                lines.append(f"store_f({index}, FMOV({_float_literal(value)}));")
+            else:
+                lines.append(f"store(N[{index}], MOV({'INT32_MIN' if value == isa.INT32_MIN else value}));")
+        return lines
+
     @staticmethod
     def _describe(out) -> str:
         if isinstance(out, MathBox):
@@ -502,7 +597,7 @@ class _Gen:
         rung_code = [self.rung_body(r) for r in p.rungs] if self.io_ok else []
         out: list[str] = []
         errors, warnings = c.r.errors, c.r.warnings
-        out += [f"// {p.name} - codigo C++ gerado pela LadderIDE {COMPILER_VERSION} a partir do diagrama LADDER",
+        out += [f"// {_comment_text(p.name)} - codigo C++ gerado pela LadderIDE {COMPILER_VERSION} a partir do diagrama LADDER",
                 "//",
                 "// Gerado direto do diagrama (nao precisa compilar antes). O ESP32 executa o",
                 "// mesmo programa compilado em bytecode (imagem LDRB) pelo interpretador do",
@@ -512,10 +607,12 @@ class _Gen:
                 + ("" if not errors else " Operandos com erro aparecem como 'false'."),
                 ""]
         for d in [d for d in c.r.diagnostics if d.rung is None]:
-            out.append(f"// {d.severity.upper()}: {d.message}")
+            out.append(f"// {d.severity.upper()}: {_comment_text(d.message)}")
         if arduino:
             out += ["#ifdef ARDUINO", "#include <Arduino.h>", "#endif"]
         out += ["#include <stdint.h>", ""]
+        if self.uses_words and io.n_words:
+            out[-1:] = ["#include <math.h>", "#include <string.h>", ""]
         if namespace:
             out += [f"namespace {namespace} {{", ""]
         out += RUNTIME.splitlines() + [""]
@@ -545,6 +642,8 @@ class _Gen:
             if io.n_words:
                 out.append(f"static int32_t N[{io.n_words}];  // registradores N (inteiros de 32 bits)")
             out += WORD_RUNTIME.splitlines()
+            if io.n_words:
+                out += FLOAT_RUNTIME.splitlines()
             mask = (1 << io.n_outputs) - 1
             out += ["// Entradas e saidas como palavra (bit k = Ik / Qk).",
                     "static inline int32_t IW() {",
@@ -560,7 +659,7 @@ class _Gen:
                     "    bool ov = r.ov;",
                     "    if (r.valid) {",
                     f"        for (int k = 0; k < {io.n_outputs}; k++) Q[k] = ((uint32_t)r.value >> k) & 1u;",
-                    f"        ov = ov || r.value < 0 || r.value > {mask};",
+                    "        ov = ov || r.value < 0" + (f" || r.value > {mask};" if io.n_outputs < 31 else ";"),
                     "    }",
                     "    set_math_flags(r, ov);",
                     "}", ""]
@@ -584,7 +683,7 @@ class _Gen:
             for decl, note in alias:
                 comment = next((s.comment for s in p.symbols if s.address.strip().upper() == note.split()[0]
                                 and s.comment), "")
-                out.append(f"{decl:<{width}}  // {note}" + (f" - {comment}" if comment else ""))
+                out.append(f"{decl:<{width}}  // {note}" + (f" - {_comment_text(comment)}" if comment else ""))
             out.append("")
 
         out += ["// Partida a frio (STOP -> RUN): zera memorias, saidas, temporizadores e contadores.",
@@ -609,6 +708,10 @@ class _Gen:
                 "    if (!FIRST_SCAN) clock_phase = (clock_phase + dt % 1000u) % 1000u;",
                 "    CLOCK_1S = clock_phase < 500u;",
                 f"    for (int k = 0; k < {io.n_inputs}; k++) I[k] = (inputs >> k) & 1u;"]
+        inits = self._variable_init_lines() if self.io_ok else []
+        if inits:
+            out += ["", "    if (FIRST_SCAN) {  // valores iniciais das variaveis, a cada partida",
+                    *["        " + ln for ln in inits], "    }"]
         rung_lines, first_el = [], []
         diag_by_rung: dict[int, list] = {}
         for d in c.r.diagnostics:
@@ -617,9 +720,9 @@ class _Gen:
         for k, (rung, body) in enumerate(zip(p.rungs, rung_code)):
             out.append("")
             start = len(out)
-            out.append(f"    // ===== Rede {k}" + (f" - {rung.comment}" if rung.comment else "") + " =====")
+            out.append(f"    // ===== Rede {k}" + (f" - {_comment_text(rung.comment)}" if rung.comment else "") + " =====")
             for d in diag_by_rung.get(k, []):
-                out.append(f"    // {d.severity.upper()}: {d.message}")
+                out.append(f"    // {d.severity.upper()}: {_comment_text(d.message)}")
             out += ["    " + ln for ln in body]
             rung_lines.append((start, len(out) - 1))
             nodes = rung.condition + rung.outputs
@@ -652,7 +755,7 @@ class _Gen:
         outs = [label(format_operand(Area.Q, k)) for k in range(io.n_outputs)]
         timers = [label(f"T{k}") for k in range(n_t)]
         counters = [label(f"C{k}") for k in range(n_c)]
-        w = max(len(x) for x in ins + outs + timers + counters)
+        w = max((len(x) for x in ins + outs + timers + counters), default=1)
 
         def table(name: str, items: list[str]) -> str:
             return f"static const char *const {name}[{len(items)}] = {{{', '.join(_c_str(x) for x in items)}}};"
@@ -818,6 +921,22 @@ class _Gen:
         return [line if line.startswith("#define") else
                 portable.sub(r"Serial.println(PLC_TEXT(\1));", line.replace("Serial.printf(", "PLC_PRINTF("))
                 for line in s]
+
+
+def _float_literal(value: float) -> str:
+    text = format(value, ".9g")
+    return text + ("f" if "." in text or "e" in text else ".0f")
+
+
+def _collides(name: str) -> bool:
+    """Nome que nao pode virar variavel no C++: reservado, macro ou global das placas."""
+    return (name in RESERVED or bool(_ARDUINO_BINARY.match(name)) or bool(_C_TYPE_NAME.match(name))
+            or (bool(_UPPERCASE.match(name)) and not _ADDRESS_NAME.match(name)))
+
+
+def _comment_text(text: str) -> str:
+    """Texto seguro em comentario //: quebra de linha viraria codigo e barra invertida no fim emendaria a linha."""
+    return re.sub(r"[\r\n\v\f\u2028\u2029]+", " ", text).replace("\\", "/")
 
 
 def _ascii(text: str) -> str:

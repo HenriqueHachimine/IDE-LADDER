@@ -14,11 +14,12 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from ..core import isa
-from ..core.asm import disassemble, format_operand, parse_constant, parse_operand
+from ..core.asm import disassemble, format_operand, parse_constant, parse_operand, parse_float_constant
 from ..core.crc import crc32
 from ..core.image import (CounterDef, ImageValidationError, Instruction, Program, TimerDef, decode,
                           encode)
 from ..core.isa import Area, CounterType, Op, TimerType
+from ..model import variables
 from ..model.project import ADDRESS_LIKE as _ADDRESS_LIKE
 from ..model.project import SYMBOL_NAME as _SYMBOL_NAME
 from ..model.project import (Coil, CompareBox, Contact, CounterBox, MathBox, NotOp, Parallel, Project,
@@ -83,6 +84,7 @@ class _Compiler:
         self.box_index: dict[str, int] = {}
         self.constants: list[int] = []
         self.qw_writers: list[tuple[int, MathBox]] = []
+        self.variable_inits: list[tuple[tuple[int, int], str, bool | int | float]] = []
         self.rung = 0
         self.controller = None
         self.max_timers, self.max_counters = isa.MAX_TIMERS, isa.MAX_COUNTERS
@@ -114,7 +116,7 @@ class _Compiler:
                                   ("registradores N", io.n_words, ctrl.words)):
             if used > limit:
                 self.error(f"o controlador {ctrl.name} tem {limit} {what}; o projeto esta configurado com "
-                           f"{used} (ajuste em Programa > Propriedades)", rung=None)
+                           f"{used} (ajuste em Editar > Propriedades do projeto)", rung=None)
 
     # -------------------------------------------------------------- simbolos
     def load_symbols(self) -> None:
@@ -131,6 +133,61 @@ class _Compiler:
                 self.symbols[name.upper()] = parse_operand(s.address)
             except ValueError:
                 self.error(f"símbolo {name}: endereço inválido {s.address!r}", rung=None)
+
+    def load_variables(self) -> None:
+        """Tabela de variaveis: cada nome vira um simbolo e os valores iniciais diferentes de 0 sao guardados."""
+        table = variables.addresses(self.p)
+        for v in self.p.variables:
+            name = v.name.strip()
+            if not _SYMBOL_NAME.match(name) or _ADDRESS_LIKE.match(name):
+                self.error(f"nome de variável inválido: {v.name!r} (use letras, números e _; "
+                           f"não pode parecer um endereço)", rung=None)
+                continue
+            if name.upper() in self.symbols:
+                self.error(f"variável com nome já usado: {name}", rung=None)
+                continue
+            address = table.get(v.name, "")
+            if not address:
+                area = "memórias M" if v.type == "boolean" else "registradores N"
+                self.error(f"variável {name}: não há {area} livres (aumente em Editar > Propriedades do projeto)",
+                           rung=None)
+                continue
+            self.symbols[name.upper()] = parse_operand(address)
+            try:
+                value = variables.initial_value(v)
+            except ValueError as exc:
+                self.error(str(exc), rung=None)
+                continue
+            if value:
+                self.variable_inits.append((parse_operand(address), v.type, value))
+
+    def constant_ref(self, value: int, area: int, element) -> tuple[int, int] | None:
+        if value not in self.constants:
+            if len(self.constants) >= isa.MAX_CONSTANTS:
+                self.error(f"constantes diferentes demais (máximo {isa.MAX_CONSTANTS})", element)
+                return None
+            self.constants.append(value)
+        return area, self.constants.index(value)
+
+    def emit_variable_inits(self) -> None:
+        """Valores iniciais: no inicio da rede 0, so na primeira varredura depois de cada partida.
+
+        BST | XIC S0.0 | atribuicoes | NXB | BND devolve o RLO verdadeiro para a logica da rede."""
+        if not self.variable_inits:
+            return
+        self.emit(Op.BST)
+        self.emit(Op.XIC, Area.S, isa.SYSTEM_BITS["FIRST_SCAN"])
+        for ref, kind, value in self.variable_inits:
+            if kind == "boolean":
+                self.emit(Op.OTL, *ref)
+                continue
+            source = (self.constant_ref(isa.float_to_bits(value), Area.KF, None) if kind == "float"
+                      else self.constant_ref(value, Area.K, None))
+            if source is not None:
+                self.emit(Op.MOV, *source)
+                self.emit(Op.ARG, *ref)
+        self.emit(Op.NXB)
+        self.emit(Op.BND)
 
     def resolve(self, text: str, element) -> tuple[int, int] | None:
         t = text.strip()
@@ -170,23 +227,29 @@ class _Compiler:
             if write:
                 self.error(f"o destino não pode ser uma constante ({t})", element)
                 return None
-            if value not in self.constants:
-                if len(self.constants) >= isa.MAX_CONSTANTS:
-                    self.error(f"constantes diferentes demais (máximo {isa.MAX_CONSTANTS})", element)
-                    return None
-                self.constants.append(value)
-            return Area.K, self.constants.index(value)
+            return self.constant_ref(value, Area.K, element)
+        try:
+            number = parse_float_constant(t)
+        except ValueError as exc:
+            self.error(str(exc), element)
+            return None
+        if number is not None:
+            if write:
+                self.error(f"o destino não pode ser uma constante ({t})", element)
+                return None
+            return self.constant_ref(isa.float_to_bits(number), Area.KF, element)
         ref = self.resolve(t, element)
         if ref is None:
             return None
         area, index = ref
         allowed = isa.WORD_WRITE_AREAS if write else isa.WORD_READ_AREAS
         if area not in allowed:
-            what = "N ou QW0" if write else "constante, N, Tn.ACC, Tn.PRE, Cn.ACC, Cn.PRE, IW0 ou QW0"
+            what = "N, F ou QW0" if write else "constante, N, F, Tn.ACC, Tn.PRE, Cn.ACC, Cn.PRE, IW0 ou QW0"
             self.error(f"{t}: {'destino' if write else 'operando'} numerico precisa ser {what}", element)
             return None
-        if area == Area.N and index >= self.p.io.n_words:
-            self.error(f"{t}: registrador fora da faixa configurada (N0 a N{self.p.io.n_words - 1})", element)
+        if area in (Area.N, Area.F) and index >= self.p.io.n_words:
+            faixa = f"N0 a N{self.p.io.n_words - 1}" if self.p.io.n_words else "nenhum configurado"
+            self.error(f"{t}: registrador fora da faixa configurada ({faixa})", element)
             return None
         if area in (Area.IW, Area.QW) and index != 0:
             self.error(f"{t}: só existe {Area(area).name}0", element)
@@ -208,6 +271,9 @@ class _Compiler:
             refs.append(ref)
         if len(refs) != 1 + len(isa.ARG_CLASSES[Op[node.kind]]):
             self.error(f"{node.kind} exige {1 + len(isa.ARG_CLASSES[Op[node.kind]])} operandos", node)
+            return None
+        if node.kind in ("MEQ", "TOD", "FRD") and any(area in isa.FLOAT_AREAS for area, _ in refs):
+            self.error(f"{node.kind} trabalha só com inteiros", node)
             return None
         self.r.element_words[node.id] = refs
         return refs
@@ -287,6 +353,8 @@ class _Compiler:
         if not rung.outputs:
             self.error("rede sem saída (adicione bobina, temporizador, contador, RES ou bloco matematico)")
         sor = self.emit(Op.SOR, Area.NONE, self.rung)
+        if self.rung == 0:
+            self.emit_variable_inits()
         self.series(rung.condition, depth=0)
         outs = rung.outputs
         if len(outs) == 1:
@@ -438,11 +506,13 @@ class _Compiler:
                     for k in range(n_t)],
             counters=[CounterDef(*self.counters[k][:2]) if k in self.counters else CounterDef(CounterType.UP, 0)
                       for k in range(n_c)],
-            code=self.code, safe_outputs=io.safe_outputs & ((1 << io.n_outputs) - 1),
+            code=self.code, safe_outputs=io.safe_outputs & ((1 << io.n_outputs) - 1) & 0xFFFF,
         )
         body = encode(prog)
         prog.build_id = crc32(body[isa.HEADER_SIZE:-isa.CRC_SIZE]
-                              + struct.pack("<HHHH", io.n_inputs, io.n_outputs, io.n_markers, io.n_words))
+                              + struct.pack("<HHHH", io.n_inputs, io.n_outputs, io.n_markers, io.n_words)
+                              # so quando existe: mantem o id de quem nao usa estado seguro
+                              + (struct.pack("<H", prog.safe_outputs) if prog.safe_outputs else b""))
         image = encode(prog)
         try:
             self.r.program = decode(image, isa.IDE_MAX_INPUTS, isa.IDE_MAX_OUTPUTS)
@@ -464,6 +534,7 @@ def compile_project(project: Project) -> CompileResult:
         return c.r
     c.check_controller()
     c.load_symbols()
+    c.load_variables()
     c.collect_drivers()
     c.compile_rungs()
     c.coil_warnings()

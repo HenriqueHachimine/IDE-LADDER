@@ -44,6 +44,10 @@ ensaios na placa real.
   operandos acompanham o novo nome (inclusive `Nome.DN`, `Nome.ACC`).
 
 ### Adicionado
+- **Variáveis de memória** (aba Variáveis): boolean, inteira e float, com endereço automático e valor inicial aplicado a cada
+  partida. Bloco **MOV**, registradores `F`, constantes float e formato **LDRB 2.1**. Float igual no simulador, no firmware e
+  no C++ gerado, conferido por testes. Exige regravar o firmware.
+- **Auditoria completa do sistema**: bugs, causas e soluções em `docs/bugs-corrigidos.md`.
 - **Módulos de expansão** (Programa → Módulos de expansão, e botão na aba CLP real): até 3 módulos
   no CLIC-02 (CLW-02/8ER-D, 8ET-D, 8ER-A, 8ER-24A) e até 3 unidades CP1W nos CP1E de 30/40 pontos e
   NA20 (8ED, 8ER, 16ER, 20EDR1, 32ER, 40EDR e versões a transistor). As E/S do projeto somam as dos

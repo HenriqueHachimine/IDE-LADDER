@@ -155,9 +155,11 @@ def cond_node_for_tool(tool: str) -> CondNode | None:
 def next_free_element(project: Project, prefix: str) -> str:
     """Primeiro Tn/Cn ainda nao acionado por nenhuma instrucao."""
     used = set()
+    addresses = {s.name.strip().upper(): s.address.strip().upper() for s in project.symbols}
     for _, node, _ in project.walk():
         if isinstance(node, (TimerBox, CounterBox)):
-            used.add(node.operand.strip().upper())
+            operand = node.operand.strip().upper()
+            used.add(addresses.get(operand, operand))      # operando pode ser o nome do simbolo
     for k in range(32):
         if f"{prefix}{k}" not in used:
             return f"{prefix}{k}"

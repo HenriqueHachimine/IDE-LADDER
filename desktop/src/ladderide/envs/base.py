@@ -52,6 +52,7 @@ class Environment(ABC):
 
     def __init__(self) -> None:
         self.operator: dict[str, bool] = {}     # botoes/chaves do operador
+        self.clicked: set[str] = set()          # pulsadores acionados que nenhuma varredura leu ainda
         self.out: dict[str, bool] = {p.key: False for p in self.outputs}
         self.time_ms = 0
         self.reset()
@@ -93,12 +94,15 @@ class Environment(ABC):
     def press(self, key: str, down: bool) -> None:
         point = next((p for p in self.inputs if p.key == key), None)
         if point is None:
+            self.on_control(key, down)
             return
         if point.kind == SWITCH:
             if down:
                 self.operator[key] = not self.operator.get(key, False)
         elif point.kind == BUTTON:
             self.operator[key] = down
+            if down:
+                self.clicked.add(key)
         else:
             self.on_control(key, down)
 
@@ -158,8 +162,13 @@ class EnvironmentPlant:
         return values
 
     def input_bits(self) -> int:
+        """Entradas lidas pela varredura: clique mais curto que uma varredura ainda conta como acionado."""
+        values = self.input_values()
+        for p in self.env.inputs:
+            if p.key in self.env.clicked:
+                values[p.key] = not p.normally_closed
         bits = 0
-        for key, value in self.input_values().items():
+        for key, value in values.items():
             if value:
                 bits |= 1 << self.in_bits[key]
         return bits
@@ -168,6 +177,7 @@ class EnvironmentPlant:
         return {key: bool(outputs >> b & 1) for key, b in self.out_bits.items()}
 
     def advance(self, dt_ms: int, outputs: int) -> None:
+        self.env.clicked.clear()                # a varredura que acabou ja leu os cliques
         out = self.decode_outputs(outputs)
         self.env.out = out
         self.env.time_ms += dt_ms
@@ -180,7 +190,9 @@ class EnvironmentPlant:
         self.env.advance_words(n)
 
     def reset(self) -> None:
-        self.env.operator.clear()
+        switches = {p.key for p in self.env.inputs if p.kind == SWITCH}     # chave com trava mantem a posicao
+        self.env.operator = {k: v for k, v in self.env.operator.items() if k in switches}
+        self.env.clicked.clear()
         self.env.out = {p.key: False for p in self.env.outputs}
         self.env.time_ms = 0
         self.env.reset()

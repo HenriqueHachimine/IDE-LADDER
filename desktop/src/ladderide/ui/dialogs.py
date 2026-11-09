@@ -24,7 +24,7 @@ KIND_CHOICES = {
                  ("MEQ", "MEQ - comparação com máscara")],
     MathBox: [("ADD", "ADD - soma"), ("SUB", "SUB - subtração"), ("MUL", "MUL - multiplicação"),
               ("DIV", "DIV - divisão inteira"), ("SQR", "SQR - raiz quadrada"), ("NEG", "NEG - troca o sinal"),
-              ("TOD", "TOD - inteiro para BCD"), ("FRD", "FRD - BCD para inteiro")],
+              ("MOV", "MOV - guarda um valor"), ("TOD", "TOD - inteiro para BCD"), ("FRD", "FRD - BCD para inteiro")],
 }
 
 

@@ -5,7 +5,7 @@ monitor online) e firmware interpretador para uma placa ESP32 com 8 relés.
 Trabalho final da disciplina de Controladores Lógicos Programáveis.
 
 > **Situação (v0.9.0, 2026-10-20):** software completo e testado no PC
-> (382 testes, incluindo o firmware executado como "dispositivo virtual").
+> (mais de 550 testes, incluindo o firmware executado como "dispositivo virtual").
 > O firmware compila para o ESP32, mas **ainda não foi testado na placa** —
 > ver [roteiro de hardware](docs/hardware-test-procedure.md).
 
@@ -17,6 +17,8 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   (OTU), TON, TOF, RTO, CTU, CTD, RES; comparação (EQU, NEQ, LES, GRT, LEQ,
   GEQ, LIM, MEQ) e matemática (ADD, SUB, MUL, DIV, SQR, NEG, TOD, FRD) com
   registradores inteiros de 32 bits
+- **Variáveis de memória** boolean, inteira e float, em uma tabela com endereço automático e valor inicial, e bloco MOV
+  para guardar valores; o float funciona no simulador, no firmware e no C++ gerado
 - **Escolha do controlador** ao criar o projeto (ESP32 Relay X8, simulação com
   16 E/S, Arduino, personalizado ou modelos Allen-Bradley de referência), que limita E/S e
   variáveis; a simulação mostra o controlador e a lista de ambientes desabilita os que precisam
@@ -163,7 +165,8 @@ Estratégia e resultados: [docs/testing.md](docs/testing.md).
 
 ## Limitações conhecidas
 
-- Não testado na placa real (pendências em [hardware-setup](docs/hardware-setup.md)).
+- Não testado na placa real (pendências em [hardware-setup](docs/hardware-setup.md)), incluindo o float.
+- Bugs corrigidos e pendências da auditoria: [docs/bugs-corrigidos.md](docs/bugs-corrigidos.md).
 - Sem memória retentiva entre partidas; sem forçamento de E/S; sem edição em RUN.
 - Wi-Fi/TCP só no lado do Desktop.
 - A placa não mede o estado físico dos relés.

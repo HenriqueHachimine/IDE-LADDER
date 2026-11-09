@@ -109,7 +109,7 @@ def area_size(area: int, p: Program) -> int:
         Area.N: p.n_words, Area.K: len(p.constants),
         Area.T_ACC: len(p.timers), Area.T_PRE: len(p.timers),
         Area.C_ACC: len(p.counters), Area.C_PRE: len(p.counters),
-        Area.IW: 1, Area.QW: 1,
+        Area.IW: 1, Area.QW: 1, Area.F: p.n_words, Area.KF: len(p.constants),
     }.get(area, 0)
 
 
@@ -124,6 +124,10 @@ def _operand_ok(cls: str, op: Op, area: int, index: int, p: Program) -> bool:
         allowed = isa.WORD_READ_AREAS
     elif cls == "word_write":
         allowed = isa.WORD_WRITE_AREAS
+    elif cls == "int_read":
+        allowed = isa.INT_READ_AREAS
+    elif cls == "int_write":
+        allowed = isa.INT_WRITE_AREAS
     elif cls == "timer":
         allowed = {Area.TIMER}
     elif cls == "counter":

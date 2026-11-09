@@ -7,7 +7,7 @@
     {"name": "curta_demais", "truncate": 10, "expect": "TOO_SHORT"},
     {"name": "assinatura", "patch": [{"offset": 0, "hex": "58"}], "expect": "BAD_MAGIC"},
     {"name": "versao_maior", "patch": [{"offset": 4, "hex": "03"}], "expect": "UNSUPPORTED_VERSION"},
-    {"name": "versao_menor_futura", "patch": [{"offset": 5, "hex": "01"}], "expect": "UNSUPPORTED_VERSION"},
+    {"name": "versao_menor_futura", "patch": [{"offset": 5, "hex": "02"}], "expect": "UNSUPPORTED_VERSION"},
     {"name": "versao_1_antiga", "patch": [{"offset": 4, "hex": "01"}], "expect": "UNSUPPORTED_VERSION"},
     {"name": "tamanho_cabecalho", "patch": [{"offset": 6, "hex": "2100"}], "expect": "BAD_HEADER_SIZE"},
     {"name": "byte_extra", "append": "00", "expect": "SIZE_MISMATCH"},
