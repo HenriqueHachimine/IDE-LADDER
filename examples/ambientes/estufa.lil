@@ -1,0 +1,136 @@
+; Estufa agricola - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0xd50ed297
+SOR ; rede 0
+LES N0
+ARG 190
+OTL M0.0
+EOR
+SOR ; rede 1
+GRT N0
+ARG 210
+OTU M0.0
+EOR
+SOR ; rede 2
+GRT N0
+ARG 270
+OTL M0.1
+EOR
+SOR ; rede 3
+LES N0
+ARG 250
+OTU M0.1
+EOR
+SOR ; rede 4
+GRT N0
+ARG 260
+OTL M0.2
+EOR
+SOR ; rede 5
+LES N0
+ARG 235
+OTU M0.2
+EOR
+SOR ; rede 6
+LES N1
+ARG 60
+GRT N0
+ARG 220
+OTL M0.3
+EOR
+SOR ; rede 7
+BST
+GRT N1
+ARG 75
+NXB
+LES N0
+ARG 200
+BND
+OTU M0.3
+EOR
+SOR ; rede 8
+XIC I0.0
+XIC M0.0
+XIO M0.1
+OTE Q0.0
+EOR
+SOR ; rede 9
+GRT N1
+ARG 85
+GRT N0
+ARG 220
+OTL M0.4
+EOR
+SOR ; rede 10
+BST
+LES N1
+ARG 75
+NXB
+LES N0
+ARG 200
+BND
+OTU M0.4
+EOR
+SOR ; rede 11
+XIC I0.0
+BST
+XIC M0.1
+NXB
+XIC M0.4
+BND
+XIO M0.0
+OTE Q0.1
+EOR
+SOR ; rede 12
+XIC I0.0
+XIC M0.2
+XIO I0.3
+XIO I0.4
+XIO I0.1
+OTE Q0.2
+EOR
+SOR ; rede 13
+BST
+XIO I0.0
+NXB
+XIO M0.2
+NXB
+BST
+XIC I0.3
+NXB
+XIC I0.4
+BND
+BND
+XIO I0.2
+XIO Q0.2
+OTE Q0.3
+EOR
+SOR ; rede 14
+XIC I0.0
+XIC M0.3
+OTE Q0.4
+EOR
+SOR ; rede 15
+XIC I0.0
+LIM 18
+ARG N2
+ARG 21
+OTE Q0.5
+EOR
+SOR ; rede 16
+BST
+GRT N0
+ARG 350
+NXB
+LES N0
+ARG 80
+NXB
+GRT N1
+ARG 90
+BND
+OTE Q0.6
+EOR

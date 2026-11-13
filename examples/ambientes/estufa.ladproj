@@ -1,0 +1,659 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Estufa agricola",
+  "description": "Controle por faixas com histerese: cada atuador liga num limite e desliga em outro (OTL com LES/GRT, OTU do outro lado), para nao ficar ligando e desligando. Aquecedor 19-21 degC, exaustor 27-25 degC, janela 26-23,5 degC (fechada com chuva ou vento), nebulizador abaixo de 60% de umidade com calor. A iluminacao suplementar usa a hora do dia (LIM 18..21 em N2). Umidade acima de 85% com calor liga o exaustor.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:50:34",
+  "modified": "2026-11-13T20:50:34",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Automatico",
+      "address": "I0.0",
+      "comment": "Chave AUTOMÁTICO"
+    },
+    {
+      "name": "Janela_Aberta",
+      "address": "I0.1",
+      "comment": "Fim de curso: janela do teto aberta"
+    },
+    {
+      "name": "Janela_Fechada",
+      "address": "I0.2",
+      "comment": "Fim de curso: janela do teto fechada"
+    },
+    {
+      "name": "Sensor_Chuva",
+      "address": "I0.3",
+      "comment": "Sensor de chuva"
+    },
+    {
+      "name": "Sensor_Vento",
+      "address": "I0.4",
+      "comment": "Anemômetro: vento forte"
+    },
+    {
+      "name": "Aquecedor",
+      "address": "Q0.0",
+      "comment": "Aquecedor a gás"
+    },
+    {
+      "name": "Exaustor",
+      "address": "Q0.1",
+      "comment": "Exaustores das paredes"
+    },
+    {
+      "name": "Janela_Abre",
+      "address": "Q0.2",
+      "comment": "Motor da janela: abrir"
+    },
+    {
+      "name": "Janela_Fecha",
+      "address": "Q0.3",
+      "comment": "Motor da janela: fechar"
+    },
+    {
+      "name": "Nebulizador",
+      "address": "Q0.4",
+      "comment": "Nebulizador (resfria e umedece)"
+    },
+    {
+      "name": "Iluminacao",
+      "address": "Q0.5",
+      "comment": "Iluminação suplementar"
+    },
+    {
+      "name": "Alarme",
+      "address": "Q0.6",
+      "comment": "Lâmpada de alarme"
+    },
+    {
+      "name": "Temperatura",
+      "address": "N0",
+      "comment": "decimos de degC, escrito pela estufa"
+    },
+    {
+      "name": "Umidade",
+      "address": "N1",
+      "comment": "%, escrito pela estufa"
+    },
+    {
+      "name": "Hora",
+      "address": "N2",
+      "comment": "0 a 23, escrito pela estufa"
+    },
+    {
+      "name": "Aquecer",
+      "address": "M0.0",
+      "comment": "faixa do aquecedor"
+    },
+    {
+      "name": "Ventilar",
+      "address": "M0.1",
+      "comment": "faixa do exaustor"
+    },
+    {
+      "name": "Abrir",
+      "address": "M0.2",
+      "comment": "faixa da janela"
+    },
+    {
+      "name": "Nebulizar",
+      "address": "M0.3",
+      "comment": "faixa do nebulizador"
+    },
+    {
+      "name": "Desumidificar",
+      "address": "M0.4",
+      "comment": "umidade alta com calor: renovar o ar"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Aquecedor: liga abaixo de 19 degC",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Temperatura",
+            "190"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Aquecer"
+        }
+      ]
+    },
+    {
+      "comment": "e desliga acima de 21 degC",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Temperatura",
+            "210"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Aquecer"
+        }
+      ]
+    },
+    {
+      "comment": "Exaustor: 27 degC liga, 25 desliga",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Temperatura",
+            "270"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ventilar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Temperatura",
+            "250"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ventilar"
+        }
+      ]
+    },
+    {
+      "comment": "Janela: 26 degC abre, 23,5 fecha",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Temperatura",
+            "260"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Abrir"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Temperatura",
+            "235"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Abrir"
+        }
+      ]
+    },
+    {
+      "comment": "Nebulizador: ar seco e quente",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Umidade",
+            "60"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Temperatura",
+            "220"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Nebulizar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Umidade",
+                  "75"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Temperatura",
+                  "200"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Nebulizar"
+        }
+      ]
+    },
+    {
+      "comment": "Saidas (so no automatico); nunca aquecer ventilando",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Aquecer"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ventilar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Aquecedor"
+        }
+      ]
+    },
+    {
+      "comment": "Desumidificar: acima de 85% com calor, ate 75%",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Umidade",
+            "85"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Temperatura",
+            "220"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Desumidificar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Umidade",
+                  "75"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Temperatura",
+                  "200"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Desumidificar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Ventilar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Desumidificar"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Aquecer"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Exaustor"
+        }
+      ]
+    },
+    {
+      "comment": "Janela abre so sem chuva e sem vento",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abrir"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Chuva"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Vento"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Janela_Aberta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Janela_Abre"
+        }
+      ]
+    },
+    {
+      "comment": "e fecha fora da faixa, com chuva, com vento ou no manual",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Automatico"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Abrir"
+              }
+            ],
+            [
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Sensor_Chuva"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Sensor_Vento"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Janela_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Janela_Abre"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Janela_Fecha"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nebulizar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Nebulizador"
+        }
+      ]
+    },
+    {
+      "comment": "Fotoperiodo: 18 h as 21 h",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "18",
+            "Hora",
+            "21"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Iluminacao"
+        }
+      ]
+    },
+    {
+      "comment": "Alarme fora dos limites",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Temperatura",
+                  "350"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Temperatura",
+                  "80"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Umidade",
+                  "90"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Alarme"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:50:34",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 17
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0xd50ed297",
+    "size": 620,
+    "instructions": 129,
+    "date": "2026-11-13T20:50:34"
+  },
+  "environment": "estufa"
+}

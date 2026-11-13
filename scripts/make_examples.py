@@ -710,6 +710,52 @@ def scale() -> Project:
     return p
 
 
+def greenhouse() -> Project:
+    p = env_project("estufa", "Estufa agricola", (
+        "Controle por faixas com histerese: cada atuador liga num limite e desliga em outro (OTL com LES/GRT, OTU "
+        "do outro lado), para nao ficar ligando e desligando. Aquecedor 19-21 degC, exaustor 27-25 degC, janela "
+        "26-23,5 degC (fechada com chuva ou vento), nebulizador abaixo de 60% de umidade com calor. A iluminacao "
+        "suplementar usa a hora do dia (LIM 18..21 em N2). Umidade acima de 85% com calor liga o exaustor."))
+    p.symbols += [Symbol("Temperatura", "N0", "decimos de degC, escrito pela estufa"),
+                  Symbol("Umidade", "N1", "%, escrito pela estufa"), Symbol("Hora", "N2", "0 a 23, escrito pela estufa"),
+                  Symbol("Aquecer", "M0.0", "faixa do aquecedor"), Symbol("Ventilar", "M0.1", "faixa do exaustor"),
+                  Symbol("Abrir", "M0.2", "faixa da janela"), Symbol("Nebulizar", "M0.3", "faixa do nebulizador"),
+                  Symbol("Desumidificar", "M0.4", "umidade alta com calor: renovar o ar")]
+    weather = Parallel([[Contact("XIC", "Sensor_Chuva")], [Contact("XIC", "Sensor_Vento")]])
+    p.rungs = [
+        Rung([CompareBox("LES", ["Temperatura", "190"])], [Coil("OTL", "Aquecer")], "Aquecedor: liga abaixo de 19 degC"),
+        Rung([CompareBox("GRT", ["Temperatura", "210"])], [Coil("OTU", "Aquecer")], "e desliga acima de 21 degC"),
+        Rung([CompareBox("GRT", ["Temperatura", "270"])], [Coil("OTL", "Ventilar")], "Exaustor: 27 degC liga, 25 desliga"),
+        Rung([CompareBox("LES", ["Temperatura", "250"])], [Coil("OTU", "Ventilar")]),
+        Rung([CompareBox("GRT", ["Temperatura", "260"])], [Coil("OTL", "Abrir")], "Janela: 26 degC abre, 23,5 fecha"),
+        Rung([CompareBox("LES", ["Temperatura", "235"])], [Coil("OTU", "Abrir")]),
+        Rung([CompareBox("LES", ["Umidade", "60"]), CompareBox("GRT", ["Temperatura", "220"])], [Coil("OTL", "Nebulizar")],
+             "Nebulizador: ar seco e quente"),
+        Rung([Parallel([[CompareBox("GRT", ["Umidade", "75"])], [CompareBox("LES", ["Temperatura", "200"])]])],
+             [Coil("OTU", "Nebulizar")]),
+        Rung([Contact("XIC", "Automatico"), Contact("XIC", "Aquecer"), Contact("XIO", "Ventilar")],
+             [Coil("OTE", "Aquecedor")], "Saidas (so no automatico); nunca aquecer ventilando"),
+        Rung([CompareBox("GRT", ["Umidade", "85"]), CompareBox("GRT", ["Temperatura", "220"])],
+             [Coil("OTL", "Desumidificar")], "Desumidificar: acima de 85% com calor, ate 75%"),
+        Rung([Parallel([[CompareBox("LES", ["Umidade", "75"])], [CompareBox("LES", ["Temperatura", "200"])]])],
+             [Coil("OTU", "Desumidificar")]),
+        Rung([Contact("XIC", "Automatico"), Parallel([[Contact("XIC", "Ventilar")], [Contact("XIC", "Desumidificar")]]),
+              Contact("XIO", "Aquecer")], [Coil("OTE", "Exaustor")]),
+        Rung([Contact("XIC", "Automatico"), Contact("XIC", "Abrir"), Contact("XIO", "Sensor_Chuva"),
+              Contact("XIO", "Sensor_Vento"), Contact("XIO", "Janela_Aberta")], [Coil("OTE", "Janela_Abre")],
+             "Janela abre so sem chuva e sem vento"),
+        Rung([Parallel([[Contact("XIO", "Automatico")], [Contact("XIO", "Abrir")], [weather]]),
+              Contact("XIO", "Janela_Fechada"), Contact("XIO", "Janela_Abre")], [Coil("OTE", "Janela_Fecha")],
+             "e fecha fora da faixa, com chuva, com vento ou no manual"),
+        Rung([Contact("XIC", "Automatico"), Contact("XIC", "Nebulizar")], [Coil("OTE", "Nebulizador")]),
+        Rung([Contact("XIC", "Automatico"), CompareBox("LIM", ["18", "Hora", "21"])], [Coil("OTE", "Iluminacao")],
+             "Fotoperiodo: 18 h as 21 h"),
+        Rung([Parallel([[CompareBox("GRT", ["Temperatura", "350"])], [CompareBox("LES", ["Temperatura", "80"])],
+                        [CompareBox("GRT", ["Umidade", "90"])]])], [Coil("OTE", "Alarme")], "Alarme fora dos limites"),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -814,7 +860,8 @@ def main() -> int:
                "ambientes/estrela_triangulo.ladproj": star_delta, "ambientes/prensa.ladproj": two_hand_press,
                "ambientes/furadeira.ladproj": drill, "ambientes/passagem_nivel.ladproj": level_crossing,
                "ambientes/estacionamento.ladproj": parking, "ambientes/seletor_pecas.ladproj": sorter,
-               "ambientes/detector_gas.ladproj": gas_detection, "ambientes/balanca.ladproj": scale}
+               "ambientes/detector_gas.ladproj": gas_detection, "ambientes/balanca.ladproj": scale,
+               "ambientes/estufa.ladproj": greenhouse}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue
