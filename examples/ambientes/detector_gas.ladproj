@@ -1,0 +1,584 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Deteccao de gas 2 de 3",
+  "description": "Votacao 2 de 3 em logica combinacional (tres ramos em paralelo) e gestao de alarme: o disparo fica travado (OTL), a sirene toca ate RECONHECER, a lampada pisca enquanto nao reconhecido e fica fixa depois, e a valvula so reabre com REARMAR quando menos de 2 detectores estiverem em alarme. Um detector sozinho so liga o exaustor (pre-alarme); discordancia por 10 s acende FALHA DE DETECTOR.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:46:19",
+  "modified": "2026-11-13T20:46:19",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Detector_1",
+      "address": "I0.0",
+      "comment": "Detector de gás 1 (perto dos queimadores)"
+    },
+    {
+      "name": "Detector_2",
+      "address": "I0.1",
+      "comment": "Detector de gás 2 (centro)"
+    },
+    {
+      "name": "Detector_3",
+      "address": "I0.2",
+      "comment": "Detector de gás 3 (perto da porta)"
+    },
+    {
+      "name": "Reconhecer",
+      "address": "I0.3",
+      "comment": "Botão RECONHECER (silencia a sirene)"
+    },
+    {
+      "name": "Rearmar",
+      "address": "I0.4",
+      "comment": "Botão REARMAR (reabre a válvula)"
+    },
+    {
+      "name": "Fluxo_Exaustao",
+      "address": "I0.5",
+      "comment": "Pressostato do duto: exaustor com fluxo"
+    },
+    {
+      "name": "Teste_Lampadas",
+      "address": "I0.6",
+      "comment": "Botão TESTE de lâmpadas"
+    },
+    {
+      "name": "Exaustor",
+      "address": "Q0.0",
+      "comment": "Exaustor da casa de caldeiras"
+    },
+    {
+      "name": "Valvula_Gas",
+      "address": "Q0.1",
+      "comment": "Válvula de bloqueio do gás (energizada = aberta)"
+    },
+    {
+      "name": "Sirene",
+      "address": "Q0.2",
+      "comment": "Sirene de alarme"
+    },
+    {
+      "name": "Luz_Alarme",
+      "address": "Q0.3",
+      "comment": "Lâmpada ALARME DE GÁS"
+    },
+    {
+      "name": "Luz_Falha_Detector",
+      "address": "Q0.4",
+      "comment": "Lâmpada FALHA DE DETECTOR (discordância)"
+    },
+    {
+      "name": "Luz_Falha_Exaustor",
+      "address": "Q0.5",
+      "comment": "Lâmpada FALHA DO EXAUSTOR (sem fluxo)"
+    },
+    {
+      "name": "Voto_2de3",
+      "address": "M0.0",
+      "comment": "dois ou mais detectores em alarme"
+    },
+    {
+      "name": "Disparo",
+      "address": "M0.1",
+      "comment": "disparo travado ate o rearme"
+    },
+    {
+      "name": "Reconhecido",
+      "address": "M0.2",
+      "comment": "alarme reconhecido pelo operador"
+    },
+    {
+      "name": "Discordancia",
+      "address": "T0",
+      "comment": "10 s com detectores discordando"
+    },
+    {
+      "name": "Sem_Fluxo",
+      "address": "T1",
+      "comment": "4 s com o exaustor ligado e sem fluxo"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Votacao 2 de 3",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Detector_1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Detector_2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Detector_1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Detector_3"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Detector_2"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Detector_3"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Voto_2de3"
+        }
+      ]
+    },
+    {
+      "comment": "Novo disparo: trava e pede reconhecimento",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Voto_2de3"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Disparo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Disparo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Reconhecido"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Reconhecer"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Disparo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Reconhecido"
+        }
+      ]
+    },
+    {
+      "comment": "Rearme so com o gas abaixo do alarme",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rearmar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Voto_2de3"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Disparo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Disparo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Reconhecido"
+        }
+      ]
+    },
+    {
+      "comment": "Valvula energizada para abrir (falha segura)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Disparo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Gas"
+        }
+      ]
+    },
+    {
+      "comment": "Exaustor no pre-alarme (um detector) e no disparo",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Disparo"
+              }
+            ],
+            [
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Detector_1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Detector_2"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Detector_3"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Exaustor"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Disparo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Reconhecido"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Sirene"
+        }
+      ]
+    },
+    {
+      "comment": "Pisca sem reconhecer, fixa depois",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Disparo"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Reconhecido"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "S0.3"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Disparo"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Reconhecido"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Teste_Lampadas"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Alarme"
+        }
+      ]
+    },
+    {
+      "comment": "Um detector diferente dos outros por 10 s",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Detector_1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Detector_2"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIC",
+                      "operand": "Detector_3"
+                    }
+                  ]
+                ]
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Voto_2de3"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Voto_2de3"
+              },
+              {
+                "type": "parallel",
+                "branches": [
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIO",
+                      "operand": "Detector_1"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIO",
+                      "operand": "Detector_2"
+                    }
+                  ],
+                  [
+                    {
+                      "type": "contact",
+                      "kind": "XIO",
+                      "operand": "Detector_3"
+                    }
+                  ]
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Discordancia",
+          "preset": 10000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Discordancia.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Teste_Lampadas"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Falha_Detector"
+        }
+      ]
+    },
+    {
+      "comment": "Exaustor sem fluxo no duto",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Exaustor"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Fluxo_Exaustao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Sem_Fluxo",
+          "preset": 4000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Sem_Fluxo.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Teste_Lampadas"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Falha_Exaustor"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:46:19",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 12
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x501b35bb",
+    "size": 520,
+    "instructions": 116,
+    "date": "2026-11-13T20:46:19"
+  },
+  "environment": "detector_gas"
+}

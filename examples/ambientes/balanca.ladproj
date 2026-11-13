@@ -1,0 +1,577 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Dosagem por balanca",
+  "description": "Aritmetica com setpoint: a balanca escreve o peso (N0) e o alvo (N1). Grossa ate N1-200, fina ate N1-Preacao. Com o peso estavel, Erro = Peso - Setpoint e Preacao += Erro (corte antecipado adaptativo, limitado de 0 a 60 g). OK se o erro estiver dentro de +-2% (LIM); depois de 1 s a esteira troca o recipiente.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:46:19",
+  "modified": "2026-11-13T20:46:19",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Partida",
+      "address": "I0.0",
+      "comment": "Botão PARTIDA (NA)"
+    },
+    {
+      "name": "Parada",
+      "address": "I0.1",
+      "comment": "Botão PARADA (NF: lê 1 quando solto)"
+    },
+    {
+      "name": "Recipiente_Posicionado",
+      "address": "I0.2",
+      "comment": "Recipiente sob o bico"
+    },
+    {
+      "name": "Peso_Estavel",
+      "address": "I0.3",
+      "comment": "Balança estável (peso parado)"
+    },
+    {
+      "name": "Valvula_Grossa",
+      "address": "Q0.0",
+      "comment": "Válvula de enchimento grossa (rápida)"
+    },
+    {
+      "name": "Valvula_Fina",
+      "address": "Q0.1",
+      "comment": "Válvula de enchimento fina (lenta)"
+    },
+    {
+      "name": "Esteira",
+      "address": "Q0.2",
+      "comment": "Esteira dos recipientes"
+    },
+    {
+      "name": "Lampada_OK",
+      "address": "Q0.3",
+      "comment": "Lâmpada PESO OK"
+    },
+    {
+      "name": "Lampada_Rejeito",
+      "address": "Q0.4",
+      "comment": "Lâmpada FORA DA TOLERÂNCIA"
+    },
+    {
+      "name": "Peso",
+      "address": "N0",
+      "comment": "peso na balanca (g), escrito pela balanca"
+    },
+    {
+      "name": "Setpoint",
+      "address": "N1",
+      "comment": "alvo (g), escrito pela balanca"
+    },
+    {
+      "name": "Corte_Grossa",
+      "address": "N2",
+      "comment": "Setpoint - 200"
+    },
+    {
+      "name": "Preacao",
+      "address": "N3",
+      "comment": "produto ainda no ar (g)"
+    },
+    {
+      "name": "Corte_Fina",
+      "address": "N4",
+      "comment": "Setpoint - Preacao"
+    },
+    {
+      "name": "Erro",
+      "address": "N5",
+      "comment": "Peso final - Setpoint"
+    },
+    {
+      "name": "Tolerancia",
+      "address": "N6",
+      "comment": "2% do setpoint"
+    },
+    {
+      "name": "Tolerancia_Neg",
+      "address": "N7",
+      "comment": "-2% do setpoint"
+    },
+    {
+      "name": "Automatico",
+      "address": "M0.0",
+      "comment": "ciclo automatico ligado"
+    },
+    {
+      "name": "Dosando",
+      "address": "M0.1",
+      "comment": "enchendo"
+    },
+    {
+      "name": "Pesado",
+      "address": "M0.2",
+      "comment": "recipiente pesado e avaliado"
+    },
+    {
+      "name": "Exibe",
+      "address": "T0",
+      "comment": "1 s mostrando o resultado"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Liga/desliga (selo); PARADA e NF",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Partida"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Automatico"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Parada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Automatico"
+        }
+      ]
+    },
+    {
+      "comment": "Primeira varredura: corte inicial de 8 g",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.0"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8",
+            "Preacao"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Pontos de corte e tolerancia",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Setpoint",
+            "200",
+            "Corte_Grossa"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Setpoint",
+            "Preacao",
+            "Corte_Fina"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Setpoint",
+            "50",
+            "Tolerancia"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "NEG",
+          "operands": [
+            "Tolerancia",
+            "Tolerancia_Neg"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Recipiente vazio parado sob o bico",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Recipiente_Posicionado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peso_Estavel"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Pesado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Dosando"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Peso",
+            "5"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Dosando"
+        }
+      ]
+    },
+    {
+      "comment": "Grossa ate 200 g antes do alvo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Dosando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Peso",
+            "Corte_Grossa"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Grossa"
+        }
+      ]
+    },
+    {
+      "comment": "Fina ate o corte antecipado",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Dosando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Peso",
+            "Corte_Fina"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Fina"
+        }
+      ]
+    },
+    {
+      "comment": "Produto assentado: mede o erro e corrige o corte",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Dosando"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Peso",
+            "Corte_Fina"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peso_Estavel"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Peso",
+            "Setpoint",
+            "Erro"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Preacao",
+            "Erro",
+            "Preacao"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pesado"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Dosando"
+        }
+      ]
+    },
+    {
+      "comment": "Corte entre 0 e 60 g",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Preacao",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Preacao"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Preacao",
+            "60"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "60",
+            "Preacao"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Dentro de +-2%",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesado"
+        },
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "Tolerancia_Neg",
+            "Erro",
+            "Tolerancia"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_OK"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Lampada_OK"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Rejeito"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Exibe",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "Troca o recipiente",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Dosando"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Exibe.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Recipiente_Posicionado"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira"
+        }
+      ]
+    },
+    {
+      "comment": "O recipiente saiu",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Recipiente_Posicionado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pesado"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:46:19",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 14
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x700ac970",
+    "size": 540,
+    "instructions": 117,
+    "date": "2026-11-13T20:46:19"
+  },
+  "environment": "balanca"
+}

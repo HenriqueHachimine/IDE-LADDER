@@ -407,3 +407,29 @@ def test_sorter_shift_register_sends_each_part_to_its_bin():
         Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")]), Rung([Contact("XIC", "I0.3")], [Coil("OTE", "Q0.1")])])
     _, alarms, _ = closed_loop(no_register, [(100, "LIGA", True)], 20000)
     assert any("destino errado" in a for a in alarms)
+
+
+def test_gas_detection_votes_two_of_three_and_needs_reset():
+    p = Project.load(EXAMPLES / "detector_gas.ladproj")
+    acts = [(2000, "VAZAMENTO", True), (12000, "RECONHECER", True), (12100, "RECONHECER", False),
+            (14000, "VAZAMENTO", True), (30000, "REARMAR", True), (30100, "REARMAR", False)]
+    env, alarms, sim = closed_loop(p, acts, 36000)
+    assert alarms == set() and env.trips == 1 and env.peak < 40 and sim.vm.outputs >> 1 & 1   # reabriu no rearme
+    env, alarms, sim = closed_loop(p, [(1000, "FALHA_D3", True)], 15000)       # detector em falso alarme
+    assert alarms == set() and env.trips == 0 and sim.vm.outputs == 0b10011   # produz, exaure e sinaliza
+    env, alarms, _ = closed_loop(p, [(500, "FALHA_D2", True), (1000, "VAZAMENTO", True)], 12000)
+    assert alarms == set() and env.trips == 1                                  # D1 + D3 ainda votam
+    auto_reopen = Project(environment="detector_gas", rungs=[Rung([Contact("XIO", "I0.0")], [Coil("OTE", "Q0.1")])])
+    _, alarms, _ = closed_loop(auto_reopen, [(1000, "VAZAMENTO", True)], 40000)
+    assert any("REARMAR" in a for a in alarms)
+
+
+def test_scale_doses_within_tolerance_with_adaptive_preact():
+    p = Project.load(EXAMPLES / "balanca.ladproj")
+    for key, target in (("SP_250", 250), ("SP_1000", 1000)):
+        env, alarms, sim = closed_loop(p, [(0, key, True), (100, "PARTIDA", True), (200, "PARTIDA", False)], 60000)
+        assert alarms == set() and env.setpoint == target and env.ok >= 5 and env.bad == 0
+        assert abs(env.last_error) <= 0.02 * target and sim.vm.n[3] > 8          # corte antecipado se ajustou
+    spill = Project(environment="balanca", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.2")])])
+    _, alarms, _ = closed_loop(spill, total_ms=5000)
+    assert any("derramado" in a for a in alarms)

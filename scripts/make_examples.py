@@ -623,6 +623,93 @@ def sorter() -> Project:
     return p
 
 
+def gas_detection() -> Project:
+    p = env_project("detector_gas", "Deteccao de gas 2 de 3", (
+        "Votacao 2 de 3 em logica combinacional (tres ramos em paralelo) e gestao de alarme: o disparo fica "
+        "travado (OTL), a sirene toca ate RECONHECER, a lampada pisca enquanto nao reconhecido e fica fixa depois, "
+        "e a valvula so reabre com REARMAR quando menos de 2 detectores estiverem em alarme. Um detector sozinho so "
+        "liga o exaustor (pre-alarme); discordancia por 10 s acende FALHA DE DETECTOR."))
+    p.symbols += [Symbol("Voto_2de3", "M0.0", "dois ou mais detectores em alarme"),
+                  Symbol("Disparo", "M0.1", "disparo travado ate o rearme"),
+                  Symbol("Reconhecido", "M0.2", "alarme reconhecido pelo operador"),
+                  Symbol("Discordancia", "T0", "10 s com detectores discordando"),
+                  Symbol("Sem_Fluxo", "T1", "4 s com o exaustor ligado e sem fluxo")]
+    d = ["Detector_1", "Detector_2", "Detector_3"]
+    any_det = Parallel([[Contact("XIC", n)] for n in d])
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", d[0]), Contact("XIC", d[1])], [Contact("XIC", d[0]), Contact("XIC", d[2])],
+                        [Contact("XIC", d[1]), Contact("XIC", d[2])]])], [Coil("OTE", "Voto_2de3")],
+             "Votacao 2 de 3"),
+        Rung([Contact("XIC", "Voto_2de3"), Contact("XIO", "Disparo")], [Coil("OTL", "Disparo"), Coil("OTU", "Reconhecido")],
+             "Novo disparo: trava e pede reconhecimento"),
+        Rung([Contact("XIC", "Reconhecer"), Contact("XIC", "Disparo")], [Coil("OTL", "Reconhecido")]),
+        Rung([Contact("XIC", "Rearmar"), Contact("XIO", "Voto_2de3"), Contact("XIC", "Disparo")],
+             [Coil("OTU", "Disparo"), Coil("OTU", "Reconhecido")], "Rearme so com o gas abaixo do alarme"),
+        Rung([Contact("XIO", "Disparo")], [Coil("OTE", "Valvula_Gas")], "Valvula energizada para abrir (falha segura)"),
+        Rung([Parallel([[Contact("XIC", "Disparo")], [Parallel([[Contact("XIC", n)] for n in d])]])],
+             [Coil("OTE", "Exaustor")], "Exaustor no pre-alarme (um detector) e no disparo"),
+        Rung([Contact("XIC", "Disparo"), Contact("XIO", "Reconhecido")], [Coil("OTE", "Sirene")]),
+        Rung([Parallel([[Contact("XIC", "Disparo"), Contact("XIO", "Reconhecido"), Contact("XIC", "S0.3")],
+                        [Contact("XIC", "Disparo"), Contact("XIC", "Reconhecido")], [Contact("XIC", "Teste_Lampadas")]])],
+             [Coil("OTE", "Luz_Alarme")], "Pisca sem reconhecer, fixa depois"),
+        Rung([Parallel([[any_det, Contact("XIO", "Voto_2de3")],
+                        [Contact("XIC", "Voto_2de3"),
+                         Parallel([[Contact("XIO", n)] for n in d])]])],
+             [TimerBox("TON", "Discordancia", 10000)], "Um detector diferente dos outros por 10 s"),
+        Rung([Parallel([[Contact("XIC", "Discordancia.DN")], [Contact("XIC", "Teste_Lampadas")]])],
+             [Coil("OTE", "Luz_Falha_Detector")]),
+        Rung([Contact("XIC", "Exaustor"), Contact("XIO", "Fluxo_Exaustao")], [TimerBox("TON", "Sem_Fluxo", 4000)],
+             "Exaustor sem fluxo no duto"),
+        Rung([Parallel([[Contact("XIC", "Sem_Fluxo.DN")], [Contact("XIC", "Teste_Lampadas")]])],
+             [Coil("OTE", "Luz_Falha_Exaustor")]),
+    ]
+    return p
+
+
+def scale() -> Project:
+    p = env_project("balanca", "Dosagem por balanca", (
+        "Aritmetica com setpoint: a balanca escreve o peso (N0) e o alvo (N1). Grossa ate N1-200, fina ate "
+        "N1-Preacao. Com o peso estavel, Erro = Peso - Setpoint e Preacao += Erro (corte antecipado adaptativo, "
+        "limitado de 0 a 60 g). OK se o erro estiver dentro de +-2% (LIM); depois de 1 s a esteira troca o "
+        "recipiente."))
+    p.symbols += [Symbol("Peso", "N0", "peso na balanca (g), escrito pela balanca"),
+                  Symbol("Setpoint", "N1", "alvo (g), escrito pela balanca"),
+                  Symbol("Corte_Grossa", "N2", "Setpoint - 200"), Symbol("Preacao", "N3", "produto ainda no ar (g)"),
+                  Symbol("Corte_Fina", "N4", "Setpoint - Preacao"), Symbol("Erro", "N5", "Peso final - Setpoint"),
+                  Symbol("Tolerancia", "N6", "2% do setpoint"), Symbol("Tolerancia_Neg", "N7", "-2% do setpoint"),
+                  Symbol("Automatico", "M0.0", "ciclo automatico ligado"), Symbol("Dosando", "M0.1", "enchendo"),
+                  Symbol("Pesado", "M0.2", "recipiente pesado e avaliado"), Symbol("Exibe", "T0", "1 s mostrando o resultado")]
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Partida")], [Contact("XIC", "Automatico")]]), Contact("XIC", "Parada")],
+             [Coil("OTE", "Automatico")], "Liga/desliga (selo); PARADA e NF"),
+        Rung([Contact("XIC", "S0.0")], [MathBox("MOV", ["8", "Preacao"])], "Primeira varredura: corte inicial de 8 g"),
+        Rung([], [MathBox("SUB", ["Setpoint", "200", "Corte_Grossa"]), MathBox("SUB", ["Setpoint", "Preacao", "Corte_Fina"]),
+                  MathBox("DIV", ["Setpoint", "50", "Tolerancia"]), MathBox("NEG", ["Tolerancia", "Tolerancia_Neg"])],
+             "Pontos de corte e tolerancia"),
+        Rung([Contact("XIC", "Automatico"), Contact("XIC", "Recipiente_Posicionado"), Contact("XIC", "Peso_Estavel"),
+              Contact("XIO", "Pesado"), Contact("XIO", "Dosando"), CompareBox("LES", ["Peso", "5"])],
+             [Coil("OTL", "Dosando")], "Recipiente vazio parado sob o bico"),
+        Rung([Contact("XIC", "Dosando"), Contact("XIC", "Automatico"), CompareBox("LES", ["Peso", "Corte_Grossa"])],
+             [Coil("OTE", "Valvula_Grossa")], "Grossa ate 200 g antes do alvo"),
+        Rung([Contact("XIC", "Dosando"), Contact("XIC", "Automatico"), CompareBox("LES", ["Peso", "Corte_Fina"])],
+             [Coil("OTE", "Valvula_Fina")], "Fina ate o corte antecipado"),
+        Rung([Contact("XIC", "Dosando"), CompareBox("GEQ", ["Peso", "Corte_Fina"]), Contact("XIC", "Peso_Estavel")],
+             [MathBox("SUB", ["Peso", "Setpoint", "Erro"]), MathBox("ADD", ["Preacao", "Erro", "Preacao"]),
+              Coil("OTL", "Pesado"), Coil("OTU", "Dosando")], "Produto assentado: mede o erro e corrige o corte"),
+        Rung([CompareBox("LES", ["Preacao", "0"])], [MathBox("MOV", ["0", "Preacao"])], "Corte entre 0 e 60 g"),
+        Rung([CompareBox("GRT", ["Preacao", "60"])], [MathBox("MOV", ["60", "Preacao"])]),
+        Rung([Contact("XIC", "Pesado"), CompareBox("LIM", ["Tolerancia_Neg", "Erro", "Tolerancia"])],
+             [Coil("OTE", "Lampada_OK")], "Dentro de +-2%"),
+        Rung([Contact("XIC", "Pesado"), Contact("XIO", "Lampada_OK")], [Coil("OTE", "Lampada_Rejeito")]),
+        Rung([Contact("XIC", "Pesado")], [TimerBox("TON", "Exibe", 1000)]),
+        Rung([Contact("XIC", "Automatico"), Contact("XIO", "Dosando"),
+              Parallel([[Contact("XIC", "Exibe.DN")], [Contact("XIO", "Recipiente_Posicionado")]])],
+             [Coil("OTE", "Esteira")], "Troca o recipiente"),
+        Rung([Contact("XIO", "Recipiente_Posicionado")], [Coil("OTU", "Pesado")], "O recipiente saiu"),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -726,7 +813,8 @@ def main() -> int:
                "factoryio/esteira_lote.ladproj": factoryio_conveyor,
                "ambientes/estrela_triangulo.ladproj": star_delta, "ambientes/prensa.ladproj": two_hand_press,
                "ambientes/furadeira.ladproj": drill, "ambientes/passagem_nivel.ladproj": level_crossing,
-               "ambientes/estacionamento.ladproj": parking, "ambientes/seletor_pecas.ladproj": sorter}
+               "ambientes/estacionamento.ladproj": parking, "ambientes/seletor_pecas.ladproj": sorter,
+               "ambientes/detector_gas.ladproj": gas_detection, "ambientes/balanca.ladproj": scale}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

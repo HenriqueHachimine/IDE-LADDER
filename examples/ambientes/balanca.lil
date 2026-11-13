@@ -1,0 +1,125 @@
+; Dosagem por balanca - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x700ac970
+.timer T0 TON 1000
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC M0.0
+BND
+XIC I0.1
+OTE M0.0
+EOR
+SOR ; rede 1
+XIC S0.0
+MOV 8
+ARG N3
+EOR
+SOR ; rede 2
+BST
+SUB N1
+ARG 200
+ARG N2
+NXB
+SUB N1
+ARG N3
+ARG N4
+NXB
+DIV N1
+ARG 50
+ARG N6
+NXB
+NEG N6
+ARG N7
+BND
+EOR
+SOR ; rede 3
+XIC M0.0
+XIC I0.2
+XIC I0.3
+XIO M0.2
+XIO M0.1
+LES N0
+ARG 5
+OTL M0.1
+EOR
+SOR ; rede 4
+XIC M0.1
+XIC M0.0
+LES N0
+ARG N2
+OTE Q0.0
+EOR
+SOR ; rede 5
+XIC M0.1
+XIC M0.0
+LES N0
+ARG N4
+OTE Q0.1
+EOR
+SOR ; rede 6
+XIC M0.1
+GEQ N0
+ARG N4
+XIC I0.3
+BST
+SUB N0
+ARG N1
+ARG N5
+NXB
+ADD N3
+ARG N5
+ARG N3
+NXB
+OTL M0.2
+NXB
+OTU M0.1
+BND
+EOR
+SOR ; rede 7
+LES N3
+ARG 0
+MOV 0
+ARG N3
+EOR
+SOR ; rede 8
+GRT N3
+ARG 60
+MOV 60
+ARG N3
+EOR
+SOR ; rede 9
+XIC M0.2
+LIM N7
+ARG N5
+ARG N6
+OTE Q0.3
+EOR
+SOR ; rede 10
+XIC M0.2
+XIO Q0.3
+OTE Q0.4
+EOR
+SOR ; rede 11
+XIC M0.2
+TON T0
+EOR
+SOR ; rede 12
+XIC M0.0
+XIO M0.1
+BST
+XIC T0.DN
+NXB
+XIO I0.2
+BND
+OTE Q0.2
+EOR
+SOR ; rede 13
+XIO I0.2
+OTU M0.2
+EOR
