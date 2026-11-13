@@ -1,0 +1,669 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Furadeira automatica",
+  "description": "Sequencia por etapas (estilo Grafcet): cada etapa e um bit M ligado com OTL e desligado pela transicao seguinte (OTU). E1 fixa, E2 desce com o mandril, E3 espera 0,5 s no fundo, E4 sobe, E5 solta e espera 0,6 s, E6 ejeta, E7 recua o ejetor. As saidas sao combinacoes das etapas; a emergencia corta mandril, descida e ejetor, mas mantem a peca presa.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:34:03",
+  "modified": "2026-11-13T20:34:03",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Partida",
+      "address": "I0.0",
+      "comment": "Botão PARTIDA do ciclo (NA)"
+    },
+    {
+      "name": "Emergencia",
+      "address": "I0.1",
+      "comment": "Emergência com trava (NF: lê 1 quando liberada)"
+    },
+    {
+      "name": "Peca_Presente",
+      "address": "I0.2",
+      "comment": "Peça na posição de furar"
+    },
+    {
+      "name": "Fixador_Avancado",
+      "address": "I0.3",
+      "comment": "Fixador avançado (peça presa)"
+    },
+    {
+      "name": "Broca_Em_Cima",
+      "address": "I0.4",
+      "comment": "Broca recuada (em cima)"
+    },
+    {
+      "name": "Broca_Embaixo",
+      "address": "I0.5",
+      "comment": "Broca no fim do furo"
+    },
+    {
+      "name": "Ejetor_Recuado",
+      "address": "I0.6",
+      "comment": "Ejetor recuado"
+    },
+    {
+      "name": "Ejetor_Avancado",
+      "address": "I0.7",
+      "comment": "Ejetor avançado"
+    },
+    {
+      "name": "Fixador",
+      "address": "Q0.0",
+      "comment": "Válvula do fixador (A+; mola recua)"
+    },
+    {
+      "name": "Broca_Desce",
+      "address": "Q0.1",
+      "comment": "Válvula da broca: desce (B+)"
+    },
+    {
+      "name": "Broca_Sobe",
+      "address": "Q0.2",
+      "comment": "Válvula da broca: sobe (B-)"
+    },
+    {
+      "name": "Motor_Mandril",
+      "address": "Q0.3",
+      "comment": "Motor do mandril"
+    },
+    {
+      "name": "Ejetor",
+      "address": "Q0.4",
+      "comment": "Válvula do ejetor (C+; mola recua)"
+    },
+    {
+      "name": "Lampada_Ciclo",
+      "address": "Q0.5",
+      "comment": "Lâmpada CICLO EM ANDAMENTO"
+    },
+    {
+      "name": "Etapa_1_Fixar",
+      "address": "M0.1",
+      "comment": "etapa da sequencia"
+    },
+    {
+      "name": "Etapa_2_Descer",
+      "address": "M0.2",
+      "comment": "etapa da sequencia"
+    },
+    {
+      "name": "Etapa_3_Fundo",
+      "address": "M0.3",
+      "comment": "etapa da sequencia"
+    },
+    {
+      "name": "Etapa_4_Subir",
+      "address": "M0.4",
+      "comment": "etapa da sequencia"
+    },
+    {
+      "name": "Etapa_5_Soltar",
+      "address": "M0.5",
+      "comment": "etapa da sequencia"
+    },
+    {
+      "name": "Etapa_6_Ejetar",
+      "address": "M0.6",
+      "comment": "etapa da sequencia"
+    },
+    {
+      "name": "Etapa_7_Recuar",
+      "address": "M0.7",
+      "comment": "etapa da sequencia"
+    },
+    {
+      "name": "Tempo_Fundo",
+      "address": "T0",
+      "comment": "0,5 s no fundo do furo"
+    },
+    {
+      "name": "Tempo_Soltar",
+      "address": "T1",
+      "comment": "0,6 s para o fixador recuar (sem sensor)"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Etapa inicial: partida com a maquina em repouso",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Partida"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peca_Presente"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Broca_Em_Cima"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ejetor_Recuado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Etapa_1_Fixar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Etapa_2_Descer"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Etapa_3_Fundo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Etapa_4_Subir"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Etapa_5_Soltar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Etapa_6_Ejetar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Etapa_7_Recuar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Etapa_1_Fixar"
+        }
+      ]
+    },
+    {
+      "comment": "Transicoes: sensor de fim de curso de cada cilindro",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_1_Fixar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fixador_Avancado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Etapa_2_Descer"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Etapa_1_Fixar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_2_Descer"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Broca_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Etapa_3_Fundo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Etapa_2_Descer"
+        }
+      ]
+    },
+    {
+      "comment": "Espera no fundo (tira a rebarba)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_3_Fundo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Fundo",
+          "preset": 500
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_3_Fundo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Fundo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Etapa_4_Subir"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Etapa_3_Fundo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_4_Subir"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Broca_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Etapa_5_Soltar"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Etapa_4_Subir"
+        }
+      ]
+    },
+    {
+      "comment": "Fixador recua pela mola",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_5_Soltar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Soltar",
+          "preset": 600
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_5_Soltar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Soltar.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Etapa_6_Ejetar"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Etapa_5_Soltar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_6_Ejetar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ejetor_Avancado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Etapa_7_Recuar"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Etapa_6_Ejetar"
+        }
+      ]
+    },
+    {
+      "comment": "Fim do ciclo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_7_Recuar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ejetor_Recuado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Etapa_7_Recuar"
+        }
+      ]
+    },
+    {
+      "comment": "Saidas a partir das etapas",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_1_Fixar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_2_Descer"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_3_Fundo"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_4_Subir"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Fixador"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_2_Descer"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_3_Fundo"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_4_Subir"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Mandril"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_2_Descer"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Broca_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_4_Subir"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Broca_Sobe"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Etapa_6_Ejetar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ejetor"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_1_Fixar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_2_Descer"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_3_Fundo"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_4_Subir"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_5_Soltar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_6_Ejetar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Etapa_7_Recuar"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Ciclo"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:34:03",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 16
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x29bcf9d9",
+    "size": 604,
+    "instructions": 137,
+    "date": "2026-11-13T20:34:03"
+  },
+  "environment": "furadeira"
+}

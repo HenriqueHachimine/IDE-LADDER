@@ -1,0 +1,47 @@
+; Partida estrela-triangulo - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x98d6f8be
+.timer T0 TON 5000
+.timer T1 TON 100
+SOR ; rede 0
+BST
+XIC I0.0
+NXB
+XIC Q0.0
+BND
+XIC I0.1
+XIC I0.2
+OTE Q0.0
+EOR
+SOR ; rede 1
+XIC Q0.0
+TON T0
+EOR
+SOR ; rede 2
+XIC Q0.0
+XIO T0.DN
+XIO Q0.2
+OTE Q0.1
+EOR
+SOR ; rede 3
+XIC T0.DN
+TON T1
+EOR
+SOR ; rede 4
+XIC Q0.0
+XIC T1.DN
+XIO Q0.1
+OTE Q0.2
+EOR
+SOR ; rede 5
+XIC Q0.2
+OTE Q0.3
+EOR
+SOR ; rede 6
+XIO I0.2
+OTE Q0.4
+EOR

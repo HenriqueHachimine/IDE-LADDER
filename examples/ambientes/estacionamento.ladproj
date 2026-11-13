@@ -1,0 +1,389 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Estacionamento",
+  "description": "Contagem com aritmetica: N1 (ocupadas) soma 1 quando um carro termina de passar pelo laco de entrada com a cancela aberta (borda de descida do laco) e subtrai 1 na saida. N0 = 12 - N1 vai para o painel. A cancela de entrada so abre com vaga (LES) e fica aberta ate o carro sair do laco, para nao descer sobre ele.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:40:33",
+  "modified": "2026-11-13T20:40:33",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Botao_Ticket",
+      "address": "I0.0",
+      "comment": "Botão do ticket na entrada"
+    },
+    {
+      "name": "Laco_Entrada",
+      "address": "I0.1",
+      "comment": "Laço detector sob a cancela de entrada"
+    },
+    {
+      "name": "Cartao_Validado",
+      "address": "I0.2",
+      "comment": "Cartão validado na saída"
+    },
+    {
+      "name": "Laco_Saida",
+      "address": "I0.3",
+      "comment": "Laço detector sob a cancela de saída"
+    },
+    {
+      "name": "Zerar_Contagem",
+      "address": "I0.4",
+      "comment": "Botão de manutenção: zera a contagem"
+    },
+    {
+      "name": "Cancela_Entrada",
+      "address": "Q0.0",
+      "comment": "Abre a cancela de entrada"
+    },
+    {
+      "name": "Cancela_Saida",
+      "address": "Q0.1",
+      "comment": "Abre a cancela de saída"
+    },
+    {
+      "name": "Painel_Livre",
+      "address": "Q0.2",
+      "comment": "Painel LIVRE (verde)"
+    },
+    {
+      "name": "Painel_Lotado",
+      "address": "Q0.3",
+      "comment": "Painel LOTADO (vermelho)"
+    },
+    {
+      "name": "Vagas_Livres",
+      "address": "N0",
+      "comment": "vagas livres (painel)"
+    },
+    {
+      "name": "Ocupadas",
+      "address": "N1",
+      "comment": "carros dentro"
+    },
+    {
+      "name": "Laco_E_Anterior",
+      "address": "M0.0",
+      "comment": "laco de entrada na varredura anterior"
+    },
+    {
+      "name": "Laco_S_Anterior",
+      "address": "M0.1",
+      "comment": "laco de saida na varredura anterior"
+    },
+    {
+      "name": "Abre_Entrada",
+      "address": "M0.2",
+      "comment": "carro autorizado a entrar"
+    },
+    {
+      "name": "Abre_Saida",
+      "address": "M0.3",
+      "comment": "carro autorizado a sair"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Ticket com carro no laco e vaga disponivel",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_Ticket"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_Entrada"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Ocupadas",
+            "12"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Abre_Entrada"
+        }
+      ]
+    },
+    {
+      "comment": "O carro terminou de passar: conta e fecha",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Laco_Entrada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_E_Anterior"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abre_Entrada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Ocupadas",
+            "1",
+            "Ocupadas"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Abre_Entrada"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_Entrada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Laco_E_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Cartao validado com carro no laco de saida",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Cartao_Validado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_Saida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Abre_Saida"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Laco_Saida"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_S_Anterior"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abre_Saida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Ocupadas",
+            "1",
+            "Ocupadas"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Abre_Saida"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_Saida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Laco_S_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Manutencao: patio vazio",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Zerar_Contagem"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Ocupadas"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Vagas livres no painel",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "12",
+            "Ocupadas",
+            "Vagas_Livres"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Ocupadas",
+            "12"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Painel_Livre"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Ocupadas",
+            "12"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Painel_Lotado"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abre_Entrada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Cancela_Entrada"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abre_Saida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Cancela_Saida"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:40:33",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 12
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x206bfec6",
+    "size": 340,
+    "instructions": 72,
+    "date": "2026-11-13T20:40:33"
+  },
+  "environment": "estacionamento"
+}

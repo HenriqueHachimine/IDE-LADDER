@@ -1,0 +1,413 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Prensa com comando bimanual",
+  "description": "Logica de seguranca: os dois botoes precisam ser acionados em ate 0,5 s (T0 conta desde o primeiro), mantidos durante a descida e soltos antes do proximo golpe (anti-repeticao, M0.0). Soltar uma mao, chegar ao PMI ou interromper a cortina faz o martelo subir.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:34:03",
+  "modified": "2026-11-13T20:34:03",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Botao_Esquerdo",
+      "address": "I0.0",
+      "comment": "Botão da mão esquerda (NA)"
+    },
+    {
+      "name": "Botao_Direito",
+      "address": "I0.1",
+      "comment": "Botão da mão direita (NA)"
+    },
+    {
+      "name": "Cortina_Luz",
+      "address": "I0.2",
+      "comment": "Cortina de luz (NF: lê 1 com a zona livre)"
+    },
+    {
+      "name": "PMS",
+      "address": "I0.3",
+      "comment": "Ponto morto superior (martelo em cima)"
+    },
+    {
+      "name": "PMI",
+      "address": "I0.4",
+      "comment": "Ponto morto inferior (fim do golpe)"
+    },
+    {
+      "name": "Emergencia",
+      "address": "I0.5",
+      "comment": "Emergência com trava (NF: lê 1 quando liberada)"
+    },
+    {
+      "name": "Valvula_Desce",
+      "address": "Q0.0",
+      "comment": "Válvula: martelo desce"
+    },
+    {
+      "name": "Valvula_Sobe",
+      "address": "Q0.1",
+      "comment": "Válvula: martelo sobe"
+    },
+    {
+      "name": "Lampada_Pronta",
+      "address": "Q0.2",
+      "comment": "Lâmpada PRONTA para o golpe"
+    },
+    {
+      "name": "Rearmado",
+      "address": "M0.0",
+      "comment": "os dois botoes foram soltos desde o ultimo golpe"
+    },
+    {
+      "name": "Ciclo",
+      "address": "M0.1",
+      "comment": "golpe em andamento (descida)"
+    },
+    {
+      "name": "Retorno",
+      "address": "M0.2",
+      "comment": "martelo voltando ao PMS"
+    },
+    {
+      "name": "Simultaneidade",
+      "address": "T0",
+      "comment": "0,5 s desde o primeiro botao"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Conta o tempo desde que a primeira mao apertou",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Botao_Esquerdo"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Botao_Direito"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Simultaneidade",
+          "preset": 500
+        }
+      ]
+    },
+    {
+      "comment": "Anti-repeticao: so rearma com as duas maos soltas",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Botao_Esquerdo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Botao_Direito"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Rearmado"
+        }
+      ]
+    },
+    {
+      "comment": "Inicio do golpe: simultaneo, rearmado e no PMS",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_Esquerdo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_Direito"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Simultaneidade.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rearmado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "PMS"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Cortina_Luz"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Retorno"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ciclo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rearmado"
+        }
+      ]
+    },
+    {
+      "comment": "Fim do golpe ou condicao insegura: volta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ciclo"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "PMI"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Botao_Esquerdo"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Botao_Direito"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Cortina_Luz"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Emergencia"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Retorno"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ciclo"
+        }
+      ]
+    },
+    {
+      "comment": "Desce so com as duas maos e zona livre",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ciclo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_Esquerdo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_Direito"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Cortina_Luz"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "PMI"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "Sobe ate o PMS",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Retorno"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "PMS"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Sobe"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Retorno"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "PMS"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Retorno"
+        }
+      ]
+    },
+    {
+      "comment": "Pronta para o proximo golpe",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "PMS"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rearmado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Cortina_Luz"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ciclo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Pronta"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:34:03",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 8
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x60d9effd",
+    "size": 348,
+    "instructions": 75,
+    "date": "2026-11-13T20:34:03"
+  },
+  "environment": "prensa"
+}

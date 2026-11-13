@@ -1,0 +1,267 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Partida estrela-triangulo",
+  "description": "Intertravamento e temporizacao: K1 com selo; K2 (estrela) por 5 s; tempo morto de 100 ms para o K2 abrir (os contatores levam 40 ms) e so entao K3 (triangulo). K2 e K3 se bloqueiam mutuamente. O rele termico (NF) derruba tudo e acende FALHA.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:34:02",
+  "modified": "2026-11-13T20:34:02",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Botão LIGA (NA)"
+    },
+    {
+      "name": "Desliga",
+      "address": "I0.1",
+      "comment": "Botão DESLIGA (NF: lê 1 quando solto)"
+    },
+    {
+      "name": "Rele_Termico",
+      "address": "I0.2",
+      "comment": "Relé térmico (NF: lê 0 quando desarma)"
+    },
+    {
+      "name": "Rotacao_Nominal",
+      "address": "I0.3",
+      "comment": "Sensor de rotação: motor acima de 85% da velocidade"
+    },
+    {
+      "name": "Contator_K1",
+      "address": "Q0.0",
+      "comment": "K1: contator de linha (rede)"
+    },
+    {
+      "name": "Contator_K2_Estrela",
+      "address": "Q0.1",
+      "comment": "K2: fecha o centro da estrela"
+    },
+    {
+      "name": "Contator_K3_Triangulo",
+      "address": "Q0.2",
+      "comment": "K3: liga o motor em triângulo"
+    },
+    {
+      "name": "Lampada_Ligado",
+      "address": "Q0.3",
+      "comment": "Lâmpada MOTOR LIGADO (triângulo)"
+    },
+    {
+      "name": "Lampada_Falha",
+      "address": "Q0.4",
+      "comment": "Lâmpada FALHA (relé térmico desarmado)"
+    },
+    {
+      "name": "Tempo_Estrela",
+      "address": "T0",
+      "comment": "5 s em estrela"
+    },
+    {
+      "name": "Tempo_Morto",
+      "address": "T1",
+      "comment": "100 ms entre abrir K2 e fechar K3"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "K1 com selo; DESLIGA e termico sao NF",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Liga"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Contator_K1"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Desliga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rele_Termico"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Contator_K1"
+        }
+      ]
+    },
+    {
+      "comment": "Tempo em estrela",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Contator_K1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Estrela",
+          "preset": 5000
+        }
+      ]
+    },
+    {
+      "comment": "Estrela, intertravada com o triangulo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Contator_K1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Tempo_Estrela.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Contator_K3_Triangulo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Contator_K2_Estrela"
+        }
+      ]
+    },
+    {
+      "comment": "Tempo morto: o K2 abre em 40 ms (arco) antes de o K3 fechar",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Estrela.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Morto",
+          "preset": 100
+        }
+      ]
+    },
+    {
+      "comment": "Triangulo, intertravado com a estrela",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Contator_K1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Morto.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Contator_K2_Estrela"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Contator_K3_Triangulo"
+        }
+      ]
+    },
+    {
+      "comment": "Sinalizacao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Contator_K3_Triangulo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Ligado"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rele_Termico"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Falha"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:34:02",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 7
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x98d6f8be",
+    "size": 208,
+    "instructions": 38,
+    "date": "2026-11-13T20:34:02"
+  },
+  "environment": "estrela_triangulo"
+}

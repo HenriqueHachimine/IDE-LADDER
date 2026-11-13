@@ -1,0 +1,146 @@
+; Furadeira automatica - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x29bcf9d9
+.timer T0 TON 500
+.timer T1 TON 600
+SOR ; rede 0
+XIC I0.0
+XIC I0.1
+XIC I0.2
+XIC I0.4
+XIC I0.6
+XIO M0.1
+XIO M0.2
+XIO M0.3
+XIO M0.4
+XIO M0.5
+XIO M0.6
+XIO M0.7
+OTL M0.1
+EOR
+SOR ; rede 1
+XIC M0.1
+XIC I0.3
+BST
+OTL M0.2
+NXB
+OTU M0.1
+BND
+EOR
+SOR ; rede 2
+XIC M0.2
+XIC I0.5
+BST
+OTL M0.3
+NXB
+OTU M0.2
+BND
+EOR
+SOR ; rede 3
+XIC M0.3
+TON T0
+EOR
+SOR ; rede 4
+XIC M0.3
+XIC T0.DN
+BST
+OTL M0.4
+NXB
+OTU M0.3
+BND
+EOR
+SOR ; rede 5
+XIC M0.4
+XIC I0.4
+BST
+OTL M0.5
+NXB
+OTU M0.4
+BND
+EOR
+SOR ; rede 6
+XIC M0.5
+TON T1
+EOR
+SOR ; rede 7
+XIC M0.5
+XIC T1.DN
+BST
+OTL M0.6
+NXB
+OTU M0.5
+BND
+EOR
+SOR ; rede 8
+XIC M0.6
+XIC I0.7
+BST
+OTL M0.7
+NXB
+OTU M0.6
+BND
+EOR
+SOR ; rede 9
+XIC M0.7
+XIC I0.6
+OTU M0.7
+EOR
+SOR ; rede 10
+BST
+XIC M0.1
+NXB
+XIC M0.2
+NXB
+XIC M0.3
+NXB
+XIC M0.4
+BND
+OTE Q0.0
+EOR
+SOR ; rede 11
+BST
+XIC M0.2
+NXB
+XIC M0.3
+NXB
+XIC M0.4
+BND
+XIC I0.1
+OTE Q0.3
+EOR
+SOR ; rede 12
+XIC M0.2
+XIC I0.1
+OTE Q0.1
+EOR
+SOR ; rede 13
+XIC M0.4
+OTE Q0.2
+EOR
+SOR ; rede 14
+XIC M0.6
+XIC I0.1
+OTE Q0.4
+EOR
+SOR ; rede 15
+BST
+XIC M0.1
+NXB
+XIC M0.2
+NXB
+XIC M0.3
+NXB
+XIC M0.4
+NXB
+XIC M0.5
+NXB
+XIC M0.6
+NXB
+XIC M0.7
+BND
+OTE Q0.5
+EOR

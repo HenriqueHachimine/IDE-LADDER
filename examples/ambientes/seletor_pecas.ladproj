@@ -1,0 +1,355 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Separacao de pecas",
+  "description": "Registrador de deslocamento: a cada pulso do encoder (borda de subida) N0 e N1 sao multiplicados por 2 (deslocam um bit) e o bit 0 recebe o que a inspecao ve agora (metal em N0, alta em N1). O bit k corresponde a peca que esta k passos depois da inspecao: o desviador A testa o bit 3 de N0 (MEQ com mascara 8) e o B o bit 6 de N1 (mascara 64). Subtrair 128 mantem so 7 bits.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:40:34",
+  "modified": "2026-11-13T20:40:34",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Chave liga a esteira"
+    },
+    {
+      "name": "Encoder",
+      "address": "I0.1",
+      "comment": "Encoder: 1 pulso por passo (metade do passo em 1)"
+    },
+    {
+      "name": "Peca_Inspecao",
+      "address": "I0.2",
+      "comment": "Peça no ponto de inspeção"
+    },
+    {
+      "name": "Sensor_Metal",
+      "address": "I0.3",
+      "comment": "Sensor indutivo: peça metálica na inspeção"
+    },
+    {
+      "name": "Sensor_Altura",
+      "address": "I0.4",
+      "comment": "Sensor de altura: peça alta na inspeção"
+    },
+    {
+      "name": "Motor_Esteira",
+      "address": "Q0.0",
+      "comment": "Motor da esteira"
+    },
+    {
+      "name": "Desviador_A",
+      "address": "Q0.1",
+      "comment": "Desviador A: metálicas"
+    },
+    {
+      "name": "Desviador_B",
+      "address": "Q0.2",
+      "comment": "Desviador B: plásticas altas"
+    },
+    {
+      "name": "Lampada_Run",
+      "address": "Q0.3",
+      "comment": "Lâmpada esteira em operação"
+    },
+    {
+      "name": "Reg_Metal",
+      "address": "N0",
+      "comment": "bit k = peca metalica k passos depois da inspecao"
+    },
+    {
+      "name": "Reg_Alta",
+      "address": "N1",
+      "comment": "bit k = peca plastica alta k passos depois da inspecao"
+    },
+    {
+      "name": "Encoder_Anterior",
+      "address": "M0.0",
+      "comment": "encoder na varredura anterior"
+    },
+    {
+      "name": "Pulso",
+      "address": "M0.1",
+      "comment": "borda de subida do encoder (uma varredura)"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Esteira",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Esteira"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Run"
+        }
+      ]
+    },
+    {
+      "comment": "Um pulso por passo da esteira",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Encoder"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Encoder_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pulso"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Encoder"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Encoder_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Desloca: cada peca anda um bit",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Reg_Metal",
+            "2",
+            "Reg_Metal"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Reg_Alta",
+            "2",
+            "Reg_Alta"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Bit 0 = peca que esta na inspecao agora",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Metal"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Reg_Metal",
+            "1",
+            "Reg_Metal"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Altura"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Reg_Alta",
+            "1",
+            "Reg_Alta"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Descarta o que passou do ultimo desviador",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Reg_Metal",
+            "128"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Reg_Metal",
+            "128",
+            "Reg_Metal"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Reg_Alta",
+            "128"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Reg_Alta",
+            "128",
+            "Reg_Alta"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Peca metalica 3 passos depois: desvia durante meio passo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Encoder"
+        },
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Reg_Metal",
+            "8",
+            "8"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Desviador_A"
+        }
+      ]
+    },
+    {
+      "comment": "Peca alta 6 passos depois",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Encoder"
+        },
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Reg_Alta",
+            "64",
+            "64"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Desviador_B"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:40:34",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 10
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x82492e13",
+    "size": 344,
+    "instructions": 71,
+    "date": "2026-11-13T20:40:34"
+  },
+  "environment": "seletor_pecas"
+}

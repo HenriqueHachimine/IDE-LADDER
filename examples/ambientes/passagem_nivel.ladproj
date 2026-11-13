@@ -1,0 +1,566 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Passagem de nivel",
+  "description": "Memoria de sentido: o primeiro sensor de aproximacao que atua define de onde o trem vem (M0.0/M0.1). Quando o trem deixa a ilha, o alerta termina e o sensor do lado de saida passa a ser ignorado ate o trem passar por ele (M0.2-M0.5), senao ele seria confundido com um novo trem. Luzes alternadas pelo relogio S0.3, sino ate a cancela abaixar e 3 s de aviso antes de descer.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:40:33",
+  "modified": "2026-11-13T20:40:33",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Sensor_Oeste",
+      "address": "I0.0",
+      "comment": "Aproximação pelo oeste (400 m)"
+    },
+    {
+      "name": "Sensor_Ilha",
+      "address": "I0.1",
+      "comment": "Trem sobre a passagem (+-15 m)"
+    },
+    {
+      "name": "Sensor_Leste",
+      "address": "I0.2",
+      "comment": "Aproximação pelo leste (400 m)"
+    },
+    {
+      "name": "Cancela_Abaixada",
+      "address": "I0.3",
+      "comment": "Fim de curso: cancela abaixada"
+    },
+    {
+      "name": "Cancela_Levantada",
+      "address": "I0.4",
+      "comment": "Fim de curso: cancela levantada"
+    },
+    {
+      "name": "Luz_Esquerda",
+      "address": "Q0.0",
+      "comment": "Luz vermelha esquerda"
+    },
+    {
+      "name": "Luz_Direita",
+      "address": "Q0.1",
+      "comment": "Luz vermelha direita"
+    },
+    {
+      "name": "Sino",
+      "address": "Q0.2",
+      "comment": "Sino de alerta"
+    },
+    {
+      "name": "Cancela_Abaixa",
+      "address": "Q0.3",
+      "comment": "Motor da cancela: abaixar"
+    },
+    {
+      "name": "Cancela_Levanta",
+      "address": "Q0.4",
+      "comment": "Motor da cancela: levantar"
+    },
+    {
+      "name": "Vindo_Oeste",
+      "address": "M0.0",
+      "comment": "trem chegando pelo oeste"
+    },
+    {
+      "name": "Vindo_Leste",
+      "address": "M0.1",
+      "comment": "trem chegando pelo leste"
+    },
+    {
+      "name": "Ignora_Leste",
+      "address": "M0.2",
+      "comment": "trem indo embora pelo leste"
+    },
+    {
+      "name": "Ignora_Oeste",
+      "address": "M0.3",
+      "comment": "trem indo embora pelo oeste"
+    },
+    {
+      "name": "Viu_Leste",
+      "address": "M0.4",
+      "comment": "o trem que vai embora chegou ao sensor leste"
+    },
+    {
+      "name": "Viu_Oeste",
+      "address": "M0.5",
+      "comment": "o trem que vai embora chegou ao sensor oeste"
+    },
+    {
+      "name": "Trem_Na_Ilha",
+      "address": "M0.6",
+      "comment": "o trem ja chegou a passagem"
+    },
+    {
+      "name": "Alerta",
+      "address": "M0.7",
+      "comment": "passagem fechada para os carros"
+    },
+    {
+      "name": "Aviso",
+      "address": "T0",
+      "comment": "3 s de luzes antes de a cancela descer"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "O primeiro sensor que atua define o sentido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Oeste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ignora_Oeste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vindo_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vindo_Oeste"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Leste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ignora_Leste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vindo_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vindo_Leste"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Vindo_Oeste"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Vindo_Leste"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Alerta"
+        }
+      ]
+    },
+    {
+      "comment": "O trem chegou a passagem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Alerta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Ilha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Trem_Na_Ilha"
+        }
+      ]
+    },
+    {
+      "comment": "Saiu da ilha: ignora o sensor do lado para onde ele vai",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Trem_Na_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vindo_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ignora_Leste"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Trem_Na_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vindo_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ignora_Oeste"
+        }
+      ]
+    },
+    {
+      "comment": "Passagem livre: fim do alerta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Trem_Na_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Ilha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vindo_Oeste"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vindo_Leste"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Trem_Na_Ilha"
+        }
+      ]
+    },
+    {
+      "comment": "O trem que vai embora passa pelo sensor do outro lado",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ignora_Leste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Viu_Leste"
+        }
+      ]
+    },
+    {
+      "comment": "e o libera quando termina de passar",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Viu_Leste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ignora_Leste"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Viu_Leste"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ignora_Oeste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Viu_Oeste"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Viu_Oeste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ignora_Oeste"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Viu_Oeste"
+        }
+      ]
+    },
+    {
+      "comment": "Luzes alternadas pelo relogio de 1 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Alerta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Esquerda"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Alerta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "S0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Direita"
+        }
+      ]
+    },
+    {
+      "comment": "Sino ate a cancela abaixar",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Alerta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Cancela_Abaixada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Sino"
+        }
+      ]
+    },
+    {
+      "comment": "3 s de aviso",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Alerta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Aviso",
+          "preset": 3000
+        }
+      ]
+    },
+    {
+      "comment": "Cancela desce depois do aviso",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Alerta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Aviso.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Cancela_Abaixada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Cancela_Abaixa"
+        }
+      ]
+    },
+    {
+      "comment": "e sobe quando o trem deixa a ilha",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Alerta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Cancela_Levantada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Cancela_Levanta"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:40:33",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 17
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x7bcfa87b",
+    "size": 472,
+    "instructions": 106,
+    "date": "2026-11-13T20:40:33"
+  },
+  "environment": "passagem_nivel"
+}

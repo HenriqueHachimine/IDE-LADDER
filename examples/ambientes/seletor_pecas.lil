@@ -1,0 +1,78 @@
+; Separacao de pecas - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x82492e13
+SOR ; rede 0
+XIC I0.0
+BST
+OTE Q0.0
+NXB
+OTE Q0.3
+BND
+EOR
+SOR ; rede 1
+XIC I0.1
+XIO M0.0
+OTE M0.1
+EOR
+SOR ; rede 2
+XIC I0.1
+OTE M0.0
+EOR
+SOR ; rede 3
+XIC M0.1
+BST
+MUL N0
+ARG 2
+ARG N0
+NXB
+MUL N1
+ARG 2
+ARG N1
+BND
+EOR
+SOR ; rede 4
+XIC M0.1
+XIC I0.3
+ADD N0
+ARG 1
+ARG N0
+EOR
+SOR ; rede 5
+XIC M0.1
+XIC I0.4
+ADD N1
+ARG 1
+ARG N1
+EOR
+SOR ; rede 6
+GEQ N0
+ARG 128
+SUB N0
+ARG 128
+ARG N0
+EOR
+SOR ; rede 7
+GEQ N1
+ARG 128
+SUB N1
+ARG 128
+ARG N1
+EOR
+SOR ; rede 8
+XIC I0.1
+MEQ N0
+ARG 8
+ARG 8
+OTE Q0.1
+EOR
+SOR ; rede 9
+XIC I0.1
+MEQ N1
+ARG 64
+ARG 64
+OTE Q0.2
+EOR

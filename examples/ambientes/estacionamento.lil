@@ -1,0 +1,79 @@
+; Estacionamento - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x206bfec6
+SOR ; rede 0
+XIC I0.0
+XIC I0.1
+LES N1
+ARG 12
+OTL M0.2
+EOR
+SOR ; rede 1
+XIO I0.1
+XIC M0.0
+XIC M0.2
+BST
+ADD N1
+ARG 1
+ARG N1
+NXB
+OTU M0.2
+BND
+EOR
+SOR ; rede 2
+XIC I0.1
+OTE M0.0
+EOR
+SOR ; rede 3
+XIC I0.2
+XIC I0.3
+OTL M0.3
+EOR
+SOR ; rede 4
+XIO I0.3
+XIC M0.1
+XIC M0.3
+BST
+SUB N1
+ARG 1
+ARG N1
+NXB
+OTU M0.3
+BND
+EOR
+SOR ; rede 5
+XIC I0.3
+OTE M0.1
+EOR
+SOR ; rede 6
+XIC I0.4
+MOV 0
+ARG N1
+EOR
+SOR ; rede 7
+SUB 12
+ARG N1
+ARG N0
+EOR
+SOR ; rede 8
+LES N1
+ARG 12
+OTE Q0.2
+EOR
+SOR ; rede 9
+GEQ N1
+ARG 12
+OTE Q0.3
+EOR
+SOR ; rede 10
+XIC M0.2
+OTE Q0.0
+EOR
+SOR ; rede 11
+XIC M0.3
+OTE Q0.1
+EOR

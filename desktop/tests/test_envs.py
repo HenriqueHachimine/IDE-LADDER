@@ -343,3 +343,67 @@ def test_io_simulator_example_runs_bcd_through_frd_and_tod():
     assert not alarms and env.thumbwheel == 1009
     assert sim.vm.n[0] == 0x1009 and sim.vm.n[2] == 1009 and env.display_word == 0x1009
     assert env.out["Q2"] and not env.out["Q0"]
+
+
+# ------------------------------------------------- ambientes com estilos de logica diferentes
+def test_star_delta_switches_after_dead_time_and_detects_short():
+    p = Project.load(EXAMPLES / "estrela_triangulo.ladproj")
+    env, alarms, _ = closed_loop(p, [(100, "LIGA", True), (200, "LIGA", False)], 9000)
+    assert alarms == set() and env.starts == 1 and env.connection == "triangulo" and env.last_peak < 2.5
+    env, alarms, sim = closed_loop(p, [(100, "LIGA", True), (200, "LIGA", False), (9000, "SOBRECARGA", True)], 30000)
+    assert env.tripped and alarms == set() and sim.vm.outputs == 0b10000          # so FALHA acesa
+    same_scan = Project(environment="estrela_triangulo", rungs=[        # troca K2 -> K3 sem tempo morto
+        Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.0"), Coil("OTL", "Q0.1")]),
+        Rung([Contact("XIC", "Q0.0")], [Coil("OTE", "Q0.2")])])
+    _, alarms, _ = closed_loop(same_scan, [(100, "LIGA", True), (200, "LIGA", False)], 1000)
+    assert any("CURTO-CIRCUITO" in a for a in alarms)
+
+
+def test_two_hand_press_needs_simultaneous_hands_and_release():
+    p = Project.load(EXAMPLES / "prensa.ladproj")
+    actions = [(100, "AMBAS", True), (5000, "AMBAS", True), (6000, "AMBAS", True),   # golpe, solta, golpe
+               (11000, "ESQ", True), (11800, "DIR", True)]                          # 800 ms: recusado
+    env, alarms, _ = closed_loop(p, actions, 16000)
+    assert env.strokes == 2 and alarms == set()
+    env, alarms, _ = closed_loop(p, [(100, "AMBAS", True), (1200, "MAO", True)], 4000)   # mao no meio do golpe
+    assert env.strokes == 0 and env.pos < 5 and alarms == set()                        # voltou antes de chegar
+    one_hand = Project(environment="prensa", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")])])
+    _, alarms, _ = closed_loop(one_hand, [(100, "ESQ", True), (200, "MAO", True)], 3000)
+    assert any("sem as duas" in a for a in alarms) and any("PERIGO" in a for a in alarms)
+
+
+def test_drill_sequence_makes_good_parts_and_breaks_bit_without_spindle():
+    p = Project.load(EXAMPLES / "furadeira.ladproj")
+    env, alarms, _ = closed_loop(p, [(100, "PARTIDA", True), (200, "PARTIDA", False), (12000, "PARTIDA", True),
+                                     (12100, "PARTIDA", False)], 24000)
+    assert env.good == 2 and env.defects == 0 and alarms == set()
+    bad = Project(environment="furadeira", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.1")])])
+    _, alarms, _ = closed_loop(bad, [(100, "PARTIDA", True), (200, "PARTIDA", False)], 3000)
+    assert any("broca quebrou" in a for a in alarms)
+
+
+def test_level_crossing_handles_both_directions_and_ignores_leaving_train():
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "passagem_nivel.ladproj"), total_ms=140000)
+    assert env.trains == 3 and alarms == set() and env.margin_s > 5 and env.cars_crossed > 10
+    no_memory = Project(environment="passagem_nivel", rungs=[
+        Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1"), Coil("OTE", "Q0.3")])])
+    _, alarms, _ = closed_loop(no_memory, total_ms=40000)
+    assert any("piscar alternadas" in a for a in alarms) and any("3 s de aviso" in a for a in alarms)
+
+
+def test_parking_counts_cars_and_shows_free_spaces_in_n0():
+    env, alarms, sim = closed_loop(Project.load(EXAMPLES / "estacionamento.ladproj"), total_ms=300000)
+    assert alarms == set() and env.entered > 30 and env.gave_up > 0           # lotou e recusou carros
+    assert sim.vm.n[0] == 12 - env.inside == env.displayed
+    no_count = Project(environment="estacionamento", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")])])
+    _, alarms, _ = closed_loop(no_count, total_ms=40000)
+    assert any("Contagem errada" in a for a in alarms)
+
+
+def test_sorter_shift_register_sends_each_part_to_its_bin():
+    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "seletor_pecas.ladproj"), [(100, "LIGA", True)], 60000)
+    assert alarms == set() and env.wrong == 0 and all(sum(env.bins[b].values()) > 5 for b in "ABC")
+    no_register = Project(environment="seletor_pecas", rungs=[
+        Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")]), Rung([Contact("XIC", "I0.3")], [Coil("OTE", "Q0.1")])])
+    _, alarms, _ = closed_loop(no_register, [(100, "LIGA", True)], 20000)
+    assert any("destino errado" in a for a in alarms)

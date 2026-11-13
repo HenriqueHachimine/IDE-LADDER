@@ -409,6 +409,220 @@ def batch_mixer() -> Project:
     return p
 
 
+def star_delta() -> Project:
+    p = env_project("estrela_triangulo", "Partida estrela-triangulo", (
+        "Intertravamento e temporizacao: K1 com selo; K2 (estrela) por 5 s; tempo morto de 100 ms para o K2 "
+        "abrir (os contatores levam 40 ms) e so entao K3 (triangulo). K2 e K3 se bloqueiam mutuamente. O rele "
+        "termico (NF) derruba tudo e acende FALHA."))
+    p.symbols += [Symbol("Tempo_Estrela", "T0", "5 s em estrela"),
+                  Symbol("Tempo_Morto", "T1", "100 ms entre abrir K2 e fechar K3")]
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Liga")], [Contact("XIC", "Contator_K1")]]), Contact("XIC", "Desliga"),
+              Contact("XIC", "Rele_Termico")], [Coil("OTE", "Contator_K1")], "K1 com selo; DESLIGA e termico sao NF"),
+        Rung([Contact("XIC", "Contator_K1")], [TimerBox("TON", "Tempo_Estrela", 5000)], "Tempo em estrela"),
+        Rung([Contact("XIC", "Contator_K1"), Contact("XIO", "Tempo_Estrela.DN"), Contact("XIO", "Contator_K3_Triangulo")],
+             [Coil("OTE", "Contator_K2_Estrela")], "Estrela, intertravada com o triangulo"),
+        Rung([Contact("XIC", "Tempo_Estrela.DN")], [TimerBox("TON", "Tempo_Morto", 100)],
+             "Tempo morto: o K2 abre em 40 ms (arco) antes de o K3 fechar"),
+        Rung([Contact("XIC", "Contator_K1"), Contact("XIC", "Tempo_Morto.DN"), Contact("XIO", "Contator_K2_Estrela")],
+             [Coil("OTE", "Contator_K3_Triangulo")], "Triangulo, intertravado com a estrela"),
+        Rung([Contact("XIC", "Contator_K3_Triangulo")], [Coil("OTE", "Lampada_Ligado")], "Sinalizacao"),
+        Rung([Contact("XIO", "Rele_Termico")], [Coil("OTE", "Lampada_Falha")]),
+    ]
+    return p
+
+
+def two_hand_press() -> Project:
+    p = env_project("prensa", "Prensa com comando bimanual", (
+        "Logica de seguranca: os dois botoes precisam ser acionados em ate 0,5 s (T0 conta desde o primeiro), "
+        "mantidos durante a descida e soltos antes do proximo golpe (anti-repeticao, M0.0). Soltar uma mao, "
+        "chegar ao PMI ou interromper a cortina faz o martelo subir."))
+    p.symbols += [Symbol("Rearmado", "M0.0", "os dois botoes foram soltos desde o ultimo golpe"),
+                  Symbol("Ciclo", "M0.1", "golpe em andamento (descida)"),
+                  Symbol("Retorno", "M0.2", "martelo voltando ao PMS"),
+                  Symbol("Simultaneidade", "T0", "0,5 s desde o primeiro botao")]
+    both = [Contact("XIC", "Botao_Esquerdo"), Contact("XIC", "Botao_Direito")]
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Botao_Esquerdo")], [Contact("XIC", "Botao_Direito")]])],
+             [TimerBox("TON", "Simultaneidade", 500)], "Conta o tempo desde que a primeira mao apertou"),
+        Rung([Contact("XIO", "Botao_Esquerdo"), Contact("XIO", "Botao_Direito")], [Coil("OTL", "Rearmado")],
+             "Anti-repeticao: so rearma com as duas maos soltas"),
+        Rung([*both, Contact("XIO", "Simultaneidade.DN"), Contact("XIC", "Rearmado"), Contact("XIC", "PMS"),
+              Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"), Contact("XIO", "Retorno")],
+             [Coil("OTL", "Ciclo"), Coil("OTU", "Rearmado")], "Inicio do golpe: simultaneo, rearmado e no PMS"),
+        Rung([Contact("XIC", "Ciclo"),
+              Parallel([[Contact("XIC", "PMI")], [Contact("XIO", "Botao_Esquerdo")], [Contact("XIO", "Botao_Direito")],
+                        [Contact("XIO", "Cortina_Luz")], [Contact("XIO", "Emergencia")]])],
+             [Coil("OTL", "Retorno"), Coil("OTU", "Ciclo")], "Fim do golpe ou condicao insegura: volta"),
+        Rung([Contact("XIC", "Ciclo"), *both, Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"),
+              Contact("XIO", "PMI")], [Coil("OTE", "Valvula_Desce")], "Desce so com as duas maos e zona livre"),
+        Rung([Contact("XIC", "Retorno"), Contact("XIC", "Emergencia"), Contact("XIO", "PMS")],
+             [Coil("OTE", "Valvula_Sobe")], "Sobe ate o PMS"),
+        Rung([Contact("XIC", "Retorno"), Contact("XIC", "PMS")], [Coil("OTU", "Retorno")]),
+        Rung([Contact("XIC", "PMS"), Contact("XIC", "Rearmado"), Contact("XIC", "Cortina_Luz"),
+              Contact("XIC", "Emergencia"), Contact("XIO", "Ciclo")], [Coil("OTE", "Lampada_Pronta")],
+             "Pronta para o proximo golpe"),
+    ]
+    return p
+
+
+def drill() -> Project:
+    p = env_project("furadeira", "Furadeira automatica", (
+        "Sequencia por etapas (estilo Grafcet): cada etapa e um bit M ligado com OTL e desligado pela "
+        "transicao seguinte (OTU). E1 fixa, E2 desce com o mandril, E3 espera 0,5 s no fundo, E4 sobe, E5 "
+        "solta e espera 0,6 s, E6 ejeta, E7 recua o ejetor. As saidas sao combinacoes das etapas; a emergencia "
+        "corta mandril, descida e ejetor, mas mantem a peca presa."))
+    steps = [("Etapa_1_Fixar", "M0.1"), ("Etapa_2_Descer", "M0.2"), ("Etapa_3_Fundo", "M0.3"),
+             ("Etapa_4_Subir", "M0.4"), ("Etapa_5_Soltar", "M0.5"), ("Etapa_6_Ejetar", "M0.6"),
+             ("Etapa_7_Recuar", "M0.7")]
+    p.symbols += [Symbol(n, a, "etapa da sequencia") for n, a in steps]
+    p.symbols += [Symbol("Tempo_Fundo", "T0", "0,5 s no fundo do furo"),
+                  Symbol("Tempo_Soltar", "T1", "0,6 s para o fixador recuar (sem sensor)")]
+    e = [n for n, _ in steps]
+
+    def go(cond, frm, to, comment=""):
+        return Rung([Contact("XIC", frm), *cond], [Coil("OTL", to), Coil("OTU", frm)], comment)
+
+    p.rungs = [
+        Rung([Contact("XIC", "Partida"), Contact("XIC", "Emergencia"), Contact("XIC", "Peca_Presente"),
+              Contact("XIC", "Broca_Em_Cima"), Contact("XIC", "Ejetor_Recuado"), *[Contact("XIO", n) for n in e]],
+             [Coil("OTL", e[0])], "Etapa inicial: partida com a maquina em repouso"),
+        go([Contact("XIC", "Fixador_Avancado")], e[0], e[1], "Transicoes: sensor de fim de curso de cada cilindro"),
+        go([Contact("XIC", "Broca_Embaixo")], e[1], e[2]),
+        Rung([Contact("XIC", e[2])], [TimerBox("TON", "Tempo_Fundo", 500)], "Espera no fundo (tira a rebarba)"),
+        go([Contact("XIC", "Tempo_Fundo.DN")], e[2], e[3]),
+        go([Contact("XIC", "Broca_Em_Cima")], e[3], e[4]),
+        Rung([Contact("XIC", e[4])], [TimerBox("TON", "Tempo_Soltar", 600)], "Fixador recua pela mola"),
+        go([Contact("XIC", "Tempo_Soltar.DN")], e[4], e[5]),
+        go([Contact("XIC", "Ejetor_Avancado")], e[5], e[6]),
+        Rung([Contact("XIC", e[6]), Contact("XIC", "Ejetor_Recuado")], [Coil("OTU", e[6])], "Fim do ciclo"),
+        Rung([Parallel([[Contact("XIC", e[k])] for k in range(4)])], [Coil("OTE", "Fixador")],
+             "Saidas a partir das etapas"),
+        Rung([Parallel([[Contact("XIC", e[k])] for k in (1, 2, 3)]), Contact("XIC", "Emergencia")],
+             [Coil("OTE", "Motor_Mandril")]),
+        Rung([Contact("XIC", e[1]), Contact("XIC", "Emergencia")], [Coil("OTE", "Broca_Desce")]),
+        Rung([Contact("XIC", e[3])], [Coil("OTE", "Broca_Sobe")]),
+        Rung([Contact("XIC", e[5]), Contact("XIC", "Emergencia")], [Coil("OTE", "Ejetor")]),
+        Rung([Parallel([[Contact("XIC", n)] for n in e])], [Coil("OTE", "Lampada_Ciclo")]),
+    ]
+    return p
+
+
+def level_crossing() -> Project:
+    p = env_project("passagem_nivel", "Passagem de nivel", (
+        "Memoria de sentido: o primeiro sensor de aproximacao que atua define de onde o trem vem (M0.0/M0.1). "
+        "Quando o trem deixa a ilha, o alerta termina e o sensor do lado de saida passa a ser ignorado ate o "
+        "trem passar por ele (M0.2-M0.5), senao ele seria confundido com um novo trem. Luzes alternadas pelo "
+        "relogio S0.3, sino ate a cancela abaixar e 3 s de aviso antes de descer."))
+    p.symbols += [Symbol("Vindo_Oeste", "M0.0", "trem chegando pelo oeste"),
+                  Symbol("Vindo_Leste", "M0.1", "trem chegando pelo leste"),
+                  Symbol("Ignora_Leste", "M0.2", "trem indo embora pelo leste"),
+                  Symbol("Ignora_Oeste", "M0.3", "trem indo embora pelo oeste"),
+                  Symbol("Viu_Leste", "M0.4", "o trem que vai embora chegou ao sensor leste"),
+                  Symbol("Viu_Oeste", "M0.5", "o trem que vai embora chegou ao sensor oeste"),
+                  Symbol("Trem_Na_Ilha", "M0.6", "o trem ja chegou a passagem"),
+                  Symbol("Alerta", "M0.7", "passagem fechada para os carros"),
+                  Symbol("Aviso", "T0", "3 s de luzes antes de a cancela descer")]
+    p.rungs = [
+        Rung([Contact("XIC", "Sensor_Oeste"), Contact("XIO", "Ignora_Oeste"), Contact("XIO", "Vindo_Leste")],
+             [Coil("OTL", "Vindo_Oeste")], "O primeiro sensor que atua define o sentido"),
+        Rung([Contact("XIC", "Sensor_Leste"), Contact("XIO", "Ignora_Leste"), Contact("XIO", "Vindo_Oeste")],
+             [Coil("OTL", "Vindo_Leste")]),
+        Rung([Parallel([[Contact("XIC", "Vindo_Oeste")], [Contact("XIC", "Vindo_Leste")]])], [Coil("OTE", "Alerta")]),
+        Rung([Contact("XIC", "Alerta"), Contact("XIC", "Sensor_Ilha")], [Coil("OTL", "Trem_Na_Ilha")],
+             "O trem chegou a passagem"),
+        Rung([Contact("XIC", "Trem_Na_Ilha"), Contact("XIO", "Sensor_Ilha"), Contact("XIC", "Vindo_Oeste")],
+             [Coil("OTL", "Ignora_Leste")], "Saiu da ilha: ignora o sensor do lado para onde ele vai"),
+        Rung([Contact("XIC", "Trem_Na_Ilha"), Contact("XIO", "Sensor_Ilha"), Contact("XIC", "Vindo_Leste")],
+             [Coil("OTL", "Ignora_Oeste")]),
+        Rung([Contact("XIC", "Trem_Na_Ilha"), Contact("XIO", "Sensor_Ilha")],
+             [Coil("OTU", "Vindo_Oeste"), Coil("OTU", "Vindo_Leste"), Coil("OTU", "Trem_Na_Ilha")],
+             "Passagem livre: fim do alerta"),
+        Rung([Contact("XIC", "Ignora_Leste"), Contact("XIC", "Sensor_Leste")], [Coil("OTL", "Viu_Leste")],
+             "O trem que vai embora passa pelo sensor do outro lado"),
+        Rung([Contact("XIC", "Viu_Leste"), Contact("XIO", "Sensor_Leste")],
+             [Coil("OTU", "Ignora_Leste"), Coil("OTU", "Viu_Leste")], "e o libera quando termina de passar"),
+        Rung([Contact("XIC", "Ignora_Oeste"), Contact("XIC", "Sensor_Oeste")], [Coil("OTL", "Viu_Oeste")]),
+        Rung([Contact("XIC", "Viu_Oeste"), Contact("XIO", "Sensor_Oeste")],
+             [Coil("OTU", "Ignora_Oeste"), Coil("OTU", "Viu_Oeste")]),
+        Rung([Contact("XIC", "Alerta"), Contact("XIC", "S0.3")], [Coil("OTE", "Luz_Esquerda")],
+             "Luzes alternadas pelo relogio de 1 s"),
+        Rung([Contact("XIC", "Alerta"), Contact("XIO", "S0.3")], [Coil("OTE", "Luz_Direita")]),
+        Rung([Contact("XIC", "Alerta"), Contact("XIO", "Cancela_Abaixada")], [Coil("OTE", "Sino")],
+             "Sino ate a cancela abaixar"),
+        Rung([Contact("XIC", "Alerta")], [TimerBox("TON", "Aviso", 3000)], "3 s de aviso"),
+        Rung([Contact("XIC", "Alerta"), Contact("XIC", "Aviso.DN"), Contact("XIO", "Cancela_Abaixada")],
+             [Coil("OTE", "Cancela_Abaixa")], "Cancela desce depois do aviso"),
+        Rung([Contact("XIO", "Alerta"), Contact("XIO", "Cancela_Levantada")], [Coil("OTE", "Cancela_Levanta")],
+             "e sobe quando o trem deixa a ilha"),
+    ]
+    return p
+
+
+def parking() -> Project:
+    p = env_project("estacionamento", "Estacionamento", (
+        "Contagem com aritmetica: N1 (ocupadas) soma 1 quando um carro termina de passar pelo laco de entrada com a "
+        "cancela aberta (borda de descida do laco) e subtrai 1 na saida. N0 = 12 - N1 vai para o painel. A cancela "
+        "de entrada so abre com vaga (LES) e fica aberta ate o carro sair do laco, para nao descer sobre ele."))
+    p.symbols += [Symbol("Vagas_Livres", "N0", "vagas livres (painel)"), Symbol("Ocupadas", "N1", "carros dentro"),
+                  Symbol("Laco_E_Anterior", "M0.0", "laco de entrada na varredura anterior"),
+                  Symbol("Laco_S_Anterior", "M0.1", "laco de saida na varredura anterior"),
+                  Symbol("Abre_Entrada", "M0.2", "carro autorizado a entrar"),
+                  Symbol("Abre_Saida", "M0.3", "carro autorizado a sair")]
+    p.rungs = [
+        Rung([Contact("XIC", "Botao_Ticket"), Contact("XIC", "Laco_Entrada"), CompareBox("LES", ["Ocupadas", "12"])],
+             [Coil("OTL", "Abre_Entrada")], "Ticket com carro no laco e vaga disponivel"),
+        Rung([Contact("XIO", "Laco_Entrada"), Contact("XIC", "Laco_E_Anterior"), Contact("XIC", "Abre_Entrada")],
+             [MathBox("ADD", ["Ocupadas", "1", "Ocupadas"]), Coil("OTU", "Abre_Entrada")],
+             "O carro terminou de passar: conta e fecha"),
+        Rung([Contact("XIC", "Laco_Entrada")], [Coil("OTE", "Laco_E_Anterior")]),
+        Rung([Contact("XIC", "Cartao_Validado"), Contact("XIC", "Laco_Saida")], [Coil("OTL", "Abre_Saida")],
+             "Cartao validado com carro no laco de saida"),
+        Rung([Contact("XIO", "Laco_Saida"), Contact("XIC", "Laco_S_Anterior"), Contact("XIC", "Abre_Saida")],
+             [MathBox("SUB", ["Ocupadas", "1", "Ocupadas"]), Coil("OTU", "Abre_Saida")]),
+        Rung([Contact("XIC", "Laco_Saida")], [Coil("OTE", "Laco_S_Anterior")]),
+        Rung([Contact("XIC", "Zerar_Contagem")], [MathBox("MOV", ["0", "Ocupadas"])], "Manutencao: patio vazio"),
+        Rung([], [MathBox("SUB", ["12", "Ocupadas", "Vagas_Livres"])], "Vagas livres no painel"),
+        Rung([CompareBox("LES", ["Ocupadas", "12"])], [Coil("OTE", "Painel_Livre")]),
+        Rung([CompareBox("GEQ", ["Ocupadas", "12"])], [Coil("OTE", "Painel_Lotado")]),
+        Rung([Contact("XIC", "Abre_Entrada")], [Coil("OTE", "Cancela_Entrada")]),
+        Rung([Contact("XIC", "Abre_Saida")], [Coil("OTE", "Cancela_Saida")]),
+    ]
+    return p
+
+
+def sorter() -> Project:
+    p = env_project("seletor_pecas", "Separacao de pecas", (
+        "Registrador de deslocamento: a cada pulso do encoder (borda de subida) N0 e N1 sao multiplicados por 2 "
+        "(deslocam um bit) e o bit 0 recebe o que a inspecao ve agora (metal em N0, alta em N1). O bit k "
+        "corresponde a peca que esta k passos depois da inspecao: o desviador A testa o bit 3 de N0 (MEQ com "
+        "mascara 8) e o B o bit 6 de N1 (mascara 64). Subtrair 128 mantem so 7 bits."))
+    p.symbols += [Symbol("Reg_Metal", "N0", "bit k = peca metalica k passos depois da inspecao"),
+                  Symbol("Reg_Alta", "N1", "bit k = peca plastica alta k passos depois da inspecao"),
+                  Symbol("Encoder_Anterior", "M0.0", "encoder na varredura anterior"),
+                  Symbol("Pulso", "M0.1", "borda de subida do encoder (uma varredura)")]
+    p.rungs = [
+        Rung([Contact("XIC", "Liga")], [Coil("OTE", "Motor_Esteira"), Coil("OTE", "Lampada_Run")], "Esteira"),
+        Rung([Contact("XIC", "Encoder"), Contact("XIO", "Encoder_Anterior")], [Coil("OTE", "Pulso")],
+             "Um pulso por passo da esteira"),
+        Rung([Contact("XIC", "Encoder")], [Coil("OTE", "Encoder_Anterior")]),
+        Rung([Contact("XIC", "Pulso")], [MathBox("MUL", ["Reg_Metal", "2", "Reg_Metal"]),
+                                         MathBox("MUL", ["Reg_Alta", "2", "Reg_Alta"])],
+             "Desloca: cada peca anda um bit"),
+        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Sensor_Metal")], [MathBox("ADD", ["Reg_Metal", "1", "Reg_Metal"])],
+             "Bit 0 = peca que esta na inspecao agora"),
+        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Sensor_Altura")], [MathBox("ADD", ["Reg_Alta", "1", "Reg_Alta"])]),
+        Rung([CompareBox("GEQ", ["Reg_Metal", "128"])], [MathBox("SUB", ["Reg_Metal", "128", "Reg_Metal"])],
+             "Descarta o que passou do ultimo desviador"),
+        Rung([CompareBox("GEQ", ["Reg_Alta", "128"])], [MathBox("SUB", ["Reg_Alta", "128", "Reg_Alta"])]),
+        Rung([Contact("XIC", "Encoder"), CompareBox("MEQ", ["Reg_Metal", "8", "8"])], [Coil("OTE", "Desviador_A")],
+             "Peca metalica 3 passos depois: desvia durante meio passo"),
+        Rung([Contact("XIC", "Encoder"), CompareBox("MEQ", ["Reg_Alta", "64", "64"])], [Coil("OTE", "Desviador_B")],
+             "Peca alta 6 passos depois"),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -509,7 +723,10 @@ def main() -> int:
                "ambientes/portao.ladproj": garage_door, "ambientes/elevador.ladproj": elevator,
                "ambientes/garrafas.ladproj": bottle_line, "ambientes/compressores.ladproj": air_compressors,
                "ambientes/misturador.ladproj": batch_mixer, "math/blocos_numericos.ladproj": numeric_blocks,
-               "factoryio/esteira_lote.ladproj": factoryio_conveyor}
+               "factoryio/esteira_lote.ladproj": factoryio_conveyor,
+               "ambientes/estrela_triangulo.ladproj": star_delta, "ambientes/prensa.ladproj": two_hand_press,
+               "ambientes/furadeira.ladproj": drill, "ambientes/passagem_nivel.ladproj": level_crossing,
+               "ambientes/estacionamento.ladproj": parking, "ambientes/seletor_pecas.ladproj": sorter}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue
