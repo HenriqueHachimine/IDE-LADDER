@@ -756,6 +756,59 @@ def greenhouse() -> Project:
     return p
 
 
+def overhead_crane() -> Project:
+    p = env_project("ponte_rolante", "Ponte rolante", (
+        "Posicionamento por encoder: conta as duas bordas do encoder (cada uma = 10 mm) somando ou subtraindo "
+        "conforme o sentido do ultimo movimento. Ao ligar, anda para a esquerda ate a chave de origem e zera a "
+        "posicao (referenciamento). Cada botao carrega o destino (MOV); Diferenca = Destino - Posicao decide o "
+        "sentido, e a menos de 200 mm passa para a velocidade lenta. Antes de partir ou inverter espera 0,4 s "
+        "parada, senao a contagem erra o sentido."))
+    p.symbols += [Symbol("Posicao", "N0", "posicao em passos de 10 mm"), Symbol("Destino", "N1", "estacao chamada"),
+                  Symbol("Diferenca", "N2", "Destino - Posicao"), Symbol("Referenciado", "M0.0", "origem encontrada"),
+                  Symbol("Encoder_Anterior", "M0.1", "encoder na varredura anterior"),
+                  Symbol("Pulso", "M0.2", "borda do encoder (subida ou descida)"),
+                  Symbol("Sentido_Direita", "M0.3", "ultimo movimento para a direita"),
+                  Symbol("Parada", "T0", "0,4 s com o motor desligado")]
+    p.rungs = [
+        Rung([Parallel([[Contact("XIC", "Encoder"), Contact("XIO", "Encoder_Anterior")],
+                        [Contact("XIO", "Encoder"), Contact("XIC", "Encoder_Anterior")]])], [Coil("OTE", "Pulso")],
+             "Borda de subida ou de descida do encoder: 10 mm"),
+        Rung([Contact("XIC", "Encoder")], [Coil("OTE", "Encoder_Anterior")]),
+        Rung([Contact("XIC", "Motor_Direita")], [Coil("OTL", "Sentido_Direita")], "Lembra o sentido do movimento"),
+        Rung([Contact("XIC", "Motor_Esquerda")], [Coil("OTU", "Sentido_Direita")]),
+        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Sentido_Direita")], [MathBox("ADD", ["Posicao", "1", "Posicao"])],
+             "Conta a posicao"),
+        Rung([Contact("XIC", "Pulso"), Contact("XIO", "Sentido_Direita")], [MathBox("SUB", ["Posicao", "1", "Posicao"])]),
+        Rung([Contact("XIC", "Origem"), Contact("XIO", "Referenciado")],
+             [MathBox("MOV", ["0", "Posicao"]), MathBox("MOV", ["0", "Destino"]), Coil("OTL", "Referenciado")],
+             "Referenciamento: origem = 0 mm"),
+        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_1")], [MathBox("MOV", ["40", "Destino"])],
+             "Estacoes: 400, 1200, 2000, 2800 e 3600 mm (/10)"),
+        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_2")], [MathBox("MOV", ["120", "Destino"])]),
+        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_3")], [MathBox("MOV", ["200", "Destino"])]),
+        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_4")], [MathBox("MOV", ["280", "Destino"])]),
+        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_5")], [MathBox("MOV", ["360", "Destino"])]),
+        Rung([], [MathBox("SUB", ["Destino", "Posicao", "Diferenca"])], "Quanto falta"),
+        Rung([Contact("XIO", "Motor_Direita"), Contact("XIO", "Motor_Esquerda")], [TimerBox("TON", "Parada", 400)],
+             "So parte (ou inverte) depois de parada"),
+        Rung([Contact("XIC", "Emergencia"), Contact("XIC", "Referenciado"), CompareBox("GRT", ["Diferenca", "0"]),
+              Parallel([[Contact("XIC", "Parada.DN")], [Contact("XIC", "Motor_Direita")]]), Contact("XIO", "Motor_Esquerda")],
+             [Coil("OTE", "Motor_Direita")], "Destino a direita"),
+        Rung([Contact("XIC", "Emergencia"), Contact("XIO", "Motor_Direita"),
+              Parallel([[Contact("XIC", "Parada.DN")], [Contact("XIC", "Motor_Esquerda")]]),
+              Parallel([[Contact("XIO", "Referenciado")],
+                        [Contact("XIC", "Referenciado"), CompareBox("LES", ["Diferenca", "0"])]])],
+             [Coil("OTE", "Motor_Esquerda")], "Destino a esquerda ou procurando a origem"),
+        Rung([Contact("XIC", "Referenciado"), CompareBox("LIM", ["-20", "Diferenca", "20"])], [Coil("OTE", "Velocidade_Lenta")],
+             "A menos de 200 mm: lenta"),
+        Rung([Parallel([[Contact("XIC", "Motor_Direita")], [Contact("XIC", "Motor_Esquerda")]])],
+             [Coil("OTE", "Libera_Freio")], "Freio solto so com o motor ligado"),
+        Rung([Contact("XIC", "Referenciado"), CompareBox("EQU", ["Diferenca", "0"]), Contact("XIC", "Parada.DN")],
+             [Coil("OTE", "Lampada_Em_Posicao")], "Chegou e parou"),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -861,7 +914,7 @@ def main() -> int:
                "ambientes/furadeira.ladproj": drill, "ambientes/passagem_nivel.ladproj": level_crossing,
                "ambientes/estacionamento.ladproj": parking, "ambientes/seletor_pecas.ladproj": sorter,
                "ambientes/detector_gas.ladproj": gas_detection, "ambientes/balanca.ladproj": scale,
-               "ambientes/estufa.ladproj": greenhouse}
+               "ambientes/estufa.ladproj": greenhouse, "ambientes/ponte_rolante.ladproj": overhead_crane}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

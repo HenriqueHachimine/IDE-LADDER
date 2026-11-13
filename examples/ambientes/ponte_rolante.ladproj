@@ -1,0 +1,706 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Ponte rolante",
+  "description": "Posicionamento por encoder: conta as duas bordas do encoder (cada uma = 10 mm) somando ou subtraindo conforme o sentido do ultimo movimento. Ao ligar, anda para a esquerda ate a chave de origem e zera a posicao (referenciamento). Cada botao carrega o destino (MOV); Diferenca = Destino - Posicao decide o sentido, e a menos de 200 mm passa para a velocidade lenta. Antes de partir ou inverter espera 0,4 s parada, senao a contagem erra o sentido.",
+  "version": "0.1.0",
+  "created": "2026-11-13T20:55:44",
+  "modified": "2026-11-13T20:55:44",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Encoder",
+      "address": "I0.0",
+      "comment": "Encoder incremental (1 ciclo / 20 mm)"
+    },
+    {
+      "name": "Origem",
+      "address": "I0.1",
+      "comment": "Chave de origem (posição 0 mm)"
+    },
+    {
+      "name": "Chama_1",
+      "address": "I0.2",
+      "comment": "Botão chamar estação 1"
+    },
+    {
+      "name": "Chama_2",
+      "address": "I0.3",
+      "comment": "Botão chamar estação 2"
+    },
+    {
+      "name": "Chama_3",
+      "address": "I0.4",
+      "comment": "Botão chamar estação 3"
+    },
+    {
+      "name": "Chama_4",
+      "address": "I0.5",
+      "comment": "Botão chamar estação 4"
+    },
+    {
+      "name": "Chama_5",
+      "address": "I0.6",
+      "comment": "Botão chamar estação 5"
+    },
+    {
+      "name": "Emergencia",
+      "address": "I0.7",
+      "comment": "Emergência com trava (NF: lê 1 quando liberada)"
+    },
+    {
+      "name": "Motor_Direita",
+      "address": "Q0.0",
+      "comment": "Motor de translação: direita"
+    },
+    {
+      "name": "Motor_Esquerda",
+      "address": "Q0.1",
+      "comment": "Motor de translação: esquerda"
+    },
+    {
+      "name": "Velocidade_Lenta",
+      "address": "Q0.2",
+      "comment": "Velocidade baixa (aproximação)"
+    },
+    {
+      "name": "Libera_Freio",
+      "address": "Q0.3",
+      "comment": "Solta o freio (sem energia o freio atua)"
+    },
+    {
+      "name": "Lampada_Em_Posicao",
+      "address": "Q0.4",
+      "comment": "Lâmpada EM POSIÇÃO"
+    },
+    {
+      "name": "Posicao",
+      "address": "N0",
+      "comment": "posicao em passos de 10 mm"
+    },
+    {
+      "name": "Destino",
+      "address": "N1",
+      "comment": "estacao chamada"
+    },
+    {
+      "name": "Diferenca",
+      "address": "N2",
+      "comment": "Destino - Posicao"
+    },
+    {
+      "name": "Referenciado",
+      "address": "M0.0",
+      "comment": "origem encontrada"
+    },
+    {
+      "name": "Encoder_Anterior",
+      "address": "M0.1",
+      "comment": "encoder na varredura anterior"
+    },
+    {
+      "name": "Pulso",
+      "address": "M0.2",
+      "comment": "borda do encoder (subida ou descida)"
+    },
+    {
+      "name": "Sentido_Direita",
+      "address": "M0.3",
+      "comment": "ultimo movimento para a direita"
+    },
+    {
+      "name": "Parada",
+      "address": "T0",
+      "comment": "0,4 s com o motor desligado"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Borda de subida ou de descida do encoder: 10 mm",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Encoder"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Encoder_Anterior"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Encoder"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Encoder_Anterior"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pulso"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Encoder"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Encoder_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Lembra o sentido do movimento",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Motor_Direita"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Sentido_Direita"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Motor_Esquerda"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Sentido_Direita"
+        }
+      ]
+    },
+    {
+      "comment": "Conta a posicao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sentido_Direita"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Posicao",
+            "1",
+            "Posicao"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sentido_Direita"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Posicao",
+            "1",
+            "Posicao"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Referenciamento: origem = 0 mm",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Origem"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Referenciado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Posicao"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Destino"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Referenciado"
+        }
+      ]
+    },
+    {
+      "comment": "Estacoes: 400, 1200, 2000, 2800 e 3600 mm (/10)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chama_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "40",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chama_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "120",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chama_3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "200",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chama_4"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "280",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Chama_5"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "360",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Quanto falta",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Destino",
+            "Posicao",
+            "Diferenca"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "So parte (ou inverte) depois de parada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Direita"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Esquerda"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Parada",
+          "preset": 400
+        }
+      ]
+    },
+    {
+      "comment": "Destino a direita",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Diferenca",
+            "0"
+          ]
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Parada.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Direita"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Esquerda"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Direita"
+        }
+      ]
+    },
+    {
+      "comment": "Destino a esquerda ou procurando a origem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Motor_Direita"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Parada.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Esquerda"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Referenciado"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Referenciado"
+              },
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Diferenca",
+                  "0"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Esquerda"
+        }
+      ]
+    },
+    {
+      "comment": "A menos de 200 mm: lenta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "-20",
+            "Diferenca",
+            "20"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Velocidade_Lenta"
+        }
+      ]
+    },
+    {
+      "comment": "Freio solto so com o motor ligado",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Direita"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Esquerda"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Libera_Freio"
+        }
+      ]
+    },
+    {
+      "comment": "Chegou e parou",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Referenciado"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Diferenca",
+            "0"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Parada.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Em_Posicao"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T20:55:44",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 19
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x9362fcb6",
+    "size": 648,
+    "instructions": 141,
+    "date": "2026-11-13T20:55:44"
+  },
+  "environment": "ponte_rolante"
+}

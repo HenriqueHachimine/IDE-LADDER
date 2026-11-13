@@ -1,0 +1,149 @@
+; Ponte rolante - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x9362fcb6
+.timer T0 TON 400
+SOR ; rede 0
+BST
+XIC I0.0
+XIO M0.1
+NXB
+XIO I0.0
+XIC M0.1
+BND
+OTE M0.2
+EOR
+SOR ; rede 1
+XIC I0.0
+OTE M0.1
+EOR
+SOR ; rede 2
+XIC Q0.0
+OTL M0.3
+EOR
+SOR ; rede 3
+XIC Q0.1
+OTU M0.3
+EOR
+SOR ; rede 4
+XIC M0.2
+XIC M0.3
+ADD N0
+ARG 1
+ARG N0
+EOR
+SOR ; rede 5
+XIC M0.2
+XIO M0.3
+SUB N0
+ARG 1
+ARG N0
+EOR
+SOR ; rede 6
+XIC I0.1
+XIO M0.0
+BST
+MOV 0
+ARG N0
+NXB
+MOV 0
+ARG N1
+NXB
+OTL M0.0
+BND
+EOR
+SOR ; rede 7
+XIC M0.0
+XIC I0.2
+MOV 40
+ARG N1
+EOR
+SOR ; rede 8
+XIC M0.0
+XIC I0.3
+MOV 120
+ARG N1
+EOR
+SOR ; rede 9
+XIC M0.0
+XIC I0.4
+MOV 200
+ARG N1
+EOR
+SOR ; rede 10
+XIC M0.0
+XIC I0.5
+MOV 280
+ARG N1
+EOR
+SOR ; rede 11
+XIC M0.0
+XIC I0.6
+MOV 360
+ARG N1
+EOR
+SOR ; rede 12
+SUB N1
+ARG N0
+ARG N2
+EOR
+SOR ; rede 13
+XIO Q0.0
+XIO Q0.1
+TON T0
+EOR
+SOR ; rede 14
+XIC I0.7
+XIC M0.0
+GRT N2
+ARG 0
+BST
+XIC T0.DN
+NXB
+XIC Q0.0
+BND
+XIO Q0.1
+OTE Q0.0
+EOR
+SOR ; rede 15
+XIC I0.7
+XIO Q0.0
+BST
+XIC T0.DN
+NXB
+XIC Q0.1
+BND
+BST
+XIO M0.0
+NXB
+XIC M0.0
+LES N2
+ARG 0
+BND
+OTE Q0.1
+EOR
+SOR ; rede 16
+XIC M0.0
+LIM -20
+ARG N2
+ARG 20
+OTE Q0.2
+EOR
+SOR ; rede 17
+BST
+XIC Q0.0
+NXB
+XIC Q0.1
+BND
+OTE Q0.3
+EOR
+SOR ; rede 18
+XIC M0.0
+EQU N2
+ARG 0
+XIC T0.DN
+OTE Q0.4
+EOR

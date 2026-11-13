@@ -442,3 +442,16 @@ def test_greenhouse_bands_keep_climate_for_days_with_rain_and_wind():
     wasteful = Project(environment="estufa", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.2")])])
     _, alarms, _ = closed_loop(wasteful, total_ms=120000)
     assert any("desperdício" in a for a in alarms) and any("chuva" in a for a in alarms)
+
+
+def test_overhead_crane_homes_counts_encoder_and_stops_at_stations():
+    calls = [(15000, "CH3"), (30000, "CH5"), (45000, "CH1"), (60000, "CH4"), (75000, "CH2")]
+    acts = [a for t, k in calls for a in ((t, k, True), (t + 200, k, False))]
+    env, alarms, sim = closed_loop(Project.load(EXAMPLES / "ponte_rolante.ladproj"), acts, 90000)
+    assert alarms == set() and env.arrivals == 5 and env.last_error <= 10       # dos dois sentidos
+    assert abs(sim.vm.n[0] * 10 - env.x) <= 10                                   # contagem = posicao real
+    runaway = Project(environment="ponte_rolante", rungs=[
+        Rung([Contact("XIC", "I0.6")], [Coil("OTL", "Q0.0"), Coil("OTL", "Q0.3")]),
+        Rung([Contact("XIC", "Q0.0")], [Coil("OTE", "Q0.4")])])
+    _, alarms, _ = closed_loop(runaway, [(100, "CH5", True), (300, "CH5", False)], 15000)
+    assert any("batente" in a for a in alarms) and any("andando" in a for a in alarms)
