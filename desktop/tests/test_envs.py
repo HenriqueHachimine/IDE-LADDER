@@ -462,12 +462,36 @@ def test_parking_counts_cars_and_shows_free_spaces_in_n0():
 
 
 def test_sorter_shift_register_sends_each_part_to_its_bin():
-    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "seletor_pecas.ladproj"), [(100, "LIGA", True)], 60000)
-    assert alarms == set() and env.wrong == 0 and all(sum(env.bins[b].values()) > 5 for b in "ABC")
+    p = Project.load(EXAMPLES / "seletor_pecas.ladproj")
+    env, alarms, _ = closed_loop(p, [(100, "LIGA", True)], 40000)
+    assert alarms == set() and env.wrong == 0 and all(sum(env.bins[b].values()) > 5 for b in "ABCD")
     no_register = Project(environment="seletor_pecas", rungs=[
         Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")]), Rung([Contact("XIC", "I0.3")], [Coil("OTE", "Q0.1")])])
     _, alarms, _ = closed_loop(no_register, [(100, "LIGA", True)], 20000)
     assert any("destino errado" in a for a in alarms)
+
+
+def test_sorter_bins_follow_the_operator_choice_and_stop_when_full():
+    p = Project.load(EXAMPLES / "seletor_pecas.ladproj")
+    for choice in ({"A": 1, "B": 1, "C": 4}, {"A": 4, "B": 0, "C": 3}, {"A": 0, "B": 0, "C": 0}):
+        env = create("seletor_pecas")
+        env.config = dict(choice)
+        result = compile_project(p)
+        sim = Simulator(result, 10)
+        sim.attach_plant(EnvironmentPlant(env))
+        sim.start()
+        env.press("LIGA", True)
+        for _ in range(3000):
+            sim.scan_once()
+        assert env.alarms() == [] and env.config == choice
+        for b in "ABC":                                     # cada caixa so recebe o tipo escolhido
+            assert all(n == 0 for k, n in env.bins[b].items() if k != choice[b])
+    env, alarms, sim = closed_loop(p, [(100, "LIGA", True)], 40000)
+    assert sim.vm.outputs >> 5 & 1 and not sim.vm.outputs & 1          # caixa cheia: TROCAR e esteira parada
+    acts = [(100, "LIGA", True), (40000, "TROCADAS", True), (40100, "TROCADAS", False),
+            (45000, "CFG_A", True), (45000, "CFG_A", False), (52000, "CFG_C", True), (52000, "CFG_C", False)]
+    env, alarms, _ = closed_loop(p, acts, 70000)                      # troca o tipo com a esteira andando
+    assert alarms == set() and env.swaps == 1 and env.config == {"A": 2, "B": 3, "C": 3}
 
 
 def test_gas_detection_votes_two_of_three_and_needs_reset():

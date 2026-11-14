@@ -665,33 +665,59 @@ def parking() -> Project:
 
 
 def sorter() -> Project:
-    p = env_project("seletor_pecas", "Separacao de pecas", (
-        "Registrador de deslocamento: a cada pulso do encoder (borda de subida) N0 e N1 sao multiplicados por 2 "
-        "(deslocam um bit) e o bit 0 recebe o que a inspecao ve agora (metal em N0, alta em N1). O bit k "
-        "corresponde a peca que esta k passos depois da inspecao: o desviador A testa o bit 3 de N0 (MEQ com "
-        "mascara 8) e o B o bit 6 de N1 (mascara 64). Subtrair 128 mantem so 7 bits."))
-    p.symbols += [Symbol("Reg_Metal", "N0", "bit k = peca metalica k passos depois da inspecao"),
-                  Symbol("Reg_Alta", "N1", "bit k = peca plastica alta k passos depois da inspecao"),
+    p = env_project("seletor_pecas", "Separacao de pecas configuravel", (
+        "Registrador de deslocamento de palavras (FIFO): N20..N31 guardam o codigo da peca que esta 0..11 passos "
+        "depois da inspecao. A cada pulso do encoder cada palavra passa para a seguinte (MOV, da ultima para a "
+        "primeira) e N20 recebe o codigo da peca na inspecao: 1 + 2 se for plastica + 1 se for baixa (0 = vazio). "
+        "Cada desviador compara a sua posicao com o tipo escolhido para a caixa (N10, N11, N12) e apaga o codigo "
+        "ao desviar. C1-C3 contam as pecas de cada caixa; com 10 numa delas a esteira para e TROCAR acende ate o "
+        "botao CAIXAS TROCADAS."))
+    p.symbols += [Symbol("Tipo_Caixa_A", "N10", "tipo escolhido para a caixa A"),
+                  Symbol("Tipo_Caixa_B", "N11", "tipo escolhido para a caixa B"),
+                  Symbol("Tipo_Caixa_C", "N12", "tipo escolhido para a caixa C"),
                   Symbol("Encoder_Anterior", "M0.0", "encoder na varredura anterior"),
-                  Symbol("Pulso", "M0.1", "borda de subida do encoder (uma varredura)")]
+                  Symbol("Pulso", "M0.1", "borda de subida do encoder (uma varredura)"),
+                  Symbol("Caixa_Cheia", "M0.2", "alguma caixa com 10 pecas"),
+                  Symbol("Desviou_A", "M0.3", "caixa A recebeu a peca deste passo"),
+                  Symbol("Desviou_B", "M0.4", "caixa B recebeu a peca deste passo"),
+                  Symbol("Desviou_C", "M0.5", "caixa C recebeu a peca deste passo"),
+                  Symbol("Pecas_A", "C1", "pecas na caixa A"), Symbol("Pecas_B", "C2", "pecas na caixa B"),
+                  Symbol("Pecas_C", "C3", "pecas na caixa C")]
+    p.symbols += [Symbol(f"Passo_{k}", f"N{20 + k}", f"codigo da peca {k} passos depois da inspecao")
+                  for k in range(12)]
+    shift = [MathBox("MOV", [f"Passo_{k - 1}", f"Passo_{k}"]) for k in range(11, 0, -1)]
     p.rungs = [
-        Rung([Contact("XIC", "Liga")], [Coil("OTE", "Motor_Esteira"), Coil("OTE", "Lampada_Run")], "Esteira"),
+        Rung([Contact("XIC", "Liga"), Contact("XIO", "Caixa_Cheia")],
+             [Coil("OTE", "Motor_Esteira"), Coil("OTE", "Lampada_Run")], "Esteira para com uma caixa cheia"),
         Rung([Contact("XIC", "Encoder"), Contact("XIO", "Encoder_Anterior")], [Coil("OTE", "Pulso")],
              "Um pulso por passo da esteira"),
         Rung([Contact("XIC", "Encoder")], [Coil("OTE", "Encoder_Anterior")]),
-        Rung([Contact("XIC", "Pulso")], [MathBox("MUL", ["Reg_Metal", "2", "Reg_Metal"]),
-                                         MathBox("MUL", ["Reg_Alta", "2", "Reg_Alta"])],
-             "Desloca: cada peca anda um bit"),
-        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Sensor_Metal")], [MathBox("ADD", ["Reg_Metal", "1", "Reg_Metal"])],
-             "Bit 0 = peca que esta na inspecao agora"),
-        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Sensor_Altura")], [MathBox("ADD", ["Reg_Alta", "1", "Reg_Alta"])]),
-        Rung([CompareBox("GEQ", ["Reg_Metal", "128"])], [MathBox("SUB", ["Reg_Metal", "128", "Reg_Metal"])],
-             "Descarta o que passou do ultimo desviador"),
-        Rung([CompareBox("GEQ", ["Reg_Alta", "128"])], [MathBox("SUB", ["Reg_Alta", "128", "Reg_Alta"])]),
-        Rung([Contact("XIC", "Encoder"), CompareBox("MEQ", ["Reg_Metal", "8", "8"])], [Coil("OTE", "Desviador_A")],
-             "Peca metalica 3 passos depois: desvia durante meio passo"),
-        Rung([Contact("XIC", "Encoder"), CompareBox("MEQ", ["Reg_Alta", "64", "64"])], [Coil("OTE", "Desviador_B")],
-             "Peca alta 6 passos depois"),
+        Rung([Contact("XIC", "Pulso")], [*shift, MathBox("MOV", ["0", "Passo_0"])],
+             "Desloca: cada codigo anda uma palavra (da ultima para a primeira)"),
+        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Peca_Inspecao")], [MathBox("MOV", ["1", "Passo_0"])],
+             "Codigo da peca na inspecao: 1 + 2 (plastica) + 1 (baixa)"),
+        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Peca_Inspecao"), Contact("XIO", "Sensor_Metal")],
+             [MathBox("ADD", ["Passo_0", "2", "Passo_0"])]),
+        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Peca_Inspecao"), Contact("XIO", "Sensor_Altura")],
+             [MathBox("ADD", ["Passo_0", "1", "Passo_0"])]),
+    ]
+    for b, k in (("A", 4), ("B", 7), ("C", 10)):
+        p.rungs.append(Rung([Contact("XIC", "Pulso"), Contact("XIC", f"Desviou_{b}")],
+                            [MathBox("MOV", ["0", f"Passo_{k}"]), Coil("OTU", f"Desviou_{b}")],
+                            "Peca desviada sai do registrador (a palavra ja andou um passo)" if b == "A" else ""))
+    for b, k, out, counter in (("A", 3, "Desviador_A", "Pecas_A"), ("B", 6, "Desviador_B", "Pecas_B"),
+                               ("C", 9, "Desviador_C", "Pecas_C")):
+        p.rungs += [
+            Rung([Contact("XIC", "Encoder"), CompareBox("NEQ", [f"Passo_{k}", "0"]),
+                  CompareBox("EQU", [f"Passo_{k}", f"Tipo_Caixa_{b}"])], [Coil("OTE", out)],
+                 f"Caixa {b}: a peca {k} passos depois e do tipo escolhido" if b == "A" else ""),
+            Rung([Contact("XIC", out)], [CounterBox("CTU", counter, 10), Coil("OTL", f"Desviou_{b}")]),
+        ]
+    p.rungs += [
+        Rung([Parallel([[Contact("XIC", "Pecas_A.DN")], [Contact("XIC", "Pecas_B.DN")], [Contact("XIC", "Pecas_C.DN")]])],
+             [Coil("OTE", "Caixa_Cheia"), Coil("OTE", "Lampada_Trocar")], "Caixa cheia: para e pede a troca"),
+        Rung([Contact("XIC", "Caixas_Trocadas")], [ResetBox("Pecas_A"), ResetBox("Pecas_B"), ResetBox("Pecas_C")],
+             "Operador trocou as caixas"),
     ]
     return p
 

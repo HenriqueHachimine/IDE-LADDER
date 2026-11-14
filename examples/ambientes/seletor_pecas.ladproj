@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Separacao de pecas",
-  "description": "Registrador de deslocamento: a cada pulso do encoder (borda de subida) N0 e N1 sao multiplicados por 2 (deslocam um bit) e o bit 0 recebe o que a inspecao ve agora (metal em N0, alta em N1). O bit k corresponde a peca que esta k passos depois da inspecao: o desviador A testa o bit 3 de N0 (MEQ com mascara 8) e o B o bit 6 de N1 (mascara 64). Subtrair 128 mantem so 7 bits.",
+  "name": "Separacao de pecas configuravel",
+  "description": "Registrador de deslocamento de palavras (FIFO): N20..N31 guardam o codigo da peca que esta 0..11 passos depois da inspecao. A cada pulso do encoder cada palavra passa para a seguinte (MOV, da ultima para a primeira) e N20 recebe o codigo da peca na inspecao: 1 + 2 se for plastica + 1 se for baixa (0 = vazio). Cada desviador compara a sua posicao com o tipo escolhido para a caixa (N10, N11, N12) e apaga o codigo ao desviar. C1-C3 contam as pecas de cada caixa; com 10 numa delas a esteira para e TROCAR acende ate o botao CAIXAS TROCADAS.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:40:34",
-  "modified": "2026-11-13T20:40:34",
+  "created": "2026-11-13T23:13:00",
+  "modified": "2026-11-13T23:13:00",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -50,6 +50,11 @@
       "comment": "Sensor de altura: peça alta na inspeção"
     },
     {
+      "name": "Caixas_Trocadas",
+      "address": "I0.5",
+      "comment": "Botão CAIXAS TROCADAS (operador esvaziou as caixas)"
+    },
+    {
       "name": "Motor_Esteira",
       "address": "Q0.0",
       "comment": "Motor da esteira"
@@ -57,12 +62,12 @@
     {
       "name": "Desviador_A",
       "address": "Q0.1",
-      "comment": "Desviador A: metálicas"
+      "comment": "Desviador da caixa A (3 passos)"
     },
     {
       "name": "Desviador_B",
       "address": "Q0.2",
-      "comment": "Desviador B: plásticas altas"
+      "comment": "Desviador da caixa B (6 passos)"
     },
     {
       "name": "Lampada_Run",
@@ -70,14 +75,29 @@
       "comment": "Lâmpada esteira em operação"
     },
     {
-      "name": "Reg_Metal",
-      "address": "N0",
-      "comment": "bit k = peca metalica k passos depois da inspecao"
+      "name": "Desviador_C",
+      "address": "Q0.4",
+      "comment": "Desviador da caixa C (9 passos)"
     },
     {
-      "name": "Reg_Alta",
-      "address": "N1",
-      "comment": "bit k = peca plastica alta k passos depois da inspecao"
+      "name": "Lampada_Trocar",
+      "address": "Q0.5",
+      "comment": "Lâmpada TROCAR CAIXAS"
+    },
+    {
+      "name": "Tipo_Caixa_A",
+      "address": "N10",
+      "comment": "tipo escolhido para a caixa A"
+    },
+    {
+      "name": "Tipo_Caixa_B",
+      "address": "N11",
+      "comment": "tipo escolhido para a caixa B"
+    },
+    {
+      "name": "Tipo_Caixa_C",
+      "address": "N12",
+      "comment": "tipo escolhido para a caixa C"
     },
     {
       "name": "Encoder_Anterior",
@@ -88,17 +108,117 @@
       "name": "Pulso",
       "address": "M0.1",
       "comment": "borda de subida do encoder (uma varredura)"
+    },
+    {
+      "name": "Caixa_Cheia",
+      "address": "M0.2",
+      "comment": "alguma caixa com 10 pecas"
+    },
+    {
+      "name": "Desviou_A",
+      "address": "M0.3",
+      "comment": "caixa A recebeu a peca deste passo"
+    },
+    {
+      "name": "Desviou_B",
+      "address": "M0.4",
+      "comment": "caixa B recebeu a peca deste passo"
+    },
+    {
+      "name": "Desviou_C",
+      "address": "M0.5",
+      "comment": "caixa C recebeu a peca deste passo"
+    },
+    {
+      "name": "Pecas_A",
+      "address": "C1",
+      "comment": "pecas na caixa A"
+    },
+    {
+      "name": "Pecas_B",
+      "address": "C2",
+      "comment": "pecas na caixa B"
+    },
+    {
+      "name": "Pecas_C",
+      "address": "C3",
+      "comment": "pecas na caixa C"
+    },
+    {
+      "name": "Passo_0",
+      "address": "N20",
+      "comment": "codigo da peca 0 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_1",
+      "address": "N21",
+      "comment": "codigo da peca 1 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_2",
+      "address": "N22",
+      "comment": "codigo da peca 2 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_3",
+      "address": "N23",
+      "comment": "codigo da peca 3 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_4",
+      "address": "N24",
+      "comment": "codigo da peca 4 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_5",
+      "address": "N25",
+      "comment": "codigo da peca 5 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_6",
+      "address": "N26",
+      "comment": "codigo da peca 6 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_7",
+      "address": "N27",
+      "comment": "codigo da peca 7 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_8",
+      "address": "N28",
+      "comment": "codigo da peca 8 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_9",
+      "address": "N29",
+      "comment": "codigo da peca 9 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_10",
+      "address": "N30",
+      "comment": "codigo da peca 10 passos depois da inspecao"
+    },
+    {
+      "name": "Passo_11",
+      "address": "N31",
+      "comment": "codigo da peca 11 passos depois da inspecao"
     }
   ],
   "variables": [],
   "rungs": [
     {
-      "comment": "Esteira",
+      "comment": "Esteira para com uma caixa cheia",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
           "operand": "Liga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixa_Cheia"
         }
       ],
       "outputs": [
@@ -154,7 +274,7 @@
       ]
     },
     {
-      "comment": "Desloca: cada peca anda um bit",
+      "comment": "Desloca: cada codigo anda uma palavra (da ultima para a primeira)",
       "condition": [
         {
           "type": "contact",
@@ -165,26 +285,104 @@
       "outputs": [
         {
           "type": "math",
-          "kind": "MUL",
+          "kind": "MOV",
           "operands": [
-            "Reg_Metal",
-            "2",
-            "Reg_Metal"
+            "Passo_10",
+            "Passo_11"
           ]
         },
         {
           "type": "math",
-          "kind": "MUL",
+          "kind": "MOV",
           "operands": [
-            "Reg_Alta",
-            "2",
-            "Reg_Alta"
+            "Passo_9",
+            "Passo_10"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_8",
+            "Passo_9"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_7",
+            "Passo_8"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_6",
+            "Passo_7"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_5",
+            "Passo_6"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_4",
+            "Passo_5"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_3",
+            "Passo_4"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_2",
+            "Passo_3"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_1",
+            "Passo_2"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Passo_0",
+            "Passo_1"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Passo_0"
           ]
         }
       ]
     },
     {
-      "comment": "Bit 0 = peca que esta na inspecao agora",
+      "comment": "Codigo da peca na inspecao: 1 + 2 (plastica) + 1 (baixa)",
       "condition": [
         {
           "type": "contact",
@@ -194,6 +392,36 @@
         {
           "type": "contact",
           "kind": "XIC",
+          "operand": "Peca_Inspecao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Passo_0"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peca_Inspecao"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
           "operand": "Sensor_Metal"
         }
       ],
@@ -202,9 +430,9 @@
           "type": "math",
           "kind": "ADD",
           "operands": [
-            "Reg_Metal",
-            "1",
-            "Reg_Metal"
+            "Passo_0",
+            "2",
+            "Passo_0"
           ]
         }
       ]
@@ -220,6 +448,11 @@
         {
           "type": "contact",
           "kind": "XIC",
+          "operand": "Peca_Inspecao"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
           "operand": "Sensor_Altura"
         }
       ],
@@ -228,34 +461,40 @@
           "type": "math",
           "kind": "ADD",
           "operands": [
-            "Reg_Alta",
+            "Passo_0",
             "1",
-            "Reg_Alta"
+            "Passo_0"
           ]
         }
       ]
     },
     {
-      "comment": "Descarta o que passou do ultimo desviador",
+      "comment": "Peca desviada sai do registrador (a palavra ja andou um passo)",
       "condition": [
         {
-          "type": "compare",
-          "kind": "GEQ",
-          "operands": [
-            "Reg_Metal",
-            "128"
-          ]
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Desviou_A"
         }
       ],
       "outputs": [
         {
           "type": "math",
-          "kind": "SUB",
+          "kind": "MOV",
           "operands": [
-            "Reg_Metal",
-            "128",
-            "Reg_Metal"
+            "0",
+            "Passo_4"
           ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Desviou_A"
         }
       ]
     },
@@ -263,28 +502,64 @@
       "comment": "",
       "condition": [
         {
-          "type": "compare",
-          "kind": "GEQ",
-          "operands": [
-            "Reg_Alta",
-            "128"
-          ]
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Desviou_B"
         }
       ],
       "outputs": [
         {
           "type": "math",
-          "kind": "SUB",
+          "kind": "MOV",
           "operands": [
-            "Reg_Alta",
-            "128",
-            "Reg_Alta"
+            "0",
+            "Passo_7"
           ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Desviou_B"
         }
       ]
     },
     {
-      "comment": "Peca metalica 3 passos depois: desvia durante meio passo",
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Desviou_C"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Passo_10"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Desviou_C"
+        }
+      ]
+    },
+    {
+      "comment": "Caixa A: a peca 3 passos depois e do tipo escolhido",
       "condition": [
         {
           "type": "contact",
@@ -293,11 +568,18 @@
         },
         {
           "type": "compare",
-          "kind": "MEQ",
+          "kind": "NEQ",
           "operands": [
-            "Reg_Metal",
-            "8",
-            "8"
+            "Passo_3",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Passo_3",
+            "Tipo_Caixa_A"
           ]
         }
       ],
@@ -310,7 +592,30 @@
       ]
     },
     {
-      "comment": "Peca alta 6 passos depois",
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Desviador_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Pecas_A",
+          "preset": 10
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Desviou_A"
+        }
+      ]
+    },
+    {
+      "comment": "",
       "condition": [
         {
           "type": "contact",
@@ -319,11 +624,18 @@
         },
         {
           "type": "compare",
-          "kind": "MEQ",
+          "kind": "NEQ",
           "operands": [
-            "Reg_Alta",
-            "64",
-            "64"
+            "Passo_6",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Passo_6",
+            "Tipo_Caixa_B"
           ]
         }
       ],
@@ -334,22 +646,168 @@
           "operand": "Desviador_B"
         }
       ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Desviador_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Pecas_B",
+          "preset": 10
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Desviou_B"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Encoder"
+        },
+        {
+          "type": "compare",
+          "kind": "NEQ",
+          "operands": [
+            "Passo_9",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Passo_9",
+            "Tipo_Caixa_C"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Desviador_C"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Desviador_C"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Pecas_C",
+          "preset": 10
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Desviou_C"
+        }
+      ]
+    },
+    {
+      "comment": "Caixa cheia: para e pede a troca",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pecas_A.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pecas_B.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pecas_C.DN"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Caixa_Cheia"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Trocar"
+        }
+      ]
+    },
+    {
+      "comment": "Operador trocou as caixas",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixas_Trocadas"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Pecas_A"
+        },
+        {
+          "type": "reset",
+          "operand": "Pecas_B"
+        },
+        {
+          "type": "reset",
+          "operand": "Pecas_C"
+        }
+      ]
     }
   ],
   "history": [
     {
-      "date": "2026-11-13T20:40:34",
+      "date": "2026-11-13T23:13:00",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 10
+      "rungs": 18
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x82492e13",
-    "size": 344,
-    "instructions": 71,
-    "date": "2026-11-13T20:40:34"
+    "build_id": "0xee450a35",
+    "size": 812,
+    "instructions": 182,
+    "date": "2026-11-13T23:13:00"
   },
   "environment": "seletor_pecas"
 }
