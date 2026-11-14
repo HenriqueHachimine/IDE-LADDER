@@ -1,47 +1,124 @@
-; Partida estrela-triangulo - gerado por LadderIDE compilador 1.0.0
+; Partida estrela-triangulo reversivel - gerado por LadderIDE compilador 1.0.0
 .inputs 8
 .outputs 8
 .markers 64
 .words 32
 .safe_outputs 0x0000
-.build_id 0x98d6f8be
-.timer T0 TON 5000
+.build_id 0x7a505677
+.timer T0 TON 150
 .timer T1 TON 100
+.timer T2 TON 12000
 SOR ; rede 0
 BST
+XIO I0.3
+NXB
+XIO I0.4
+BND
+OTE M0.2
+EOR
+SOR ; rede 1
+XIC M0.2
+OTE Q0.5
+EOR
+SOR ; rede 2
 XIC I0.0
+XIO M0.2
+BST
+OTL M0.0
+NXB
+OTU M0.1
+BND
+EOR
+SOR ; rede 3
+XIC I0.1
+XIO M0.2
+BST
+OTL M0.1
+NXB
+OTU M0.0
+BND
+EOR
+SOR ; rede 4
+BST
+XIO I0.2
+NXB
+XIC M0.2
+NXB
+XIC T2.DN
+BND
+BST
+OTU M0.0
+NXB
+OTU M0.1
+BND
+EOR
+SOR ; rede 5
+XIO Q0.0
+XIO Q0.1
+TON T0
+EOR
+SOR ; rede 6
+XIC M0.0
+XIO Q0.1
+BST
+XIC I0.6
+XIC T0.DN
 NXB
 XIC Q0.0
 BND
-XIC I0.1
-XIC I0.2
 OTE Q0.0
 EOR
-SOR ; rede 1
-XIC Q0.0
-TON T0
-EOR
-SOR ; rede 2
-XIC Q0.0
-XIO T0.DN
-XIO Q0.2
+SOR ; rede 7
+XIC M0.1
+XIO Q0.0
+BST
+XIC I0.6
+XIC T0.DN
+NXB
+XIC Q0.1
+BND
 OTE Q0.1
 EOR
-SOR ; rede 3
-XIC T0.DN
-TON T1
-EOR
-SOR ; rede 4
+SOR ; rede 8
+BST
 XIC Q0.0
-XIC T1.DN
-XIO Q0.1
+NXB
+XIC Q0.1
+BND
+OTE M0.3
+EOR
+SOR ; rede 9
+XIC M0.3
+XIC I0.5
+OTL M0.4
+EOR
+SOR ; rede 10
+XIO M0.3
+OTU M0.4
+EOR
+SOR ; rede 11
+XIC M0.3
+XIO M0.4
+XIO Q0.3
 OTE Q0.2
 EOR
-SOR ; rede 5
-XIC Q0.2
+SOR ; rede 12
+XIC M0.3
+XIO M0.4
+TON T2
+EOR
+SOR ; rede 13
+XIC M0.4
+XIO Q0.2
+TON T1
+EOR
+SOR ; rede 14
+XIC M0.3
+XIC T1.DN
+XIO Q0.2
 OTE Q0.3
 EOR
-SOR ; rede 6
-XIO I0.2
+SOR ; rede 15
+XIC Q0.3
 OTE Q0.4
 EOR

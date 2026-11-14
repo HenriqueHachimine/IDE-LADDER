@@ -73,3 +73,27 @@ class IDM:
 
     def stopping_distance(self, v: float, decel: float | None = None) -> float:
         return v * v / (2 * (decel or self.b))
+
+
+class History:
+    """Amostras periodicas para graficos de tendencia (uma lista por grandeza)."""
+
+    def __init__(self, n: int = 120, every_ms: int = 500, count: int = 1):
+        self.n, self.every_ms = n, every_ms
+        self.data: list[deque[float]] = [deque(maxlen=n) for _ in range(count)]
+        self._t = 0
+
+    def add(self, dt_ms: int, *values: float) -> None:
+        self._t += dt_ms
+        if self._t >= self.every_ms or not self.data[0]:
+            self._t = 0
+            for d, v in zip(self.data, values):
+                d.append(float(v))
+
+    def series(self, k: int = 0) -> list[float]:
+        return list(self.data[k])
+
+    def clear(self) -> None:
+        for d in self.data:
+            d.clear()
+        self._t = 0

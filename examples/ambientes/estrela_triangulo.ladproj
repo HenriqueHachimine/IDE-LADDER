@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Partida estrela-triangulo",
-  "description": "Intertravamento e temporizacao: K1 com selo; K2 (estrela) por 5 s; tempo morto de 100 ms para o K2 abrir (os contatores levam 40 ms) e so entao K3 (triangulo). K2 e K3 se bloqueiam mutuamente. O rele termico (NF) derruba tudo e acende FALHA.",
+  "name": "Partida estrela-triangulo reversivel",
+  "description": "Intertravamentos e tempos mortos: o ultimo botao de sentido vence (OTL/OTU). K1 e K4 se bloqueiam, so fecham com o motor parado (I0.6) e depois de 150 ms com os dois abertos (os contatores abrem em 40 ms). A estrela dura ate o sensor de rotacao (I0.5); o K3 so fecha 100 ms depois de o K2 abrir. Termico e falta de fase (NF) param tudo e acendem FALHA; partida que nao chega a rotacao em 12 s e abortada.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:34:02",
-  "modified": "2026-11-13T20:34:02",
+  "created": "2026-11-13T22:55:00",
+  "modified": "2026-11-13T22:55:00",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -25,65 +25,375 @@
   },
   "symbols": [
     {
-      "name": "Liga",
+      "name": "Liga_Horario",
       "address": "I0.0",
-      "comment": "Botão LIGA (NA)"
+      "comment": "Botão LIGA sentido horário (NA)"
+    },
+    {
+      "name": "Liga_Anti_Horario",
+      "address": "I0.1",
+      "comment": "Botão LIGA sentido anti-horário (NA)"
     },
     {
       "name": "Desliga",
-      "address": "I0.1",
+      "address": "I0.2",
       "comment": "Botão DESLIGA (NF: lê 1 quando solto)"
     },
     {
       "name": "Rele_Termico",
-      "address": "I0.2",
-      "comment": "Relé térmico (NF: lê 0 quando desarma)"
+      "address": "I0.3",
+      "comment": "Relé térmico F1 (NF: lê 0 quando desarma)"
+    },
+    {
+      "name": "Rele_Falta_Fase",
+      "address": "I0.4",
+      "comment": "Relé de falta de fase (NF: lê 0 sem uma fase)"
     },
     {
       "name": "Rotacao_Nominal",
-      "address": "I0.3",
-      "comment": "Sensor de rotação: motor acima de 85% da velocidade"
+      "address": "I0.5",
+      "comment": "Sensor de rotação: acima de 85% da velocidade"
     },
     {
-      "name": "Contator_K1",
+      "name": "Motor_Parado",
+      "address": "I0.6",
+      "comment": "Sensor de motor parado: abaixo de 3% da velocidade"
+    },
+    {
+      "name": "K1_Horario",
       "address": "Q0.0",
-      "comment": "K1: contator de linha (rede)"
+      "comment": "K1: contator de linha, sentido horário"
     },
     {
-      "name": "Contator_K2_Estrela",
+      "name": "K4_Anti_Horario",
       "address": "Q0.1",
+      "comment": "K4: contator de linha com duas fases trocadas"
+    },
+    {
+      "name": "K2_Estrela",
+      "address": "Q0.2",
       "comment": "K2: fecha o centro da estrela"
     },
     {
-      "name": "Contator_K3_Triangulo",
-      "address": "Q0.2",
+      "name": "K3_Triangulo",
+      "address": "Q0.3",
       "comment": "K3: liga o motor em triângulo"
     },
     {
       "name": "Lampada_Ligado",
-      "address": "Q0.3",
+      "address": "Q0.4",
       "comment": "Lâmpada MOTOR LIGADO (triângulo)"
     },
     {
       "name": "Lampada_Falha",
-      "address": "Q0.4",
-      "comment": "Lâmpada FALHA (relé térmico desarmado)"
+      "address": "Q0.5",
+      "comment": "Lâmpada FALHA (térmico ou falta de fase)"
     },
     {
-      "name": "Tempo_Estrela",
+      "name": "Pedido_Horario",
+      "address": "M0.0",
+      "comment": "ultimo pedido: sentido horario"
+    },
+    {
+      "name": "Pedido_Anti",
+      "address": "M0.1",
+      "comment": "ultimo pedido: sentido anti-horario"
+    },
+    {
+      "name": "Falha",
+      "address": "M0.2",
+      "comment": "termico desarmado ou falta de fase"
+    },
+    {
+      "name": "Em_Linha",
+      "address": "M0.3",
+      "comment": "K1 ou K4 ligado"
+    },
+    {
+      "name": "Em_Triangulo",
+      "address": "M0.4",
+      "comment": "motor ja atingiu a rotacao em estrela"
+    },
+    {
+      "name": "Linha_Livre",
       "address": "T0",
-      "comment": "5 s em estrela"
+      "comment": "150 ms com K1 e K4 abertos"
     },
     {
       "name": "Tempo_Morto",
       "address": "T1",
       "comment": "100 ms entre abrir K2 e fechar K3"
+    },
+    {
+      "name": "Tempo_Estrela",
+      "address": "T2",
+      "comment": "12 s maximo em estrela"
     }
   ],
   "variables": [],
   "rungs": [
     {
-      "comment": "K1 com selo; DESLIGA e termico sao NF",
+      "comment": "Reles NF: 0 = desarmado (termico) ou sem uma fase",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Rele_Termico"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Rele_Falta_Fase"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Falha"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Falha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Falha"
+        }
+      ]
+    },
+    {
+      "comment": "O ultimo botao de sentido vence",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga_Horario"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pedido_Horario"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedido_Anti"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga_Anti_Horario"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pedido_Anti"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedido_Horario"
+        }
+      ]
+    },
+    {
+      "comment": "Desliga (NF), falha ou partida que nao completou: para",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Desliga"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Falha"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Tempo_Estrela.DN"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedido_Horario"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedido_Anti"
+        }
+      ]
+    },
+    {
+      "comment": "Tempo morto entre os contatores de linha",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "K1_Horario"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "K4_Anti_Horario"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Linha_Livre",
+          "preset": 150
+        }
+      ]
+    },
+    {
+      "comment": "K1: parte so com o motor parado; selo pelo proprio K1",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedido_Horario"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "K4_Anti_Horario"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Parado"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Linha_Livre.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "K1_Horario"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "K1_Horario"
+        }
+      ]
+    },
+    {
+      "comment": "K4: idem, intertravado com o K1",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedido_Anti"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "K1_Horario"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Motor_Parado"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Linha_Livre.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "K4_Anti_Horario"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "K4_Anti_Horario"
+        }
+      ]
+    },
+    {
+      "comment": "",
       "condition": [
         {
           "type": "parallel",
@@ -92,52 +402,63 @@
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Liga"
+                "operand": "K1_Horario"
               }
             ],
             [
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Contator_K1"
+                "operand": "K4_Anti_Horario"
               }
             ]
           ]
-        },
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Desliga"
-        },
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Rele_Termico"
         }
       ],
       "outputs": [
         {
           "type": "coil",
           "kind": "OTE",
-          "operand": "Contator_K1"
+          "operand": "Em_Linha"
         }
       ]
     },
     {
-      "comment": "Tempo em estrela",
+      "comment": "Passa para triangulo quando a estrela chega a 85% da rotacao",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Contator_K1"
+          "operand": "Em_Linha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rotacao_Nominal"
         }
       ],
       "outputs": [
         {
-          "type": "timer",
-          "kind": "TON",
-          "operand": "Tempo_Estrela",
-          "preset": 5000
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Em_Triangulo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Em_Linha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Em_Triangulo"
         }
       ]
     },
@@ -147,34 +468,62 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Contator_K1"
+          "operand": "Em_Linha"
         },
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Tempo_Estrela.DN"
+          "operand": "Em_Triangulo"
         },
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Contator_K3_Triangulo"
+          "operand": "K3_Triangulo"
         }
       ],
       "outputs": [
         {
           "type": "coil",
           "kind": "OTE",
-          "operand": "Contator_K2_Estrela"
+          "operand": "K2_Estrela"
         }
       ]
     },
     {
-      "comment": "Tempo morto: o K2 abre em 40 ms (arco) antes de o K3 fechar",
+      "comment": "Partida que nao chega a rotacao em 12 s e abortada",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Tempo_Estrela.DN"
+          "operand": "Em_Linha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Em_Triangulo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Estrela",
+          "preset": 12000
+        }
+      ]
+    },
+    {
+      "comment": "Tempo morto: o K2 abre em 40 ms antes de o K3 fechar",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Em_Triangulo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "K2_Estrela"
         }
       ],
       "outputs": [
@@ -192,7 +541,7 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Contator_K1"
+          "operand": "Em_Linha"
         },
         {
           "type": "contact",
@@ -202,14 +551,14 @@
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Contator_K2_Estrela"
+          "operand": "K2_Estrela"
         }
       ],
       "outputs": [
         {
           "type": "coil",
           "kind": "OTE",
-          "operand": "Contator_K3_Triangulo"
+          "operand": "K3_Triangulo"
         }
       ]
     },
@@ -219,7 +568,7 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Contator_K3_Triangulo"
+          "operand": "K3_Triangulo"
         }
       ],
       "outputs": [
@@ -229,39 +578,22 @@
           "operand": "Lampada_Ligado"
         }
       ]
-    },
-    {
-      "comment": "",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIO",
-          "operand": "Rele_Termico"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTE",
-          "operand": "Lampada_Falha"
-        }
-      ]
     }
   ],
   "history": [
     {
-      "date": "2026-11-13T20:34:02",
+      "date": "2026-11-13T22:55:00",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 7
+      "rungs": 16
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x98d6f8be",
-    "size": 208,
-    "instructions": 38,
-    "date": "2026-11-13T20:34:02"
+    "build_id": "0x7a505677",
+    "size": 520,
+    "instructions": 114,
+    "date": "2026-11-13T22:55:00"
   },
   "environment": "estrela_triangulo"
 }

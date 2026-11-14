@@ -410,24 +410,52 @@ def batch_mixer() -> Project:
 
 
 def star_delta() -> Project:
-    p = env_project("estrela_triangulo", "Partida estrela-triangulo", (
-        "Intertravamento e temporizacao: K1 com selo; K2 (estrela) por 5 s; tempo morto de 100 ms para o K2 "
-        "abrir (os contatores levam 40 ms) e so entao K3 (triangulo). K2 e K3 se bloqueiam mutuamente. O rele "
-        "termico (NF) derruba tudo e acende FALHA."))
-    p.symbols += [Symbol("Tempo_Estrela", "T0", "5 s em estrela"),
-                  Symbol("Tempo_Morto", "T1", "100 ms entre abrir K2 e fechar K3")]
+    p = env_project("estrela_triangulo", "Partida estrela-triangulo reversivel", (
+        "Intertravamentos e tempos mortos: o ultimo botao de sentido vence (OTL/OTU). K1 e K4 se bloqueiam, so "
+        "fecham com o motor parado (I0.6) e depois de 150 ms com os dois abertos (os contatores abrem em 40 ms). "
+        "A estrela dura ate o sensor de rotacao (I0.5); o K3 so fecha 100 ms depois de o K2 abrir. Termico e "
+        "falta de fase (NF) param tudo e acendem FALHA; partida que nao chega a rotacao em 12 s e abortada."))
+    p.symbols += [Symbol("Pedido_Horario", "M0.0", "ultimo pedido: sentido horario"),
+                  Symbol("Pedido_Anti", "M0.1", "ultimo pedido: sentido anti-horario"),
+                  Symbol("Falha", "M0.2", "termico desarmado ou falta de fase"),
+                  Symbol("Em_Linha", "M0.3", "K1 ou K4 ligado"),
+                  Symbol("Em_Triangulo", "M0.4", "motor ja atingiu a rotacao em estrela"),
+                  Symbol("Linha_Livre", "T0", "150 ms com K1 e K4 abertos"),
+                  Symbol("Tempo_Morto", "T1", "100 ms entre abrir K2 e fechar K3"),
+                  Symbol("Tempo_Estrela", "T2", "12 s maximo em estrela")]
     p.rungs = [
-        Rung([Parallel([[Contact("XIC", "Liga")], [Contact("XIC", "Contator_K1")]]), Contact("XIC", "Desliga"),
-              Contact("XIC", "Rele_Termico")], [Coil("OTE", "Contator_K1")], "K1 com selo; DESLIGA e termico sao NF"),
-        Rung([Contact("XIC", "Contator_K1")], [TimerBox("TON", "Tempo_Estrela", 5000)], "Tempo em estrela"),
-        Rung([Contact("XIC", "Contator_K1"), Contact("XIO", "Tempo_Estrela.DN"), Contact("XIO", "Contator_K3_Triangulo")],
-             [Coil("OTE", "Contator_K2_Estrela")], "Estrela, intertravada com o triangulo"),
-        Rung([Contact("XIC", "Tempo_Estrela.DN")], [TimerBox("TON", "Tempo_Morto", 100)],
-             "Tempo morto: o K2 abre em 40 ms (arco) antes de o K3 fechar"),
-        Rung([Contact("XIC", "Contator_K1"), Contact("XIC", "Tempo_Morto.DN"), Contact("XIO", "Contator_K2_Estrela")],
-             [Coil("OTE", "Contator_K3_Triangulo")], "Triangulo, intertravado com a estrela"),
-        Rung([Contact("XIC", "Contator_K3_Triangulo")], [Coil("OTE", "Lampada_Ligado")], "Sinalizacao"),
-        Rung([Contact("XIO", "Rele_Termico")], [Coil("OTE", "Lampada_Falha")]),
+        Rung([Parallel([[Contact("XIO", "Rele_Termico")], [Contact("XIO", "Rele_Falta_Fase")]])],
+             [Coil("OTE", "Falha")], "Reles NF: 0 = desarmado (termico) ou sem uma fase"),
+        Rung([Contact("XIC", "Falha")], [Coil("OTE", "Lampada_Falha")]),
+        Rung([Contact("XIC", "Liga_Horario"), Contact("XIO", "Falha")],
+             [Coil("OTL", "Pedido_Horario"), Coil("OTU", "Pedido_Anti")], "O ultimo botao de sentido vence"),
+        Rung([Contact("XIC", "Liga_Anti_Horario"), Contact("XIO", "Falha")],
+             [Coil("OTL", "Pedido_Anti"), Coil("OTU", "Pedido_Horario")]),
+        Rung([Parallel([[Contact("XIO", "Desliga")], [Contact("XIC", "Falha")], [Contact("XIC", "Tempo_Estrela.DN")]])],
+             [Coil("OTU", "Pedido_Horario"), Coil("OTU", "Pedido_Anti")],
+             "Desliga (NF), falha ou partida que nao completou: para"),
+        Rung([Contact("XIO", "K1_Horario"), Contact("XIO", "K4_Anti_Horario")], [TimerBox("TON", "Linha_Livre", 150)],
+             "Tempo morto entre os contatores de linha"),
+        Rung([Contact("XIC", "Pedido_Horario"), Contact("XIO", "K4_Anti_Horario"),
+              Parallel([[Contact("XIC", "Motor_Parado"), Contact("XIC", "Linha_Livre.DN")], [Contact("XIC", "K1_Horario")]])],
+             [Coil("OTE", "K1_Horario")], "K1: parte so com o motor parado; selo pelo proprio K1"),
+        Rung([Contact("XIC", "Pedido_Anti"), Contact("XIO", "K1_Horario"),
+              Parallel([[Contact("XIC", "Motor_Parado"), Contact("XIC", "Linha_Livre.DN")],
+                        [Contact("XIC", "K4_Anti_Horario")]])],
+             [Coil("OTE", "K4_Anti_Horario")], "K4: idem, intertravado com o K1"),
+        Rung([Parallel([[Contact("XIC", "K1_Horario")], [Contact("XIC", "K4_Anti_Horario")]])], [Coil("OTE", "Em_Linha")]),
+        Rung([Contact("XIC", "Em_Linha"), Contact("XIC", "Rotacao_Nominal")], [Coil("OTL", "Em_Triangulo")],
+             "Passa para triangulo quando a estrela chega a 85% da rotacao"),
+        Rung([Contact("XIO", "Em_Linha")], [Coil("OTU", "Em_Triangulo")]),
+        Rung([Contact("XIC", "Em_Linha"), Contact("XIO", "Em_Triangulo"), Contact("XIO", "K3_Triangulo")],
+             [Coil("OTE", "K2_Estrela")], "Estrela, intertravada com o triangulo"),
+        Rung([Contact("XIC", "Em_Linha"), Contact("XIO", "Em_Triangulo")], [TimerBox("TON", "Tempo_Estrela", 12000)],
+             "Partida que nao chega a rotacao em 12 s e abortada"),
+        Rung([Contact("XIC", "Em_Triangulo"), Contact("XIO", "K2_Estrela")], [TimerBox("TON", "Tempo_Morto", 100)],
+             "Tempo morto: o K2 abre em 40 ms antes de o K3 fechar"),
+        Rung([Contact("XIC", "Em_Linha"), Contact("XIC", "Tempo_Morto.DN"), Contact("XIO", "K2_Estrela")],
+             [Coil("OTE", "K3_Triangulo")], "Triangulo, intertravado com a estrela"),
+        Rung([Contact("XIC", "K3_Triangulo")], [Coil("OTE", "Lampada_Ligado")], "Sinalizacao"),
     ]
     return p
 

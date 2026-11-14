@@ -13,7 +13,7 @@ from conftest import ROOT  # noqa: E402
 from ladderide.compiler import compile_project  # noqa: E402
 from ladderide.envs import EnvironmentPlant, available, create, discover, get  # noqa: E402
 from ladderide.envs import registry  # noqa: E402
-from ladderide.model import Coil, Contact, Project, Rung  # noqa: E402
+from ladderide.model import Coil, Contact, Parallel, Project, Rung, TimerBox  # noqa: E402
 from ladderide.sim.simulator import Simulator  # noqa: E402
 
 EXAMPLES = ROOT / "examples" / "ambientes"
@@ -346,17 +346,35 @@ def test_io_simulator_example_runs_bcd_through_frd_and_tod():
 
 
 # ------------------------------------------------- ambientes com estilos de logica diferentes
-def test_star_delta_switches_after_dead_time_and_detects_short():
+def test_star_delta_reverses_after_motor_stops_and_detects_shorts():
     p = Project.load(EXAMPLES / "estrela_triangulo.ladproj")
-    env, alarms, _ = closed_loop(p, [(100, "LIGA", True), (200, "LIGA", False)], 9000)
-    assert alarms == set() and env.starts == 1 and env.connection == "triangulo" and env.last_peak < 2.5
-    env, alarms, sim = closed_loop(p, [(100, "LIGA", True), (200, "LIGA", False), (9000, "SOBRECARGA", True)], 30000)
-    assert env.tripped and alarms == set() and sim.vm.outputs == 0b10000          # so FALHA acesa
-    same_scan = Project(environment="estrela_triangulo", rungs=[        # troca K2 -> K3 sem tempo morto
-        Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.0"), Coil("OTL", "Q0.1")]),
-        Rung([Contact("XIC", "Q0.0")], [Coil("OTE", "Q0.2")])])
-    _, alarms, _ = closed_loop(same_scan, [(100, "LIGA", True), (200, "LIGA", False)], 1000)
-    assert any("CURTO-CIRCUITO" in a for a in alarms)
+    env, alarms, _ = closed_loop(p, [(100, "LIGA_H", True), (200, "LIGA_H", False)], 9000)
+    assert alarms == set() and env.starts[1] == 1 and env.connection == "triangulo" and env.last_peak < 2.5
+    rev = [(100, "LIGA_H", True), (200, "LIGA_H", False), (9000, "LIGA_A", True), (9100, "LIGA_A", False)]
+    env, alarms, _ = closed_loop(p, rev, 30000)               # espera parar e parte no outro sentido
+    assert alarms == set() and env.starts == {1: 1, -1: 1} and env.w < -0.9 and env.plugging == 0
+    for fault in ("SOBRECARGA", "FALTA_FASE"):
+        env, alarms, sim = closed_loop(p, [(100, "LIGA_H", True), (200, "LIGA_H", False), (9000, fault, True)], 30000)
+        assert alarms == set() and sim.vm.outputs == 0b100000                   # so FALHA acesa
+    def program(*rungs):
+        return Project(environment="estrela_triangulo", rungs=list(rungs))
+    reverse = [Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.0"), Coil("OTU", "Q0.1")]),
+               Rung([Contact("XIC", "I0.1")], [Coil("OTL", "Q0.1"), Coil("OTU", "Q0.0")])]
+    star = Rung([Parallel([[Contact("XIC", "Q0.0")], [Contact("XIC", "Q0.1")]])], [Coil("OTE", "Q0.2")])
+    _, alarms, _ = closed_loop(program(*reverse, star), rev, 12000)        # sem tempo morto entre K1 e K4
+    assert any("K1 e K4 fecharam juntos" in a for a in alarms)
+    dead_time = [Rung([Contact("XIC", "I0.0")], [Coil("OTU", "Q0.1"), Coil("OTL", "M0.0")]),
+                 Rung([Contact("XIC", "I0.1")], [Coil("OTU", "Q0.0"), Coil("OTL", "M0.1")]),
+                 Rung([Contact("XIO", "Q0.0"), Contact("XIO", "Q0.1")], [TimerBox("TON", "T0", 200)]),
+                 Rung([Contact("XIC", "M0.0"), Contact("XIC", "T0.DN")], [Coil("OTL", "Q0.0"), Coil("OTU", "M0.0")]),
+                 Rung([Contact("XIC", "M0.1"), Contact("XIC", "T0.DN")], [Coil("OTL", "Q0.1"), Coil("OTU", "M0.1")])]
+    _, alarms, _ = closed_loop(program(*dead_time, star), rev, 12000)      # nao espera o motor parar
+    assert any("Reversão com o motor girando" in a for a in alarms)
+    assert not any("CURTO" in a for a in alarms)
+    same_scan = program(Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.0"), Coil("OTL", "Q0.2")]),
+                        Rung([Contact("XIC", "I0.5")], [Coil("OTU", "Q0.2"), Coil("OTL", "Q0.3")]))
+    _, alarms, _ = closed_loop(same_scan, [(100, "LIGA_H", True), (200, "LIGA_H", False)], 6000)
+    assert any("K2 (estrela) e K3" in a for a in alarms)
 
 
 def test_two_hand_press_needs_simultaneous_hands_and_release():
