@@ -44,6 +44,11 @@ ensaios na placa real.
   operandos acompanham o novo nome (inclusive `Nome.DN`, `Nome.ACC`).
 
 ### Adicionado
+- Seis ambientes de manuseio de materiais com programa exemplo: separação por altura (rastreamento pelo
+  encoder com registrador de deslocamento), pick & place XY (coordenadas calculadas e eixos por setpoint),
+  armazém automático (mapa de ocupação e pedidos do operador), separação por peso (fila FIFO de palavras),
+  convergência de esteiras (arbitragem entre filas com batentes) e estação de montagem (duas sequências em
+  paralelo). Esteiras com acúmulo, caixas e emissores comuns em `envs/transport.py`.
 - Sete ambientes novos com programa exemplo: controle de nível PI (malha contínua com anti-windup), paletizador
   (contadores aninhados), forno com rampa e patamar (perfil e controle proporcional ao tempo), controle de
   demanda de energia (projeção e corte por prioridade), transferência rede/gerador (retentativas e

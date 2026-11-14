@@ -36,13 +36,14 @@ Trabalho final da disciplina de Controladores Lógicos Programáveis.
   watchdog, estado seguro configurável e Modbus RTU somente leitura
 - **Dispositivo virtual**: o firmware rodando no PC, para aulas e testes sem placa
 - **Gravar firmware na placa** pela IDE (esptool), sem instalar o PlatformIO
-- **Ambientes de simulação** animados (25): silo de envase, semáforo, portão de garagem, elevador,
+- **Ambientes de simulação** animados (31): silo de envase, semáforo, portão de garagem, elevador,
   linha de garrafas, ar comprimido, misturador de batelada, partida estrela-triângulo reversível,
   prensa bimanual, furadeira automática, passagem de nível em linha dupla, estacionamento de dois
   pisos, separação de peças configurável, detecção de gás analógica, dosagem por receita, estufa com
   irrigação, ponte rolante com guincho, máquina de venda, controle de nível PI, paletizador, forno com
-  rampa e patamar, controle de demanda, transferência rede/gerador, eclusa, lava-rápido e simulador
-  de E/S, cada um com um estilo de lógica diferente,
+  rampa e patamar, controle de demanda, transferência rede/gerador, eclusa, lava-rápido, separação por
+  altura, pick & place XY, armazém automático, separação por peso, convergência de esteiras, estação de
+  montagem e simulador de E/S, cada um com um estilo de lógica diferente,
   controlados pelo programa, com alarmes de erros de lógica; novos ambientes são
   plugins independentes ([guia](docs/simulation-environments.md))
 - **Factory IO** pelo driver Modbus TCP/IP Server: a simulação controla cenas 3D, com os
