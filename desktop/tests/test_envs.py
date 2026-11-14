@@ -841,3 +841,23 @@ def test_warehouse_keeps_occupancy_map_and_serves_requests():
         r.outputs = [o for o in r.outputs if getattr(o, "operands", None) != ["Ocupacao", "Peso", "Ocupacao"]]
     _, alarms, _ = closed_loop(blind, [(0, "LIGA", True)], 40000)
     assert any("bateu em outra caixa" in a for a in alarms)
+
+
+def test_weight_sorting_keeps_a_word_fifo_between_scale_and_transfer():
+    p = Project.load(EXAMPLES / "separacao_peso.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True)], 90000)
+    assert alarms == set() and env.wrong == 0 and min(env.done.values()) >= 5
+    hasty = Project.load(EXAMPLES / "separacao_peso.ladproj")              # nao para a esteira da balanca
+    hasty.rungs[1].condition = [Contact("XIC", "Liga")]
+    _, alarms, _ = closed_loop(hasty, [(0, "LIGA", True)], 20000)
+    assert any("sem pesagem" in a for a in alarms)
+    blind = Project.load(EXAMPLES / "separacao_peso.ladproj")              # olha a ultima pesada, nao a fila
+    for r in blind.rungs:
+        for node in r.condition:
+            groups = node.branches if isinstance(node, Parallel) else [[node]]
+            for g in groups:
+                for c in g:
+                    if isinstance(c, CompareBox) and c.operands[0] == "Fila_1":
+                        c.operands[0] = "Classe"
+    env, _, _ = closed_loop(blind, [(0, "LIGA", True)], 40000)
+    assert env.wrong > 0

@@ -1,0 +1,744 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Separacao por peso",
+  "description": "Fila FIFO de palavras feita com MOV. A esteira da balanca para com a caixa inteira na plataforma; com o peso estavel a classe (1 no peso, 2 leve, 3 pesada) entra no primeiro lugar vazio da fila N20..N24. As entradas na fila estao escritas do ultimo lugar para o primeiro: assim so o primeiro vazio recebe a classe. N20 e a caixa que chega ao transferidor: com ela no lugar a esteira de desvio para (se nao for boa) e o transferidor leva a caixa para a rampa certa. Quando a fotocelula do transferidor desliga a caixa saiu: a fila anda (N21 -> N20, ..., 0 -> N24). Com a fila cheia a caixa espera na balanca.",
+  "version": "0.1.0",
+  "created": "2026-11-14T14:02:06",
+  "modified": "2026-11-14T14:02:06",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Chave LIGA"
+    },
+    {
+      "name": "Caixa_Na_Balanca",
+      "address": "I0.1",
+      "comment": "Caixa inteira sobre a plataforma da balança"
+    },
+    {
+      "name": "Peso_Estavel",
+      "address": "I0.2",
+      "comment": "Leitura da balança estável (N0 vale)"
+    },
+    {
+      "name": "Caixa_No_Transferidor",
+      "address": "I0.3",
+      "comment": "Fotocélula: caixa centrada no transferidor"
+    },
+    {
+      "name": "Esteira_Entrada",
+      "address": "Q0.0",
+      "comment": "Esteira de entrada"
+    },
+    {
+      "name": "Esteira_Balanca",
+      "address": "Q0.1",
+      "comment": "Esteira da balança"
+    },
+    {
+      "name": "Esteira_Desvio",
+      "address": "Q0.2",
+      "comment": "Esteira até o transferidor e a expedição"
+    },
+    {
+      "name": "Transfere_Leves",
+      "address": "Q0.3",
+      "comment": "Transferidor: leva a caixa para a rampa das leves"
+    },
+    {
+      "name": "Transfere_Pesadas",
+      "address": "Q0.4",
+      "comment": "Transferidor: leva a caixa para a rampa das pesadas"
+    },
+    {
+      "name": "Emissor",
+      "address": "Q0.5",
+      "comment": "Emissor de caixas"
+    },
+    {
+      "name": "Luz_Operando",
+      "address": "Q0.6",
+      "comment": "Lâmpada operando"
+    },
+    {
+      "name": "Peso",
+      "address": "N0",
+      "comment": "peso na balanca (g)"
+    },
+    {
+      "name": "Classe",
+      "address": "N10",
+      "comment": "classe da caixa pesada"
+    },
+    {
+      "name": "Fila_1",
+      "address": "N20",
+      "comment": "classe da caixa que chega ao transferidor"
+    },
+    {
+      "name": "Fila_2",
+      "address": "N21",
+      "comment": ""
+    },
+    {
+      "name": "Fila_3",
+      "address": "N22",
+      "comment": ""
+    },
+    {
+      "name": "Fila_4",
+      "address": "N23",
+      "comment": ""
+    },
+    {
+      "name": "Fila_5",
+      "address": "N24",
+      "comment": "ultimo lugar da fila"
+    },
+    {
+      "name": "Pesar",
+      "address": "M0.0",
+      "comment": "pesagem valida nesta varredura"
+    },
+    {
+      "name": "Pesada",
+      "address": "M0.1",
+      "comment": "a caixa na balanca ja entrou na fila"
+    },
+    {
+      "name": "Balanca_Anterior",
+      "address": "M0.2",
+      "comment": "caixa na balanca na varredura anterior"
+    },
+    {
+      "name": "Transf_Anterior",
+      "address": "M0.3",
+      "comment": "caixa no transferidor na varredura anterior"
+    },
+    {
+      "name": "Saiu",
+      "address": "M0.4",
+      "comment": "a caixa deixou o transferidor"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Liga a linha",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Entrada"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Emissor"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Operando"
+        }
+      ]
+    },
+    {
+      "comment": "BALANCA: para com a caixa ainda nao pesada sobre a plataforma",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Caixa_Na_Balanca"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pesada"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Balanca"
+        }
+      ]
+    },
+    {
+      "comment": "Peso estavel e lugar na fila",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_Na_Balanca"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peso_Estavel"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Pesada"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_5",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pesar"
+        }
+      ]
+    },
+    {
+      "comment": "CLASSE: 1 no peso",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Classe"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "2 leve (abaixo de 450 g)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Peso",
+            "450"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2",
+            "Classe"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "3 pesada (acima de 550 g)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Peso",
+            "550"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3",
+            "Classe"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "SAIDA DA FILA: a caixa deixou o transferidor",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixa_No_Transferidor"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Transf_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Saiu"
+        }
+      ]
+    },
+    {
+      "comment": "A fila anda um lugar",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Saiu"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Fila_2",
+            "Fila_1"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Fila_3",
+            "Fila_2"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Fila_4",
+            "Fila_3"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Fila_5",
+            "Fila_4"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Fila_5"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "ENTRADA NA FILA: primeiro lugar vazio (do ultimo para o primeiro)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        },
+        {
+          "type": "compare",
+          "kind": "NEQ",
+          "operands": [
+            "Fila_4",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_5",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Classe",
+            "Fila_5"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        },
+        {
+          "type": "compare",
+          "kind": "NEQ",
+          "operands": [
+            "Fila_3",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_4",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Classe",
+            "Fila_4"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        },
+        {
+          "type": "compare",
+          "kind": "NEQ",
+          "operands": [
+            "Fila_2",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_3",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Classe",
+            "Fila_3"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        },
+        {
+          "type": "compare",
+          "kind": "NEQ",
+          "operands": [
+            "Fila_1",
+            "0"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_2",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Classe",
+            "Fila_2"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_1",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Classe",
+            "Fila_1"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "A caixa ja esta na fila: pode seguir",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pesar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pesada"
+        }
+      ]
+    },
+    {
+      "comment": "Saiu da balanca: a proxima ainda nao foi pesada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixa_Na_Balanca"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Balanca_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pesada"
+        }
+      ]
+    },
+    {
+      "comment": "DESVIO: so anda se a caixa no transferidor for boa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Caixa_No_Transferidor"
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "EQU",
+                "operands": [
+                  "Fila_1",
+                  "1"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Desvio"
+        }
+      ]
+    },
+    {
+      "comment": "Transferidor: leves para cima",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_No_Transferidor"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_1",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Transfere_Leves"
+        }
+      ]
+    },
+    {
+      "comment": "pesadas para baixo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_No_Transferidor"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Fila_1",
+            "3"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Transfere_Pesadas"
+        }
+      ]
+    },
+    {
+      "comment": "Imagens anteriores",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_Na_Balanca"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Balanca_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_No_Transferidor"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Transf_Anterior"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T14:02:06",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 20
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x4f8e9db0",
+    "size": 672,
+    "instructions": 152,
+    "date": "2026-11-14T14:02:06"
+  },
+  "environment": "separacao_peso"
+}

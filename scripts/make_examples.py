@@ -1765,6 +1765,66 @@ def warehouse() -> Project:
     return p
 
 
+def weight_sorting() -> Project:
+    p = env_project("separacao_peso", "Separacao por peso", (
+        "Fila FIFO de palavras feita com MOV. A esteira da balanca para com a caixa inteira na plataforma; com o "
+        "peso estavel a classe (1 no peso, 2 leve, 3 pesada) entra no primeiro lugar vazio da fila N20..N24. As "
+        "entradas na fila estao escritas do ultimo lugar para o primeiro: assim so o primeiro vazio recebe a classe. "
+        "N20 e a caixa que chega ao transferidor: com ela no lugar a esteira de desvio para (se nao for boa) e o "
+        "transferidor leva a caixa para a rampa certa. Quando a fotocelula do transferidor desliga a caixa saiu: "
+        "a fila anda (N21 -> N20, ..., 0 -> N24). Com a fila cheia a caixa espera na balanca."))
+    p.symbols += [Symbol("Peso", "N0", "peso na balanca (g)"), Symbol("Classe", "N10", "classe da caixa pesada"),
+                  Symbol("Fila_1", "N20", "classe da caixa que chega ao transferidor"),
+                  Symbol("Fila_2", "N21", ""), Symbol("Fila_3", "N22", ""), Symbol("Fila_4", "N23", ""),
+                  Symbol("Fila_5", "N24", "ultimo lugar da fila"),
+                  Symbol("Pesar", "M0.0", "pesagem valida nesta varredura"),
+                  Symbol("Pesada", "M0.1", "a caixa na balanca ja entrou na fila"),
+                  Symbol("Balanca_Anterior", "M0.2", "caixa na balanca na varredura anterior"),
+                  Symbol("Transf_Anterior", "M0.3", "caixa no transferidor na varredura anterior"),
+                  Symbol("Saiu", "M0.4", "a caixa deixou o transferidor")]
+    p.rungs = [
+        Rung([Contact("XIC", "Liga")], [Coil("OTE", "Esteira_Entrada"), Coil("OTE", "Emissor"),
+                                        Coil("OTE", "Luz_Operando")], "Liga a linha"),
+        Rung([Contact("XIC", "Liga"), Parallel([[Contact("XIO", "Caixa_Na_Balanca")], [Contact("XIC", "Pesada")]])],
+             [Coil("OTE", "Esteira_Balanca")], "BALANCA: para com a caixa ainda nao pesada sobre a plataforma"),
+        Rung([Contact("XIC", "Caixa_Na_Balanca"), Contact("XIC", "Peso_Estavel"), Contact("XIO", "Pesada"),
+              CompareBox("EQU", ["Fila_5", "0"])], [Coil("OTE", "Pesar")], "Peso estavel e lugar na fila"),
+        Rung([Contact("XIC", "Pesar")], [MathBox("MOV", ["1", "Classe"])], "CLASSE: 1 no peso"),
+        Rung([Contact("XIC", "Pesar"), CompareBox("LES", ["Peso", "450"])], [MathBox("MOV", ["2", "Classe"])],
+             "2 leve (abaixo de 450 g)"),
+        Rung([Contact("XIC", "Pesar"), CompareBox("GRT", ["Peso", "550"])], [MathBox("MOV", ["3", "Classe"])],
+             "3 pesada (acima de 550 g)"),
+        Rung([Contact("XIO", "Caixa_No_Transferidor"), Contact("XIC", "Transf_Anterior")], [Coil("OTE", "Saiu")],
+             "SAIDA DA FILA: a caixa deixou o transferidor"),
+        Rung([Contact("XIC", "Saiu")],
+             [MathBox("MOV", ["Fila_2", "Fila_1"]), MathBox("MOV", ["Fila_3", "Fila_2"]),
+              MathBox("MOV", ["Fila_4", "Fila_3"]), MathBox("MOV", ["Fila_5", "Fila_4"]),
+              MathBox("MOV", ["0", "Fila_5"])], "A fila anda um lugar"),
+        Rung([Contact("XIC", "Pesar"), CompareBox("NEQ", ["Fila_4", "0"]), CompareBox("EQU", ["Fila_5", "0"])],
+             [MathBox("MOV", ["Classe", "Fila_5"])], "ENTRADA NA FILA: primeiro lugar vazio (do ultimo para o primeiro)"),
+        Rung([Contact("XIC", "Pesar"), CompareBox("NEQ", ["Fila_3", "0"]), CompareBox("EQU", ["Fila_4", "0"])],
+             [MathBox("MOV", ["Classe", "Fila_4"])]),
+        Rung([Contact("XIC", "Pesar"), CompareBox("NEQ", ["Fila_2", "0"]), CompareBox("EQU", ["Fila_3", "0"])],
+             [MathBox("MOV", ["Classe", "Fila_3"])]),
+        Rung([Contact("XIC", "Pesar"), CompareBox("NEQ", ["Fila_1", "0"]), CompareBox("EQU", ["Fila_2", "0"])],
+             [MathBox("MOV", ["Classe", "Fila_2"])]),
+        Rung([Contact("XIC", "Pesar"), CompareBox("EQU", ["Fila_1", "0"])], [MathBox("MOV", ["Classe", "Fila_1"])]),
+        Rung([Contact("XIC", "Pesar")], [Coil("OTL", "Pesada")], "A caixa ja esta na fila: pode seguir"),
+        Rung([Contact("XIO", "Caixa_Na_Balanca"), Contact("XIC", "Balanca_Anterior")], [Coil("OTU", "Pesada")],
+             "Saiu da balanca: a proxima ainda nao foi pesada"),
+        Rung([Contact("XIC", "Liga"),
+              Parallel([[Contact("XIO", "Caixa_No_Transferidor")], [CompareBox("EQU", ["Fila_1", "1"])]])],
+             [Coil("OTE", "Esteira_Desvio")], "DESVIO: so anda se a caixa no transferidor for boa"),
+        Rung([Contact("XIC", "Caixa_No_Transferidor"), CompareBox("EQU", ["Fila_1", "2"])],
+             [Coil("OTE", "Transfere_Leves")], "Transferidor: leves para cima"),
+        Rung([Contact("XIC", "Caixa_No_Transferidor"), CompareBox("EQU", ["Fila_1", "3"])],
+             [Coil("OTE", "Transfere_Pesadas")], "pesadas para baixo"),
+        Rung([Contact("XIC", "Caixa_Na_Balanca")], [Coil("OTE", "Balanca_Anterior")], "Imagens anteriores"),
+        Rung([Contact("XIC", "Caixa_No_Transferidor")], [Coil("OTE", "Transf_Anterior")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1881,7 +1941,8 @@ def main() -> int:
                "ambientes/lava_rapido.ladproj": car_wash,
                "ambientes/separacao_altura.ladproj": height_sorting,
                "ambientes/pick_place.ladproj": pick_place,
-               "ambientes/armazem.ladproj": warehouse}
+               "ambientes/armazem.ladproj": warehouse,
+               "ambientes/separacao_peso.ladproj": weight_sorting}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue
