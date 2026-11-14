@@ -582,42 +582,55 @@ def drill() -> Project:
 
 
 def level_crossing() -> Project:
-    p = env_project("passagem_nivel", "Passagem de nivel", (
-        "Memoria de sentido: o primeiro sensor de aproximacao que atua define de onde o trem vem (M0.0/M0.1). "
-        "Quando o trem deixa a ilha, o alerta termina e o sensor do lado de saida passa a ser ignorado ate o "
-        "trem passar por ele (M0.2-M0.5), senao ele seria confundido com um novo trem. Luzes alternadas pelo "
-        "relogio S0.3, sino ate a cancela abaixar e 3 s de aviso antes de descer."))
-    p.symbols += [Symbol("Vindo_Oeste", "M0.0", "trem chegando pelo oeste"),
-                  Symbol("Vindo_Leste", "M0.1", "trem chegando pelo leste"),
-                  Symbol("Ignora_Leste", "M0.2", "trem indo embora pelo leste"),
-                  Symbol("Ignora_Oeste", "M0.3", "trem indo embora pelo oeste"),
-                  Symbol("Viu_Leste", "M0.4", "o trem que vai embora chegou ao sensor leste"),
-                  Symbol("Viu_Oeste", "M0.5", "o trem que vai embora chegou ao sensor oeste"),
-                  Symbol("Trem_Na_Ilha", "M0.6", "o trem ja chegou a passagem"),
-                  Symbol("Alerta", "M0.7", "passagem fechada para os carros"),
-                  Symbol("Aviso", "T0", "3 s de luzes antes de a cancela descer")]
-    p.rungs = [
-        Rung([Contact("XIC", "Sensor_Oeste"), Contact("XIO", "Ignora_Oeste"), Contact("XIO", "Vindo_Leste")],
-             [Coil("OTL", "Vindo_Oeste")], "O primeiro sensor que atua define o sentido"),
-        Rung([Contact("XIC", "Sensor_Leste"), Contact("XIO", "Ignora_Leste"), Contact("XIO", "Vindo_Oeste")],
-             [Coil("OTL", "Vindo_Leste")]),
-        Rung([Parallel([[Contact("XIC", "Vindo_Oeste")], [Contact("XIC", "Vindo_Leste")]])], [Coil("OTE", "Alerta")]),
-        Rung([Contact("XIC", "Alerta"), Contact("XIC", "Sensor_Ilha")], [Coil("OTL", "Trem_Na_Ilha")],
-             "O trem chegou a passagem"),
-        Rung([Contact("XIC", "Trem_Na_Ilha"), Contact("XIO", "Sensor_Ilha"), Contact("XIC", "Vindo_Oeste")],
-             [Coil("OTL", "Ignora_Leste")], "Saiu da ilha: ignora o sensor do lado para onde ele vai"),
-        Rung([Contact("XIC", "Trem_Na_Ilha"), Contact("XIO", "Sensor_Ilha"), Contact("XIC", "Vindo_Leste")],
-             [Coil("OTL", "Ignora_Oeste")]),
-        Rung([Contact("XIC", "Trem_Na_Ilha"), Contact("XIO", "Sensor_Ilha")],
-             [Coil("OTU", "Vindo_Oeste"), Coil("OTU", "Vindo_Leste"), Coil("OTU", "Trem_Na_Ilha")],
-             "Passagem livre: fim do alerta"),
-        Rung([Contact("XIC", "Ignora_Leste"), Contact("XIC", "Sensor_Leste")], [Coil("OTL", "Viu_Leste")],
-             "O trem que vai embora passa pelo sensor do outro lado"),
-        Rung([Contact("XIC", "Viu_Leste"), Contact("XIO", "Sensor_Leste")],
-             [Coil("OTU", "Ignora_Leste"), Coil("OTU", "Viu_Leste")], "e o libera quando termina de passar"),
-        Rung([Contact("XIC", "Ignora_Oeste"), Contact("XIC", "Sensor_Oeste")], [Coil("OTL", "Viu_Oeste")]),
-        Rung([Contact("XIC", "Viu_Oeste"), Contact("XIO", "Sensor_Oeste")],
-             [Coil("OTU", "Ignora_Oeste"), Coil("OTU", "Viu_Oeste")]),
+    p = env_project("passagem_nivel", "Passagem de nivel em linha dupla", (
+        "Memoria de sentido por via: o primeiro sensor de aproximacao que atua define de onde o trem vem. Quando o "
+        "trem deixa a ilha, a via fica livre e o sensor do lado de saida e ignorado ate o trem passar por ele, "
+        "senao seria confundido com um novo trem. A logica de uma via e repetida para a outra (bits M0.x e M1.x). "
+        "Alerta = via 1 ou via 2 ocupada; OUTRO TREM = as duas. Luzes alternadas pelo relogio S0.3, sino ate a "
+        "cancela abaixar, 3 s de aviso antes de descer e so sobe com as duas vias livres."))
+    p.symbols += [Symbol("Alerta", "M2.0", "alguma via ocupada"), Symbol("Aviso", "T0", "3 s de luzes antes de descer")]
+    p.rungs = []
+    for k, byte in ((1, 0), (2, 1)):
+        names = ["Vindo_Oeste", "Vindo_Leste", "Ignora_Leste", "Ignora_Oeste", "Viu_Leste", "Viu_Oeste", "Na_Ilha",
+                 "Ocupada"]
+        notes = ["trem chegando pelo oeste", "trem chegando pelo leste", "trem indo embora pelo leste",
+                 "trem indo embora pelo oeste", "o trem que vai embora chegou ao sensor leste",
+                 "o trem que vai embora chegou ao sensor oeste", "o trem ja chegou a passagem", "via ocupada"]
+        p.symbols += [Symbol(f"{n}_{k}", f"M{byte}.{b}", f"via {k}: {c}") for b, (n, c) in enumerate(zip(names, notes))]
+        W, I, E = f"Via{k}_Oeste", f"Via{k}_Ilha", f"Via{k}_Leste"
+
+        def m(name, k=k):
+            return f"{name}_{k}"
+
+        p.rungs += [
+            Rung([Contact("XIC", W), Contact("XIO", m("Ignora_Oeste")), Contact("XIO", m("Vindo_Leste"))],
+                 [Coil("OTL", m("Vindo_Oeste"))], f"VIA {k}: o primeiro sensor que atua define o sentido"),
+            Rung([Contact("XIC", E), Contact("XIO", m("Ignora_Leste")), Contact("XIO", m("Vindo_Oeste"))],
+                 [Coil("OTL", m("Vindo_Leste"))]),
+            Rung([Parallel([[Contact("XIC", m("Vindo_Oeste"))], [Contact("XIC", m("Vindo_Leste"))]])],
+                 [Coil("OTE", m("Ocupada"))]),
+            Rung([Contact("XIC", m("Ocupada")), Contact("XIC", I)], [Coil("OTL", m("Na_Ilha"))],
+                 "O trem chegou a passagem"),
+            Rung([Contact("XIC", m("Na_Ilha")), Contact("XIO", I), Contact("XIC", m("Vindo_Oeste"))],
+                 [Coil("OTL", m("Ignora_Leste"))], "Saiu da ilha: ignora o sensor do lado para onde ele vai"),
+            Rung([Contact("XIC", m("Na_Ilha")), Contact("XIO", I), Contact("XIC", m("Vindo_Leste"))],
+                 [Coil("OTL", m("Ignora_Oeste"))]),
+            Rung([Contact("XIC", m("Na_Ilha")), Contact("XIO", I)],
+                 [Coil("OTU", m("Vindo_Oeste")), Coil("OTU", m("Vindo_Leste")), Coil("OTU", m("Na_Ilha"))],
+                 "Via livre"),
+            Rung([Contact("XIC", m("Ignora_Leste")), Contact("XIC", E)], [Coil("OTL", m("Viu_Leste"))],
+                 "O trem que vai embora passa pelo sensor do outro lado e o libera quando termina"),
+            Rung([Contact("XIC", m("Viu_Leste")), Contact("XIO", E)],
+                 [Coil("OTU", m("Ignora_Leste")), Coil("OTU", m("Viu_Leste"))]),
+            Rung([Contact("XIC", m("Ignora_Oeste")), Contact("XIC", W)], [Coil("OTL", m("Viu_Oeste"))]),
+            Rung([Contact("XIC", m("Viu_Oeste")), Contact("XIO", W)],
+                 [Coil("OTU", m("Ignora_Oeste")), Coil("OTU", m("Viu_Oeste"))]),
+        ]
+    p.rungs += [
+        Rung([Parallel([[Contact("XIC", "Ocupada_1")], [Contact("XIC", "Ocupada_2")]])], [Coil("OTE", "Alerta")],
+             "PASSAGEM: alerta com qualquer via ocupada"),
+        Rung([Contact("XIC", "Ocupada_1"), Contact("XIC", "Ocupada_2")], [Coil("OTE", "Painel_Outro_Trem")],
+             "Dois trens: painel OUTRO TREM"),
         Rung([Contact("XIC", "Alerta"), Contact("XIC", "S0.3")], [Coil("OTE", "Luz_Esquerda")],
              "Luzes alternadas pelo relogio de 1 s"),
         Rung([Contact("XIC", "Alerta"), Contact("XIO", "S0.3")], [Coil("OTE", "Luz_Direita")]),
@@ -625,9 +638,9 @@ def level_crossing() -> Project:
              "Sino ate a cancela abaixar"),
         Rung([Contact("XIC", "Alerta")], [TimerBox("TON", "Aviso", 3000)], "3 s de aviso"),
         Rung([Contact("XIC", "Alerta"), Contact("XIC", "Aviso.DN"), Contact("XIO", "Cancela_Abaixada")],
-             [Coil("OTE", "Cancela_Abaixa")], "Cancela desce depois do aviso"),
+             [Coil("OTE", "Cancela_Abaixa")], "Cancelas descem depois do aviso"),
         Rung([Contact("XIO", "Alerta"), Contact("XIO", "Cancela_Levantada")], [Coil("OTE", "Cancela_Levanta")],
-             "e sobe quando o trem deixa a ilha"),
+             "Sobem so com as duas vias livres"),
     ]
     return p
 

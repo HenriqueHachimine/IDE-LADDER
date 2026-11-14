@@ -1,10 +1,10 @@
-; Passagem de nivel - gerado por LadderIDE compilador 1.0.0
+; Passagem de nivel em linha dupla - gerado por LadderIDE compilador 1.0.0
 .inputs 8
 .outputs 8
 .markers 64
 .words 32
 .safe_outputs 0x0000
-.build_id 0x7bcfa87b
+.build_id 0x94fc9288
 .timer T0 TON 3000
 SOR ; rede 0
 XIC I0.0
@@ -83,32 +83,121 @@ OTU M0.5
 BND
 EOR
 SOR ; rede 11
+XIC I0.5
+XIO M1.3
+XIO M1.1
+OTL M1.0
+EOR
+SOR ; rede 12
+XIC I0.7
+XIO M1.2
+XIO M1.0
+OTL M1.1
+EOR
+SOR ; rede 13
+BST
+XIC M1.0
+NXB
+XIC M1.1
+BND
+OTE M1.7
+EOR
+SOR ; rede 14
+XIC M1.7
+XIC I0.6
+OTL M1.6
+EOR
+SOR ; rede 15
+XIC M1.6
+XIO I0.6
+XIC M1.0
+OTL M1.2
+EOR
+SOR ; rede 16
+XIC M1.6
+XIO I0.6
+XIC M1.1
+OTL M1.3
+EOR
+SOR ; rede 17
+XIC M1.6
+XIO I0.6
+BST
+OTU M1.0
+NXB
+OTU M1.1
+NXB
+OTU M1.6
+BND
+EOR
+SOR ; rede 18
+XIC M1.2
+XIC I0.7
+OTL M1.4
+EOR
+SOR ; rede 19
+XIC M1.4
+XIO I0.7
+BST
+OTU M1.2
+NXB
+OTU M1.4
+BND
+EOR
+SOR ; rede 20
+XIC M1.3
+XIC I0.5
+OTL M1.5
+EOR
+SOR ; rede 21
+XIC M1.5
+XIO I0.5
+BST
+OTU M1.3
+NXB
+OTU M1.5
+BND
+EOR
+SOR ; rede 22
+BST
 XIC M0.7
+NXB
+XIC M1.7
+BND
+OTE M2.0
+EOR
+SOR ; rede 23
+XIC M0.7
+XIC M1.7
+OTE Q0.5
+EOR
+SOR ; rede 24
+XIC M2.0
 XIC S0.3
 OTE Q0.0
 EOR
-SOR ; rede 12
-XIC M0.7
+SOR ; rede 25
+XIC M2.0
 XIO S0.3
 OTE Q0.1
 EOR
-SOR ; rede 13
-XIC M0.7
+SOR ; rede 26
+XIC M2.0
 XIO I0.3
 OTE Q0.2
 EOR
-SOR ; rede 14
-XIC M0.7
+SOR ; rede 27
+XIC M2.0
 TON T0
 EOR
-SOR ; rede 15
-XIC M0.7
+SOR ; rede 28
+XIC M2.0
 XIC T0.DN
 XIO I0.3
 OTE Q0.3
 EOR
-SOR ; rede 16
-XIO M0.7
+SOR ; rede 29
+XIO M2.0
 XIO I0.4
 OTE Q0.4
 EOR

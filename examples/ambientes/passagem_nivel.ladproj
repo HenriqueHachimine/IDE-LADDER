@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Passagem de nivel",
-  "description": "Memoria de sentido: o primeiro sensor de aproximacao que atua define de onde o trem vem (M0.0/M0.1). Quando o trem deixa a ilha, o alerta termina e o sensor do lado de saida passa a ser ignorado ate o trem passar por ele (M0.2-M0.5), senao ele seria confundido com um novo trem. Luzes alternadas pelo relogio S0.3, sino ate a cancela abaixar e 3 s de aviso antes de descer.",
+  "name": "Passagem de nivel em linha dupla",
+  "description": "Memoria de sentido por via: o primeiro sensor de aproximacao que atua define de onde o trem vem. Quando o trem deixa a ilha, a via fica livre e o sensor do lado de saida e ignorado ate o trem passar por ele, senao seria confundido com um novo trem. A logica de uma via e repetida para a outra (bits M0.x e M1.x). Alerta = via 1 ou via 2 ocupada; OUTRO TREM = as duas. Luzes alternadas pelo relogio S0.3, sino ate a cancela abaixar, 3 s de aviso antes de descer e so sobe com as duas vias livres.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:40:33",
-  "modified": "2026-11-13T20:40:33",
+  "created": "2026-11-13T23:17:11",
+  "modified": "2026-11-13T23:17:11",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -25,29 +25,44 @@
   },
   "symbols": [
     {
-      "name": "Sensor_Oeste",
+      "name": "Via1_Oeste",
       "address": "I0.0",
-      "comment": "Aproximação pelo oeste (400 m)"
+      "comment": "Via 1: aproximação pelo oeste (400 m)"
     },
     {
-      "name": "Sensor_Ilha",
+      "name": "Via1_Ilha",
       "address": "I0.1",
-      "comment": "Trem sobre a passagem (+-15 m)"
+      "comment": "Via 1: trem sobre a passagem (+-15 m)"
     },
     {
-      "name": "Sensor_Leste",
+      "name": "Via1_Leste",
       "address": "I0.2",
-      "comment": "Aproximação pelo leste (400 m)"
+      "comment": "Via 1: aproximação pelo leste (400 m)"
     },
     {
       "name": "Cancela_Abaixada",
       "address": "I0.3",
-      "comment": "Fim de curso: cancela abaixada"
+      "comment": "Fim de curso: cancelas abaixadas"
     },
     {
       "name": "Cancela_Levantada",
       "address": "I0.4",
-      "comment": "Fim de curso: cancela levantada"
+      "comment": "Fim de curso: cancelas levantadas"
+    },
+    {
+      "name": "Via2_Oeste",
+      "address": "I0.5",
+      "comment": "Via 2: aproximação pelo oeste (400 m)"
+    },
+    {
+      "name": "Via2_Ilha",
+      "address": "I0.6",
+      "comment": "Via 2: trem sobre a passagem (+-15 m)"
+    },
+    {
+      "name": "Via2_Leste",
+      "address": "I0.7",
+      "comment": "Via 2: aproximação pelo leste (400 m)"
     },
     {
       "name": "Luz_Esquerda",
@@ -67,85 +82,135 @@
     {
       "name": "Cancela_Abaixa",
       "address": "Q0.3",
-      "comment": "Motor da cancela: abaixar"
+      "comment": "Motor das cancelas: abaixar"
     },
     {
       "name": "Cancela_Levanta",
       "address": "Q0.4",
-      "comment": "Motor da cancela: levantar"
+      "comment": "Motor das cancelas: levantar"
     },
     {
-      "name": "Vindo_Oeste",
-      "address": "M0.0",
-      "comment": "trem chegando pelo oeste"
-    },
-    {
-      "name": "Vindo_Leste",
-      "address": "M0.1",
-      "comment": "trem chegando pelo leste"
-    },
-    {
-      "name": "Ignora_Leste",
-      "address": "M0.2",
-      "comment": "trem indo embora pelo leste"
-    },
-    {
-      "name": "Ignora_Oeste",
-      "address": "M0.3",
-      "comment": "trem indo embora pelo oeste"
-    },
-    {
-      "name": "Viu_Leste",
-      "address": "M0.4",
-      "comment": "o trem que vai embora chegou ao sensor leste"
-    },
-    {
-      "name": "Viu_Oeste",
-      "address": "M0.5",
-      "comment": "o trem que vai embora chegou ao sensor oeste"
-    },
-    {
-      "name": "Trem_Na_Ilha",
-      "address": "M0.6",
-      "comment": "o trem ja chegou a passagem"
+      "name": "Painel_Outro_Trem",
+      "address": "Q0.5",
+      "comment": "Painel luminoso OUTRO TREM"
     },
     {
       "name": "Alerta",
-      "address": "M0.7",
-      "comment": "passagem fechada para os carros"
+      "address": "M2.0",
+      "comment": "alguma via ocupada"
     },
     {
       "name": "Aviso",
       "address": "T0",
-      "comment": "3 s de luzes antes de a cancela descer"
+      "comment": "3 s de luzes antes de descer"
+    },
+    {
+      "name": "Vindo_Oeste_1",
+      "address": "M0.0",
+      "comment": "via 1: trem chegando pelo oeste"
+    },
+    {
+      "name": "Vindo_Leste_1",
+      "address": "M0.1",
+      "comment": "via 1: trem chegando pelo leste"
+    },
+    {
+      "name": "Ignora_Leste_1",
+      "address": "M0.2",
+      "comment": "via 1: trem indo embora pelo leste"
+    },
+    {
+      "name": "Ignora_Oeste_1",
+      "address": "M0.3",
+      "comment": "via 1: trem indo embora pelo oeste"
+    },
+    {
+      "name": "Viu_Leste_1",
+      "address": "M0.4",
+      "comment": "via 1: o trem que vai embora chegou ao sensor leste"
+    },
+    {
+      "name": "Viu_Oeste_1",
+      "address": "M0.5",
+      "comment": "via 1: o trem que vai embora chegou ao sensor oeste"
+    },
+    {
+      "name": "Na_Ilha_1",
+      "address": "M0.6",
+      "comment": "via 1: o trem ja chegou a passagem"
+    },
+    {
+      "name": "Ocupada_1",
+      "address": "M0.7",
+      "comment": "via 1: via ocupada"
+    },
+    {
+      "name": "Vindo_Oeste_2",
+      "address": "M1.0",
+      "comment": "via 2: trem chegando pelo oeste"
+    },
+    {
+      "name": "Vindo_Leste_2",
+      "address": "M1.1",
+      "comment": "via 2: trem chegando pelo leste"
+    },
+    {
+      "name": "Ignora_Leste_2",
+      "address": "M1.2",
+      "comment": "via 2: trem indo embora pelo leste"
+    },
+    {
+      "name": "Ignora_Oeste_2",
+      "address": "M1.3",
+      "comment": "via 2: trem indo embora pelo oeste"
+    },
+    {
+      "name": "Viu_Leste_2",
+      "address": "M1.4",
+      "comment": "via 2: o trem que vai embora chegou ao sensor leste"
+    },
+    {
+      "name": "Viu_Oeste_2",
+      "address": "M1.5",
+      "comment": "via 2: o trem que vai embora chegou ao sensor oeste"
+    },
+    {
+      "name": "Na_Ilha_2",
+      "address": "M1.6",
+      "comment": "via 2: o trem ja chegou a passagem"
+    },
+    {
+      "name": "Ocupada_2",
+      "address": "M1.7",
+      "comment": "via 2: via ocupada"
     }
   ],
   "variables": [],
   "rungs": [
     {
-      "comment": "O primeiro sensor que atua define o sentido",
+      "comment": "VIA 1: o primeiro sensor que atua define o sentido",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Sensor_Oeste"
+          "operand": "Via1_Oeste"
         },
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Ignora_Oeste"
+          "operand": "Ignora_Oeste_1"
         },
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Vindo_Leste"
+          "operand": "Vindo_Leste_1"
         }
       ],
       "outputs": [
         {
           "type": "coil",
           "kind": "OTL",
-          "operand": "Vindo_Oeste"
+          "operand": "Vindo_Oeste_1"
         }
       ]
     },
@@ -155,24 +220,24 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Sensor_Leste"
+          "operand": "Via1_Leste"
         },
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Ignora_Leste"
+          "operand": "Ignora_Leste_1"
         },
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Vindo_Oeste"
+          "operand": "Vindo_Oeste_1"
         }
       ],
       "outputs": [
         {
           "type": "coil",
           "kind": "OTL",
-          "operand": "Vindo_Leste"
+          "operand": "Vindo_Leste_1"
         }
       ]
     },
@@ -186,14 +251,542 @@
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Vindo_Oeste"
+                "operand": "Vindo_Oeste_1"
               }
             ],
             [
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Vindo_Leste"
+                "operand": "Vindo_Leste_1"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ocupada_1"
+        }
+      ]
+    },
+    {
+      "comment": "O trem chegou a passagem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ocupada_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via1_Ilha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Na_Ilha_1"
+        }
+      ]
+    },
+    {
+      "comment": "Saiu da ilha: ignora o sensor do lado para onde ele vai",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Na_Ilha_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via1_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vindo_Oeste_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ignora_Leste_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Na_Ilha_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via1_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vindo_Leste_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ignora_Oeste_1"
+        }
+      ]
+    },
+    {
+      "comment": "Via livre",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Na_Ilha_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via1_Ilha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vindo_Oeste_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vindo_Leste_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Na_Ilha_1"
+        }
+      ]
+    },
+    {
+      "comment": "O trem que vai embora passa pelo sensor do outro lado e o libera quando termina",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ignora_Leste_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via1_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Viu_Leste_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Viu_Leste_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via1_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ignora_Leste_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Viu_Leste_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ignora_Oeste_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via1_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Viu_Oeste_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Viu_Oeste_1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via1_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ignora_Oeste_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Viu_Oeste_1"
+        }
+      ]
+    },
+    {
+      "comment": "VIA 2: o primeiro sensor que atua define o sentido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via2_Oeste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ignora_Oeste_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vindo_Leste_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vindo_Oeste_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via2_Leste"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ignora_Leste_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vindo_Oeste_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vindo_Leste_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Vindo_Oeste_2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Vindo_Leste_2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ocupada_2"
+        }
+      ]
+    },
+    {
+      "comment": "O trem chegou a passagem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ocupada_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via2_Ilha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Na_Ilha_2"
+        }
+      ]
+    },
+    {
+      "comment": "Saiu da ilha: ignora o sensor do lado para onde ele vai",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Na_Ilha_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via2_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vindo_Oeste_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ignora_Leste_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Na_Ilha_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via2_Ilha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vindo_Leste_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ignora_Oeste_2"
+        }
+      ]
+    },
+    {
+      "comment": "Via livre",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Na_Ilha_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via2_Ilha"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vindo_Oeste_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vindo_Leste_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Na_Ilha_2"
+        }
+      ]
+    },
+    {
+      "comment": "O trem que vai embora passa pelo sensor do outro lado e o libera quando termina",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ignora_Leste_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via2_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Viu_Leste_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Viu_Leste_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via2_Leste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ignora_Leste_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Viu_Leste_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ignora_Oeste_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Via2_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Viu_Oeste_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Viu_Oeste_2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Via2_Oeste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ignora_Oeste_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Viu_Oeste_2"
+        }
+      ]
+    },
+    {
+      "comment": "PASSAGEM: alerta com qualquer via ocupada",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Ocupada_1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Ocupada_2"
               }
             ]
           ]
@@ -208,208 +801,24 @@
       ]
     },
     {
-      "comment": "O trem chegou a passagem",
+      "comment": "Dois trens: painel OUTRO TREM",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Alerta"
+          "operand": "Ocupada_1"
         },
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Sensor_Ilha"
+          "operand": "Ocupada_2"
         }
       ],
       "outputs": [
         {
           "type": "coil",
-          "kind": "OTL",
-          "operand": "Trem_Na_Ilha"
-        }
-      ]
-    },
-    {
-      "comment": "Saiu da ilha: ignora o sensor do lado para onde ele vai",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Trem_Na_Ilha"
-        },
-        {
-          "type": "contact",
-          "kind": "XIO",
-          "operand": "Sensor_Ilha"
-        },
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Vindo_Oeste"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTL",
-          "operand": "Ignora_Leste"
-        }
-      ]
-    },
-    {
-      "comment": "",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Trem_Na_Ilha"
-        },
-        {
-          "type": "contact",
-          "kind": "XIO",
-          "operand": "Sensor_Ilha"
-        },
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Vindo_Leste"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTL",
-          "operand": "Ignora_Oeste"
-        }
-      ]
-    },
-    {
-      "comment": "Passagem livre: fim do alerta",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Trem_Na_Ilha"
-        },
-        {
-          "type": "contact",
-          "kind": "XIO",
-          "operand": "Sensor_Ilha"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Vindo_Oeste"
-        },
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Vindo_Leste"
-        },
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Trem_Na_Ilha"
-        }
-      ]
-    },
-    {
-      "comment": "O trem que vai embora passa pelo sensor do outro lado",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Ignora_Leste"
-        },
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Sensor_Leste"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTL",
-          "operand": "Viu_Leste"
-        }
-      ]
-    },
-    {
-      "comment": "e o libera quando termina de passar",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Viu_Leste"
-        },
-        {
-          "type": "contact",
-          "kind": "XIO",
-          "operand": "Sensor_Leste"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Ignora_Leste"
-        },
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Viu_Leste"
-        }
-      ]
-    },
-    {
-      "comment": "",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Ignora_Oeste"
-        },
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Sensor_Oeste"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTL",
-          "operand": "Viu_Oeste"
-        }
-      ]
-    },
-    {
-      "comment": "",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Viu_Oeste"
-        },
-        {
-          "type": "contact",
-          "kind": "XIO",
-          "operand": "Sensor_Oeste"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Ignora_Oeste"
-        },
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Viu_Oeste"
+          "kind": "OTE",
+          "operand": "Painel_Outro_Trem"
         }
       ]
     },
@@ -498,7 +907,7 @@
       ]
     },
     {
-      "comment": "Cancela desce depois do aviso",
+      "comment": "Cancelas descem depois do aviso",
       "condition": [
         {
           "type": "contact",
@@ -525,7 +934,7 @@
       ]
     },
     {
-      "comment": "e sobe quando o trem deixa a ilha",
+      "comment": "Sobem so com as duas vias livres",
       "condition": [
         {
           "type": "contact",
@@ -549,18 +958,18 @@
   ],
   "history": [
     {
-      "date": "2026-11-13T20:40:33",
+      "date": "2026-11-13T23:17:11",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 17
+      "rungs": 30
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x7bcfa87b",
-    "size": 472,
-    "instructions": 106,
-    "date": "2026-11-13T20:40:33"
+    "build_id": "0x94fc9288",
+    "size": 828,
+    "instructions": 195,
+    "date": "2026-11-13T23:17:11"
   },
   "environment": "passagem_nivel"
 }

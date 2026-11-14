@@ -444,12 +444,28 @@ def test_drill_counts_tool_life_and_resets_on_new_bit():
 
 
 def test_level_crossing_handles_both_directions_and_ignores_leaving_train():
-    env, alarms, _ = closed_loop(Project.load(EXAMPLES / "passagem_nivel.ladproj"), total_ms=140000)
-    assert env.trains == 3 and alarms == set() and env.margin_s > 5 and env.cars_crossed > 10
+    p = Project.load(EXAMPLES / "passagem_nivel.ladproj")
+    env, alarms, _ = closed_loop(p, total_ms=200000)
+    assert env.train_count >= 6 and alarms == set() and env.min_margin_s > 3 and env.cars_crossed > 20
+    env, alarms, sim = closed_loop(p, [(0, "AUTO", True), (1000, "TREM_1O", True), (6000, "TREM_2L", True)], 60000)
+    assert env.train_count == 2 and alarms == set()                     # dois trens: painel OUTRO TREM
     no_memory = Project(environment="passagem_nivel", rungs=[
         Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1"), Coil("OTE", "Q0.3")])])
     _, alarms, _ = closed_loop(no_memory, total_ms=40000)
     assert any("piscar alternadas" in a for a in alarms) and any("3 s de aviso" in a for a in alarms)
+
+
+def test_level_crossing_needs_both_tracks_and_the_other_train_sign():
+    one_track = Project.load(EXAMPLES / "passagem_nivel.ladproj")        # so a logica da via 1
+    one_track.rungs = [r for r in one_track.rungs if not any("_2" in getattr(n, "operand", "")
+                                                              for n in r.condition + r.outputs)]
+    _, alarms, _ = closed_loop(one_track, [(0, "AUTO", True), (1000, "TREM_2O", True)], 40000)
+    assert any("cancela aberta" in a for a in alarms)
+    no_sign = Project.load(EXAMPLES / "passagem_nivel.ladproj")
+    no_sign.rungs = [r for r in no_sign.rungs if not any(getattr(c, "operand", "") == "Painel_Outro_Trem"
+                                                         for c in r.outputs)]
+    _, alarms, _ = closed_loop(no_sign, [(0, "AUTO", True), (1000, "TREM_1O", True), (6000, "TREM_2L", True)], 30000)
+    assert any("OUTRO TREM" in a for a in alarms)
 
 
 def test_parking_counts_cars_and_shows_free_spaces_in_n0():
