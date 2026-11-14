@@ -1825,6 +1825,51 @@ def weight_sorting() -> Project:
     return p
 
 
+def merge() -> Project:
+    p = env_project("convergencia", "Convergencia de esteiras", (
+        "Arbitragem entre duas filas. Uma caixa so sai com a juncao livre e sem outra liberacao em andamento "
+        "(Livre); com as duas filas esperando, elas se alternam (Vez_B). Liberando_A/B seguram o batente abaixado "
+        "ate a caixa sair (borda de descida do sensor do batente), e o batente sobe antes da caixa seguinte chegar. "
+        "A lampada de fila longa acende com a fotocelula de uma fila coberta por 1 s (TON)."))
+    p.symbols += [Symbol("Liberando_A", "M0.0", "batente A abaixado ate a caixa sair"),
+                  Symbol("Liberando_B", "M0.1", "batente B abaixado ate a caixa sair"),
+                  Symbol("Vez_B", "M0.2", "a proxima vez e da fila B"),
+                  Symbol("Batente_A_Ant", "M0.3", "sensor do batente A na varredura anterior"),
+                  Symbol("Batente_B_Ant", "M0.4", "sensor do batente B na varredura anterior"),
+                  Symbol("Livre", "M1.0", "pode soltar uma caixa"),
+                  Symbol("Solta_A", "M1.3", "decisao: solta A"), Symbol("Solta_B", "M1.4", "decisao: solta B"),
+                  Symbol("A_Longa", "T0", "fila A longa por 1 s"), Symbol("B_Longa", "T1", "fila B longa por 1 s")]
+    p.rungs = [
+        Rung([Contact("XIC", "Liga")], [Coil("OTE", "Esteira_A"), Coil("OTE", "Esteira_B"),
+                                        Coil("OTE", "Esteira_Principal"), Coil("OTE", "Emissores"),
+                                        Coil("OTE", "Luz_Operando")], "Liga a linha"),
+        Rung([Contact("XIC", "Fila_A_Longa")], [TimerBox("TON", "A_Longa", 1000)],
+             "FILA LONGA: fotocelula coberta por 1 s seguido"),
+        Rung([Contact("XIC", "Fila_B_Longa")], [TimerBox("TON", "B_Longa", 1000)]),
+        Rung([Parallel([[Contact("XIC", "A_Longa.DN")], [Contact("XIC", "B_Longa.DN")]])],
+             [Coil("OTE", "Luz_Fila_Longa")], "Aviso de fila longa"),
+        Rung([Contact("XIC", "Liga"), Contact("XIO", "Juncao_Ocupada"), Contact("XIO", "Liberando_A"),
+              Contact("XIO", "Liberando_B")], [Coil("OTE", "Livre")], "LIVRE: juncao vazia e nada saindo"),
+        Rung([Contact("XIC", "Livre"), Contact("XIC", "Caixa_No_Batente_A"),
+              Parallel([[Contact("XIO", "Caixa_No_Batente_B")], [Contact("XIO", "Vez_B")]])],
+             [Coil("OTE", "Solta_A")], "DECISAO: A se B nao tem caixa ou se e a vez de A"),
+        Rung([Contact("XIC", "Livre"), Contact("XIC", "Caixa_No_Batente_B"), Contact("XIO", "Solta_A")],
+             [Coil("OTE", "Solta_B")], "senao B"),
+        Rung([Contact("XIC", "Solta_A")], [Coil("OTL", "Liberando_A"), Coil("OTL", "Vez_B")],
+             "Solta A; a proxima vez e de B"),
+        Rung([Contact("XIC", "Solta_B")], [Coil("OTL", "Liberando_B"), Coil("OTU", "Vez_B")],
+             "Solta B; a proxima vez e de A"),
+        Rung([Contact("XIO", "Caixa_No_Batente_A"), Contact("XIC", "Batente_A_Ant")], [Coil("OTU", "Liberando_A")],
+             "A caixa passou do batente: ele sobe"),
+        Rung([Contact("XIO", "Caixa_No_Batente_B"), Contact("XIC", "Batente_B_Ant")], [Coil("OTU", "Liberando_B")]),
+        Rung([Contact("XIC", "Liberando_A")], [Coil("OTE", "Libera_A")], "SAIDAS"),
+        Rung([Contact("XIC", "Liberando_B")], [Coil("OTE", "Libera_B")]),
+        Rung([Contact("XIC", "Caixa_No_Batente_A")], [Coil("OTE", "Batente_A_Ant")], "Imagens anteriores"),
+        Rung([Contact("XIC", "Caixa_No_Batente_B")], [Coil("OTE", "Batente_B_Ant")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1942,7 +1987,8 @@ def main() -> int:
                "ambientes/separacao_altura.ladproj": height_sorting,
                "ambientes/pick_place.ladproj": pick_place,
                "ambientes/armazem.ladproj": warehouse,
-               "ambientes/separacao_peso.ladproj": weight_sorting}
+               "ambientes/separacao_peso.ladproj": weight_sorting,
+               "ambientes/convergencia.ladproj": merge}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

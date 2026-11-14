@@ -1,0 +1,527 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Convergencia de esteiras",
+  "description": "Arbitragem entre duas filas. Uma caixa so sai com a juncao livre e sem outra liberacao em andamento (Livre); com as duas filas esperando, elas se alternam (Vez_B). Liberando_A/B seguram o batente abaixado ate a caixa sair (borda de descida do sensor do batente), e o batente sobe antes da caixa seguinte chegar. A lampada de fila longa acende com a fotocelula de uma fila coberta por 1 s (TON).",
+  "version": "0.1.0",
+  "created": "2026-11-14T14:14:18",
+  "modified": "2026-11-14T14:14:18",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Chave LIGA"
+    },
+    {
+      "name": "Caixa_No_Batente_A",
+      "address": "I0.1",
+      "comment": "Caixa parada no batente A"
+    },
+    {
+      "name": "Caixa_No_Batente_B",
+      "address": "I0.2",
+      "comment": "Caixa parada no batente B"
+    },
+    {
+      "name": "Fila_A_Longa",
+      "address": "I0.3",
+      "comment": "Fotocélula atrás da 3ª caixa da fila A"
+    },
+    {
+      "name": "Fila_B_Longa",
+      "address": "I0.4",
+      "comment": "Fotocélula atrás da 3ª caixa da fila B"
+    },
+    {
+      "name": "Juncao_Ocupada",
+      "address": "I0.5",
+      "comment": "Cortina de luz: caixa na zona da junção"
+    },
+    {
+      "name": "Esteira_A",
+      "address": "Q0.0",
+      "comment": "Esteira de acúmulo A"
+    },
+    {
+      "name": "Esteira_B",
+      "address": "Q0.1",
+      "comment": "Esteira de acúmulo B"
+    },
+    {
+      "name": "Esteira_Principal",
+      "address": "Q0.2",
+      "comment": "Linha principal e diagonal de B"
+    },
+    {
+      "name": "Libera_A",
+      "address": "Q0.3",
+      "comment": "Abaixa o batente A"
+    },
+    {
+      "name": "Libera_B",
+      "address": "Q0.4",
+      "comment": "Abaixa o batente B"
+    },
+    {
+      "name": "Emissores",
+      "address": "Q0.5",
+      "comment": "Emissores das duas filas"
+    },
+    {
+      "name": "Luz_Operando",
+      "address": "Q0.6",
+      "comment": "Lâmpada operando"
+    },
+    {
+      "name": "Luz_Fila_Longa",
+      "address": "Q0.7",
+      "comment": "Lâmpada de aviso: fila longa"
+    },
+    {
+      "name": "Liberando_A",
+      "address": "M0.0",
+      "comment": "batente A abaixado ate a caixa sair"
+    },
+    {
+      "name": "Liberando_B",
+      "address": "M0.1",
+      "comment": "batente B abaixado ate a caixa sair"
+    },
+    {
+      "name": "Vez_B",
+      "address": "M0.2",
+      "comment": "a proxima vez e da fila B"
+    },
+    {
+      "name": "Batente_A_Ant",
+      "address": "M0.3",
+      "comment": "sensor do batente A na varredura anterior"
+    },
+    {
+      "name": "Batente_B_Ant",
+      "address": "M0.4",
+      "comment": "sensor do batente B na varredura anterior"
+    },
+    {
+      "name": "Livre",
+      "address": "M1.0",
+      "comment": "pode soltar uma caixa"
+    },
+    {
+      "name": "Solta_A",
+      "address": "M1.3",
+      "comment": "decisao: solta A"
+    },
+    {
+      "name": "Solta_B",
+      "address": "M1.4",
+      "comment": "decisao: solta B"
+    },
+    {
+      "name": "A_Longa",
+      "address": "T0",
+      "comment": "fila A longa por 1 s"
+    },
+    {
+      "name": "B_Longa",
+      "address": "T1",
+      "comment": "fila B longa por 1 s"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Liga a linha",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_A"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_B"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Principal"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Emissores"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Operando"
+        }
+      ]
+    },
+    {
+      "comment": "FILA LONGA: fotocelula coberta por 1 s seguido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fila_A_Longa"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "A_Longa",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fila_B_Longa"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "B_Longa",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "Aviso de fila longa",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "A_Longa.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "B_Longa.DN"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Fila_Longa"
+        }
+      ]
+    },
+    {
+      "comment": "LIVRE: juncao vazia e nada saindo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Juncao_Ocupada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Liberando_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Liberando_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Livre"
+        }
+      ]
+    },
+    {
+      "comment": "DECISAO: A se B nao tem caixa ou se e a vez de A",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Livre"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_No_Batente_A"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Caixa_No_Batente_B"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Vez_B"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Solta_A"
+        }
+      ]
+    },
+    {
+      "comment": "senao B",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Livre"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_No_Batente_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Solta_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Solta_B"
+        }
+      ]
+    },
+    {
+      "comment": "Solta A; a proxima vez e de B",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Solta_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Liberando_A"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vez_B"
+        }
+      ]
+    },
+    {
+      "comment": "Solta B; a proxima vez e de A",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Solta_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Liberando_B"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vez_B"
+        }
+      ]
+    },
+    {
+      "comment": "A caixa passou do batente: ele sobe",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixa_No_Batente_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Batente_A_Ant"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Liberando_A"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixa_No_Batente_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Batente_B_Ant"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Liberando_B"
+        }
+      ]
+    },
+    {
+      "comment": "SAIDAS",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liberando_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Libera_A"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liberando_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Libera_B"
+        }
+      ]
+    },
+    {
+      "comment": "Imagens anteriores",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_No_Batente_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Batente_A_Ant"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_No_Batente_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Batente_B_Ant"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T14:14:18",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 15
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0xc50f1d13",
+    "size": 436,
+    "instructions": 95,
+    "date": "2026-11-14T14:14:18"
+  },
+  "environment": "convergencia"
+}

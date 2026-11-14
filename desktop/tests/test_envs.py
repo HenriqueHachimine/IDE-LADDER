@@ -861,3 +861,21 @@ def test_weight_sorting_keeps_a_word_fifo_between_scale_and_transfer():
                         c.operands[0] = "Classe"
     env, _, _ = closed_loop(blind, [(0, "LIGA", True)], 40000)
     assert env.wrong > 0
+
+
+def test_merge_releases_one_box_at_a_time_and_alternates_lanes():
+    p = Project.load(EXAMPLES / "convergencia.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True), (60000, "EXPED", True), (90000, "EXPED", True)], 150000)
+    assert alarms == set() and env.served["A"] >= 30 and env.served["B"] >= 30
+    blind = Project.load(EXAMPLES / "convergencia.ladproj")                # ignora a zona da juncao
+    for r in blind.rungs:
+        r.condition = [c for c in r.condition if getattr(c, "operand", "") != "Juncao_Ocupada"]
+    _, alarms, _ = closed_loop(blind, [(0, "LIGA", True)], 30000)
+    assert any("Colisão" in a for a in alarms)
+    pulse = Project.load(EXAMPLES / "convergencia.ladproj")                # batente abaixa so por um pulso
+    for r in pulse.rungs:
+        for lane in "AB":
+            if any(getattr(o, "operand", "") == "Libera_" + lane for o in r.outputs):
+                r.condition = [Contact("XIC", "Solta_" + lane)]
+    _, alarms, _ = closed_loop(pulse, [(0, "LIGA", True)], 30000)
+    assert any("subiu embaixo de uma caixa" in a for a in alarms)
