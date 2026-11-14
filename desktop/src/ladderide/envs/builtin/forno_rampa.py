@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen, QRadialGradient
+from PySide6.QtGui import QColor, QPainter, QPen, QRadialGradient
 
 from .. import draw
 from ..base import BUTTON, Environment, IOPoint

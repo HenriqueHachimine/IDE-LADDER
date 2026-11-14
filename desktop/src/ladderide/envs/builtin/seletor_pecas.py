@@ -5,7 +5,7 @@ import math
 import random
 from dataclasses import dataclass
 
-from PySide6.QtCore import QPointF, QRectF, Qt
+from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 
 from .. import draw

@@ -481,7 +481,6 @@ def test_parking_counts_cars_and_shows_free_spaces_in_n0():
 
 
 def test_parking_ramp_direction_and_floor_full_sign():
-    p = Project.load(EXAMPLES / "estacionamento.ladproj")
     no_ramp = Project.load(EXAMPLES / "estacionamento.ladproj")             # nao acompanha a rampa
     no_ramp.rungs = [r for r in no_ramp.rungs if not any("Rampa" in getattr(n, "operand", "") for n in r.condition)]
     _, alarms, _ = closed_loop(no_ramp, total_ms=150000)

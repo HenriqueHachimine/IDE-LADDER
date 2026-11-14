@@ -283,7 +283,6 @@ class StarDeltaEnvironment(Environment):
         draw.background(p, 720, 470)
         sens = self.sensors()
         live_bus = not self.breaker_open
-        d = self.direction
         conn = self.connection
         flowing = conn in ("estrela", "triangulo")
         # ---- barramento trifasico e disjuntor

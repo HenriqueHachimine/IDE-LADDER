@@ -295,8 +295,7 @@ class ParkingEnvironment(Environment):
             elif car.state == "desistindo":
                 car.s -= step
             elif car.state == "estacionado" and now >= car.leave_at_ms:
-                sx, sy = car.x, car.y
-                path = [(sx, AISLE_Y)]
+                path = [(car.x, AISLE_Y)]
                 if car.spot[0] == 2:
                     path += [(RAMP[1] + 20, AISLE_Y)]
                 path += [(TURN_OUT, AISLE_Y), (TURN_OUT, LANE_Y)]

@@ -1,14 +1,12 @@
 """Controle de nivel PI: valvula de controle analogica, consumo variavel e protecoes por chave de nivel."""
 from __future__ import annotations
 
-import math
-
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QPainter, QPen
 
 from .. import draw
 from ..base import SWITCH, Environment, IOPoint
-from ..physics import DelayLine, History, approach
+from ..physics import DelayLine, History
 from ..registry import register
 
 HEIGHT = 2000.0               # mm (tanque de 1 m2: 1 L = 1 mm)

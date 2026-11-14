@@ -1,7 +1,6 @@
 """Dosagem por receita em balanca: tara, dois ingredientes, corte antecipado e rejeicao (registradores N)."""
 from __future__ import annotations
 
-import math
 import random
 
 from PySide6.QtCore import QPointF, QRectF, Qt

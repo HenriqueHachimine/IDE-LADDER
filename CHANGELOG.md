@@ -44,6 +44,12 @@ ensaios na placa real.
   operandos acompanham o novo nome (inclusive `Nome.DN`, `Nome.ACC`).
 
 ### Adicionado
+- Sete ambientes novos com programa exemplo: controle de nível PI (malha contínua com anti-windup), paletizador
+  (contadores aninhados), forno com rampa e patamar (perfil e controle proporcional ao tempo), controle de
+  demanda de energia (projeção e corte por prioridade), transferência rede/gerador (retentativas e
+  intertravamento), eclusa de navegação (permissivos e equalização) e lava-rápido (receita como máscara de bits).
+- Kit de desenho comum (cartões, metais, tubulação com fluxo, tanques, válvulas, displays, manômetros, gráficos
+  de tendência) e redesenho dos onze ambientes anteriores.
 - Onze ambientes de simulação, cada um com um estilo de lógica diferente e com programa exemplo: partida
   estrela-triângulo (intertravamento e tempo morto), prensa bimanual (segurança), furadeira automática
   (etapas), passagem de nível (memória de sentido), estacionamento (contagem com display em N0), separação
@@ -192,6 +198,11 @@ ensaios na placa real.
   aplicado sem reiniciar e lembrado entre sessões.
 
 ### Alterado
+- Os onze ambientes anteriores ficaram mais completos: estrela-triângulo reversível, prensa com válvula de
+  segurança monitorada, furadeira com quebra-cavaco e vida da broca, passagem de nível em linha dupla,
+  estacionamento de dois pisos, separação com o tipo de cada caixa escolhido pelo operador, gás com
+  detectores analógicos e votação degradável, balança com tara e receita, estufa com irrigação, ponte
+  rolante com guincho e eletroímã e máquina de venda com preços e troco de duas moedas.
 - Suporte a Linux: fontes com alternativas (DejaVu, Noto, Ubuntu...),
   `scripts/build_app.py` gera o executável no Windows e no Linux (com
   `.tar.gz`, ícone, atalho de menu e `install.sh`), documentação de instalação
