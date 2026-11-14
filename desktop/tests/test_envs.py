@@ -15,7 +15,7 @@ from ladderide.envs import EnvironmentPlant, available, create, discover, get  #
 from ladderide.envs import registry  # noqa: E402
 from ladderide.envs.builtin.detector_gas import ALARM as ALARM_LEVEL  # noqa: E402
 from ladderide.model import Coil, Contact, Parallel, Project, Rung, TimerBox  # noqa: E402
-from ladderide.model.project import CompareBox  # noqa: E402
+from ladderide.model.project import CompareBox, MathBox  # noqa: E402
 from ladderide.sim.simulator import Simulator  # noqa: E402
 
 EXAMPLES = ROOT / "examples" / "ambientes"
@@ -685,3 +685,22 @@ def test_vending_gives_big_coins_first_and_keeps_door_safe():
     _, alarms, _ = closed_loop(no_door, [(100, "PORTA", True), (300, "C100", True), (500, "C100", True),
                                          (700, "C100", True), (1500, "K1", True)], 6000)
     assert any("porta de serviço" in a for a in alarms)
+
+
+def test_level_pi_tracks_setpoint_through_demand_changes():
+    p = Project.load(EXAMPLES / "nivel_pi.ladproj")
+    env, alarms, sim = closed_loop(p, [(0, "AUTO", True)], 360000)          # consumo muda a cada 60 s
+    assert alarms == set() and env.iae / ((env.auto_ms - 30000) / 1000) < 150
+    p_only = Project.load(EXAMPLES / "nivel_pi.ladproj")                     # sem integral: erro em regime
+    p_only.rungs = [r for r in p_only.rungs if not any(getattr(o, "operands", [""])[0] == "Acumulado"
+                                                       and o.kind == "ADD" for o in r.outputs)]
+    for r in p_only.rungs:
+        for o in r.outputs:
+            if getattr(o, "operands", None) == ["50000", "Acumulado"]:
+                o.operands = ["0", "Acumulado"]
+    _, alarms, _ = closed_loop(p_only, [(0, "AUTO", True)], 240000)
+    assert any("setpoint" in a for a in alarms)
+    raw = Project(environment="nivel_pi", rungs=[
+        Rung([], [MathBox("SUB", ["N2", "N0", "N1"])]), Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.0")])])
+    _, alarms, _ = closed_loop(raw, total_ms=5000)
+    assert any("fora de 0 a 100" in a for a in alarms)

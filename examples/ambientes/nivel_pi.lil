@@ -1,0 +1,124 @@
+; Controle de nivel PI - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x6f13b66c
+.timer T0 TON 200
+SOR ; rede 0
+XIC S0.0
+MOV 50000
+ARG N5
+EOR
+SOR ; rede 1
+XIO T0.DN
+TON T0
+EOR
+SOR ; rede 2
+BST
+SUB N2
+ARG N0
+ARG N3
+NXB
+DIV N3
+ARG 5
+ARG N4
+BND
+EOR
+SOR ; rede 3
+XIC T0.DN
+XIC I0.0
+BST
+LIM 0
+ARG N8
+ARG 100
+NXB
+GRT N8
+ARG 100
+LES N3
+ARG 0
+NXB
+LES N8
+ARG 0
+GRT N3
+ARG 0
+BND
+ADD N5
+ARG N3
+ARG N5
+EOR
+SOR ; rede 4
+GRT N5
+ARG 100000
+MOV 100000
+ARG N5
+EOR
+SOR ; rede 5
+LES N5
+ARG 0
+MOV 0
+ARG N5
+EOR
+SOR ; rede 6
+BST
+DIV N5
+ARG 1000
+ARG N6
+NXB
+ADD N4
+ARG N6
+ARG N8
+NXB
+MOV N8
+ARG N7
+BND
+EOR
+SOR ; rede 7
+GRT N7
+ARG 100
+MOV 100
+ARG N7
+EOR
+SOR ; rede 8
+LES N7
+ARG 0
+MOV 0
+ARG N7
+EOR
+SOR ; rede 9
+XIC I0.0
+MOV N7
+ARG N1
+EOR
+SOR ; rede 10
+XIO I0.0
+MOV 0
+ARG N1
+EOR
+SOR ; rede 11
+XIC I0.0
+XIO I0.1
+OTE Q0.0
+EOR
+SOR ; rede 12
+XIC I0.2
+OTU M0.0
+EOR
+SOR ; rede 13
+GRT N0
+ARG 300
+OTL M0.0
+EOR
+SOR ; rede 14
+XIC M0.0
+OTE Q0.1
+EOR
+SOR ; rede 15
+XIC I0.1
+OTE Q0.2
+EOR
+SOR ; rede 16
+XIC I0.2
+OTE Q0.3
+EOR

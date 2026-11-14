@@ -1,0 +1,551 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Controle de nivel PI",
+  "description": "Malha fechada com aritmetica inteira. A cada 200 ms (oscilador T0): Erro = SP - Nivel; P = Erro / 5 (Kp = 0,2 %/mm); o integral acumula o erro (N5) e vale N5 / 1000 (Ti = 40 s). Anti-windup por integracao condicional: com a saida saturada (N8 fora de 0..100) so acumula o erro que tira da saturacao; o acumulador tambem fica entre 0 e 100000. Saida = P + I limitada a 0..100% em N1. A bomba de alimentacao para no nivel alto; a de consumo desliga no nivel baixo e so volta acima de 300 mm.",
+  "version": "0.1.0",
+  "created": "2026-11-14T06:27:32",
+  "modified": "2026-11-14T06:27:32",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Automatico",
+      "address": "I0.0",
+      "comment": "Chave AUTOMÁTICO (malha fechada)"
+    },
+    {
+      "name": "Nivel_Alto",
+      "address": "I0.1",
+      "comment": "Chave de nível alto (1850 mm)"
+    },
+    {
+      "name": "Nivel_Baixo",
+      "address": "I0.2",
+      "comment": "Chave de nível baixo (150 mm)"
+    },
+    {
+      "name": "Bomba_Alimentacao",
+      "address": "Q0.0",
+      "comment": "Bomba de alimentação (a válvula só tem vazão com ela)"
+    },
+    {
+      "name": "Bomba_Consumo",
+      "address": "Q0.1",
+      "comment": "Bomba de saída para o consumo"
+    },
+    {
+      "name": "Alarme_Alto",
+      "address": "Q0.2",
+      "comment": "Lâmpada NÍVEL ALTO"
+    },
+    {
+      "name": "Alarme_Baixo",
+      "address": "Q0.3",
+      "comment": "Lâmpada NÍVEL BAIXO"
+    },
+    {
+      "name": "Nivel",
+      "address": "N0",
+      "comment": "mm, escrito pelo tanque"
+    },
+    {
+      "name": "Valvula",
+      "address": "N1",
+      "comment": "abertura 0..100% (saida)"
+    },
+    {
+      "name": "Setpoint",
+      "address": "N2",
+      "comment": "mm, escolhido pelo operador"
+    },
+    {
+      "name": "Erro",
+      "address": "N3",
+      "comment": "SP - nivel (mm)"
+    },
+    {
+      "name": "Parcela_P",
+      "address": "N4",
+      "comment": "Kp x erro (%)"
+    },
+    {
+      "name": "Acumulado",
+      "address": "N5",
+      "comment": "soma dos erros"
+    },
+    {
+      "name": "Parcela_I",
+      "address": "N6",
+      "comment": "Acumulado / 1000 (%)"
+    },
+    {
+      "name": "Saida",
+      "address": "N7",
+      "comment": "saida limitada a 0..100"
+    },
+    {
+      "name": "Saida_Bruta",
+      "address": "N8",
+      "comment": "P + I antes do limite"
+    },
+    {
+      "name": "Amostra",
+      "address": "T0",
+      "comment": "periodo do controlador: 200 ms"
+    },
+    {
+      "name": "Consumo_Liberado",
+      "address": "M0.0",
+      "comment": "tanque com agua para o consumo"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Partida: integral em 50%",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.0"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "50000",
+            "Acumulado"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Periodo de amostragem: 200 ms",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Amostra.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Amostra",
+          "preset": 200
+        }
+      ]
+    },
+    {
+      "comment": "Erro e parcela proporcional",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Setpoint",
+            "Nivel",
+            "Erro"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Erro",
+            "5",
+            "Parcela_P"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Integral: soma o erro a cada amostra, mas nao com a saida saturada (integracao condicional)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Amostra.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "0",
+                  "Saida_Bruta",
+                  "100"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Saida_Bruta",
+                  "100"
+                ]
+              },
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Erro",
+                  "0"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Saida_Bruta",
+                  "0"
+                ]
+              },
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Erro",
+                  "0"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Acumulado",
+            "Erro",
+            "Acumulado"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "O integral fica entre 0 e 100%",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Acumulado",
+            "100000"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "100000",
+            "Acumulado"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Acumulado",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Acumulado"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Saida = P + I",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Acumulado",
+            "1000",
+            "Parcela_I"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Parcela_P",
+            "Parcela_I",
+            "Saida_Bruta"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Saida_Bruta",
+            "Saida"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Limita a saida em 0..100%",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Saida",
+            "100"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "100",
+            "Saida"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Saida",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Saida"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Automatico: PI na valvula",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Saida",
+            "Valvula"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Manual: valvula fechada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Automatico"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Valvula"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Protecoes: alimentacao para no nivel alto",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Nivel_Alto"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba_Alimentacao"
+        }
+      ]
+    },
+    {
+      "comment": "Consumo desliga no nivel baixo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Baixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Consumo_Liberado"
+        }
+      ]
+    },
+    {
+      "comment": "e volta acima de 300 mm",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Nivel",
+            "300"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Consumo_Liberado"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Consumo_Liberado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba_Consumo"
+        }
+      ]
+    },
+    {
+      "comment": "Sinalizacao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Alto"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Alarme_Alto"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Baixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Alarme_Baixo"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T06:27:32",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 17
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x6f13b66c",
+    "size": 540,
+    "instructions": 116,
+    "date": "2026-11-14T06:27:32"
+  },
+  "environment": "nivel_pi"
+}

@@ -1161,6 +1161,52 @@ def vending() -> Project:
     return p
 
 
+def level_pi() -> Project:
+    p = env_project("nivel_pi", "Controle de nivel PI", (
+        "Malha fechada com aritmetica inteira. A cada 200 ms (oscilador T0): Erro = SP - Nivel; P = Erro / 5 "
+        "(Kp = 0,2 %/mm); o integral acumula o erro (N5) e vale N5 / 1000 (Ti = 40 s). Anti-windup por integracao "
+        "condicional: com a saida saturada (N8 fora de 0..100) so acumula o erro que tira da saturacao; o acumulador "
+        "tambem fica entre 0 e 100000. Saida = P + I limitada a 0..100% em N1. "
+        "A bomba de alimentacao para no nivel alto; a de consumo desliga no nivel baixo e so volta acima de 300 mm."))
+    p.symbols += [Symbol("Nivel", "N0", "mm, escrito pelo tanque"), Symbol("Valvula", "N1", "abertura 0..100% (saida)"),
+                  Symbol("Setpoint", "N2", "mm, escolhido pelo operador"), Symbol("Erro", "N3", "SP - nivel (mm)"),
+                  Symbol("Parcela_P", "N4", "Kp x erro (%)"), Symbol("Acumulado", "N5", "soma dos erros"),
+                  Symbol("Parcela_I", "N6", "Acumulado / 1000 (%)"), Symbol("Saida", "N7", "saida limitada a 0..100"),
+                  Symbol("Saida_Bruta", "N8", "P + I antes do limite"),
+                  Symbol("Amostra", "T0", "periodo do controlador: 200 ms"),
+                  Symbol("Consumo_Liberado", "M0.0", "tanque com agua para o consumo")]
+    p.rungs = [
+        Rung([Contact("XIC", "S0.0")], [MathBox("MOV", ["50000", "Acumulado"])], "Partida: integral em 50%"),
+        Rung([Contact("XIO", "Amostra.DN")], [TimerBox("TON", "Amostra", 200)], "Periodo de amostragem: 200 ms"),
+        Rung([], [MathBox("SUB", ["Setpoint", "Nivel", "Erro"]), MathBox("DIV", ["Erro", "5", "Parcela_P"])],
+             "Erro e parcela proporcional"),
+        Rung([Contact("XIC", "Amostra.DN"), Contact("XIC", "Automatico"),
+              Parallel([[CompareBox("LIM", ["0", "Saida_Bruta", "100"])],
+                        [CompareBox("GRT", ["Saida_Bruta", "100"]), CompareBox("LES", ["Erro", "0"])],
+                        [CompareBox("LES", ["Saida_Bruta", "0"]), CompareBox("GRT", ["Erro", "0"])]])],
+             [MathBox("ADD", ["Acumulado", "Erro", "Acumulado"])],
+             "Integral: soma o erro a cada amostra, mas nao com a saida saturada (integracao condicional)"),
+        Rung([CompareBox("GRT", ["Acumulado", "100000"])], [MathBox("MOV", ["100000", "Acumulado"])],
+             "O integral fica entre 0 e 100%"),
+        Rung([CompareBox("LES", ["Acumulado", "0"])], [MathBox("MOV", ["0", "Acumulado"])]),
+        Rung([], [MathBox("DIV", ["Acumulado", "1000", "Parcela_I"]),
+                  MathBox("ADD", ["Parcela_P", "Parcela_I", "Saida_Bruta"]), MathBox("MOV", ["Saida_Bruta", "Saida"])],
+             "Saida = P + I"),
+        Rung([CompareBox("GRT", ["Saida", "100"])], [MathBox("MOV", ["100", "Saida"])], "Limita a saida em 0..100%"),
+        Rung([CompareBox("LES", ["Saida", "0"])], [MathBox("MOV", ["0", "Saida"])]),
+        Rung([Contact("XIC", "Automatico")], [MathBox("MOV", ["Saida", "Valvula"])], "Automatico: PI na valvula"),
+        Rung([Contact("XIO", "Automatico")], [MathBox("MOV", ["0", "Valvula"])], "Manual: valvula fechada"),
+        Rung([Contact("XIC", "Automatico"), Contact("XIO", "Nivel_Alto")], [Coil("OTE", "Bomba_Alimentacao")],
+             "Protecoes: alimentacao para no nivel alto"),
+        Rung([Contact("XIC", "Nivel_Baixo")], [Coil("OTU", "Consumo_Liberado")], "Consumo desliga no nivel baixo"),
+        Rung([CompareBox("GRT", ["Nivel", "300"])], [Coil("OTL", "Consumo_Liberado")], "e volta acima de 300 mm"),
+        Rung([Contact("XIC", "Consumo_Liberado")], [Coil("OTE", "Bomba_Consumo")]),
+        Rung([Contact("XIC", "Nivel_Alto")], [Coil("OTE", "Alarme_Alto")], "Sinalizacao"),
+        Rung([Contact("XIC", "Nivel_Baixo")], [Coil("OTE", "Alarme_Baixo")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1267,7 +1313,8 @@ def main() -> int:
                "ambientes/estacionamento.ladproj": parking, "ambientes/seletor_pecas.ladproj": sorter,
                "ambientes/detector_gas.ladproj": gas_detection, "ambientes/balanca.ladproj": scale,
                "ambientes/estufa.ladproj": greenhouse, "ambientes/ponte_rolante.ladproj": overhead_crane,
-               "ambientes/venda.ladproj": vending}
+               "ambientes/venda.ladproj": vending,
+               "ambientes/nivel_pi.ladproj": level_pi}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue
