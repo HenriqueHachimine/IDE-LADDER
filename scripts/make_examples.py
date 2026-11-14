@@ -1031,65 +1031,85 @@ def overhead_crane() -> Project:
 
 def vending() -> Project:
     p = env_project("venda", "Maquina de venda", (
-        "Maquina de estados com dinheiro: cada pulso de moeda soma ao credito (N0, centavos). A venda so comeca com "
-        "credito suficiente (e com troco no tubo, ou valor exato); a espiral para no sensor de queda, o preco e "
-        "descontado e o troco sai moeda a moeda (gerador de pulsos com dois temporizadores, SUB 25 a cada pulso) "
-        "ate o credito zerar ou o tubo esvaziar - o que faltar continua no display. Sem queda em 3 s o produto "
-        "esta esgotado: o credito volta e a lampada ESGOTADO acende por 5 s."))
+        "Maquina de estados com dinheiro e registradores. Cada pulso de moeda soma ao credito (N0). A tecla chega "
+        "em N4: com a maquina livre, a porta fechada, credito >= preco (N1..N3) e troco garantido (ou valor exato) "
+        "a venda comeca; N4 e sempre zerado depois de lido. A espiral para no sensor de queda, o preco e "
+        "descontado e o troco sai por um gerador de pulsos: antes de cada pulso escolhe a moeda (R$ 0,50 se o "
+        "credito permitir e o tubo tiver, senao R$ 0,25) e cada pulso desconta o seu valor. Para quando o credito "
+        "zera ou nao da mais para pagar. Sem queda em 3 s: esgotado, devolve o credito."))
     p.symbols += [Symbol("Credito", "N0", "credito em centavos (display)"),
-                  Symbol("M25_Anterior", "M0.0", ""), Symbol("M50_Anterior", "M0.1", ""), Symbol("M100_Anterior", "M0.2", ""),
-                  Symbol("Vendendo_A", "M0.3", "espiral A entregando"), Symbol("Vendendo_B", "M0.4", "espiral B entregando"),
-                  Symbol("Devolvendo", "M0.5", "pagando o troco"), Symbol("Queda_Anterior", "M0.6", ""),
-                  Symbol("Troco_Anterior", "M0.7", ""), Symbol("Esgotou", "M1.0", "a espiral girou vazia"),
+                  Symbol("Preco_1", "N1", "preco da lata"), Symbol("Preco_2", "N2", "preco do suco"),
+                  Symbol("Preco_3", "N3", "preco da agua"), Symbol("Tecla", "N4", "produto escolhido (0 = nenhum)"),
+                  Symbol("M25_Anterior", "M0.0", ""), Symbol("M50_Anterior", "M0.1", ""),
+                  Symbol("M100_Anterior", "M0.2", ""),
+                  Symbol("Vendendo_1", "M0.3", ""), Symbol("Vendendo_2", "M0.4", ""), Symbol("Vendendo_3", "M0.5", ""),
+                  Symbol("Devolvendo", "M0.6", "pagando o troco"), Symbol("Queda_Anterior", "M0.7", ""),
+                  Symbol("Esgotou", "M1.0", "a espiral girou vazia"), Symbol("Usar_50", "M1.1", "proxima moeda: 0,50"),
+                  Symbol("Ej25_Anterior", "M1.2", ""), Symbol("Ej50_Anterior", "M1.3", ""),
+                  Symbol("Livre", "M1.4", "sem venda e sem troco em andamento"),
+                  Symbol("Pode_Pagar", "M1.5", "ha moeda para devolver parte do credito"),
                   Symbol("Tempo_Espiral", "T0", "3 s esperando o produto cair"),
                   Symbol("Pulso_Troco", "T1", "150 ms com o ejetor desligado"),
                   Symbol("Pausa_Troco", "T2", "150 ms com o ejetor ligado"),
                   Symbol("Aviso_Esgotado", "T3", "5 s com a lampada ESGOTADO")]
-
-    def idle():
-        return [Contact("XIO", "Vendendo_A"), Contact("XIO", "Vendendo_B"), Contact("XIO", "Devolvendo")]
-
+    sales = [("1", "Espiral_A"), ("2", "Espiral_B"), ("3", "Espiral_C")]
     rungs = []
     for coin, prev, value in (("Moeda_25", "M25_Anterior", "25"), ("Moeda_50", "M50_Anterior", "50"),
                               ("Moeda_100", "M100_Anterior", "100")):
         rungs += [Rung([Contact("XIC", coin), Contact("XIO", prev)], [MathBox("ADD", ["Credito", value, "Credito"])],
-                       "Cada moeda soma ao credito (borda do sensor)" if value == "25" else ""),
+                       "MOEDAS: cada pulso soma ao credito" if value == "25" else ""),
                   Rung([Contact("XIC", coin)], [Coil("OTE", prev)])]
-    for prod, price in (("A", "250"), ("B", "375")):
-        rungs.append(Rung([Contact("XIC", f"Botao_{prod}"), CompareBox("GEQ", ["Credito", price]), *idle(),
-                           Parallel([[Contact("XIO", "Tubo_Troco_Vazio")], [CompareBox("EQU", ["Credito", price])]])],
-                          [Coil("OTL", f"Vendendo_{prod}")],
-                          "Venda: credito suficiente, maquina livre e troco garantido" if prod == "A" else ""))
-    for prod, price in (("A", "250"), ("B", "375")):
+    rungs.append(Rung([Contact("XIO", "Vendendo_1"), Contact("XIO", "Vendendo_2"), Contact("XIO", "Vendendo_3"),
+                       Contact("XIO", "Devolvendo")], [Coil("OTE", "Livre")]))
+    for k, _ in sales:
+        rungs.append(Rung([Contact("XIC", "Livre"), Contact("XIO", "Porta_Servico"), CompareBox("EQU", ["Tecla", k]),
+                           CompareBox("GEQ", ["Credito", f"Preco_{k}"]),
+                           Parallel([[Contact("XIO", "Tubo_25_Vazio")], [CompareBox("EQU", ["Credito", f"Preco_{k}"])]])],
+                          [Coil("OTL", f"Vendendo_{k}")],
+                          "TECLADO: venda com credito, porta fechada e troco garantido" if k == "1" else ""))
+    rungs.append(Rung([CompareBox("NEQ", ["Tecla", "0"])], [MathBox("MOV", ["0", "Tecla"])], "Tecla lida: zera N4"))
+    for k, spiral in sales:
         rungs.append(Rung([Contact("XIC", "Sensor_Queda"), Contact("XIO", "Queda_Anterior"),
-                           Contact("XIC", f"Vendendo_{prod}")],
-                          [MathBox("SUB", ["Credito", price, "Credito"]), Coil("OTU", f"Vendendo_{prod}"),
-                           Coil("OTL", "Devolvendo")], "O produto caiu: desconta e paga o troco" if prod == "A" else ""))
+                           Contact("XIC", f"Vendendo_{k}")],
+                          [MathBox("SUB", ["Credito", f"Preco_{k}", "Credito"]), Coil("OTU", f"Vendendo_{k}"),
+                           Coil("OTL", "Devolvendo")], "O produto caiu: desconta e paga o troco" if k == "1" else ""))
+    rungs.append(Rung([Contact("XIC", "Sensor_Queda")], [Coil("OTE", "Queda_Anterior")]))
+    for k, spiral in sales:
+        rungs.append(Rung([Contact("XIC", f"Vendendo_{k}")], [Coil("OTE", spiral)], "Espirais" if k == "1" else ""))
     rungs += [
-        Rung([Contact("XIC", "Sensor_Queda")], [Coil("OTE", "Queda_Anterior")]),
-        Rung([Contact("XIC", "Vendendo_A")], [Coil("OTE", "Espiral_A")], "Espirais"),
-        Rung([Contact("XIC", "Vendendo_B")], [Coil("OTE", "Espiral_B")]),
-        Rung([Parallel([[Contact("XIC", "Vendendo_A")], [Contact("XIC", "Vendendo_B")]])],
-             [TimerBox("TON", "Tempo_Espiral", 3000)], "Sem queda em 3 s: esgotado, devolve o credito"),
+        Rung([Contact("XIO", "Livre"), Contact("XIO", "Devolvendo")], [TimerBox("TON", "Tempo_Espiral", 3000)],
+             "Sem queda em 3 s: esgotado, devolve o credito"),
         Rung([Contact("XIC", "Tempo_Espiral.DN")],
-             [Coil("OTU", "Vendendo_A"), Coil("OTU", "Vendendo_B"), Coil("OTL", "Devolvendo"), Coil("OTL", "Esgotou")]),
+             [Coil("OTU", "Vendendo_1"), Coil("OTU", "Vendendo_2"), Coil("OTU", "Vendendo_3"),
+              Coil("OTL", "Devolvendo"), Coil("OTL", "Esgotou")]),
         Rung([Contact("XIC", "Esgotou")], [TimerBox("TON", "Aviso_Esgotado", 5000)]),
         Rung([Contact("XIC", "Aviso_Esgotado.DN")], [Coil("OTU", "Esgotou")]),
-        Rung([Contact("XIC", "Devolver"), Contact("XIO", "Vendendo_A"), Contact("XIO", "Vendendo_B")],
-             [Coil("OTL", "Devolvendo")], "Devolver: paga todo o credito"),
-        Rung([Contact("XIC", "Devolvendo"), CompareBox("GRT", ["Credito", "0"]), Contact("XIO", "Tubo_Troco_Vazio"),
-              Contact("XIO", "Pausa_Troco.DN")], [TimerBox("TON", "Pulso_Troco", 150)],
-             "Gerador de pulsos para o ejetor de troco"),
-        Rung([Contact("XIC", "Pulso_Troco.DN")], [Coil("OTE", "Ejetor_Troco"), TimerBox("TON", "Pausa_Troco", 150)]),
-        Rung([Contact("XIC", "Ejetor_Troco"), Contact("XIO", "Troco_Anterior")],
-             [MathBox("SUB", ["Credito", "25", "Credito"])], "Cada moeda de troco: menos 25 centavos"),
-        Rung([Contact("XIC", "Ejetor_Troco")], [Coil("OTE", "Troco_Anterior")]),
-        Rung([Contact("XIC", "Devolvendo"), Contact("XIO", "Ejetor_Troco"),
-              Parallel([[CompareBox("LEQ", ["Credito", "0"])], [Contact("XIC", "Tubo_Troco_Vazio")]])],
-             [Coil("OTU", "Devolvendo")], "Troco pago (ou tubo vazio: o resto fica no credito)"),
-        Rung(idle(), [Coil("OTE", "Lampada_Pronto")]),
+        Rung([Contact("XIC", "Devolver"), Contact("XIC", "Livre")], [Coil("OTL", "Devolvendo")],
+             "Devolver: paga todo o credito"),
+        Rung([Parallel([[CompareBox("GEQ", ["Credito", "50"]), Contact("XIO", "Tubo_50_Vazio")],
+                        [CompareBox("GEQ", ["Credito", "25"]), Contact("XIO", "Tubo_25_Vazio")]])],
+             [Coil("OTE", "Pode_Pagar")], "TROCO: ainda da para devolver alguma moeda?"),
+        Rung([Contact("XIC", "Devolvendo"), Contact("XIO", "Pode_Pagar"), Contact("XIO", "Ejetor_25"),
+              Contact("XIO", "Ejetor_50")], [Coil("OTU", "Devolvendo")],
+             "Troco pago (ou sem moeda: o resto fica no credito)"),
+        Rung([Contact("XIC", "Devolvendo"), Contact("XIC", "Pode_Pagar"), Contact("XIO", "Pausa_Troco.DN")],
+             [TimerBox("TON", "Pulso_Troco", 150)], "Gerador de pulsos"),
+        Rung([Contact("XIC", "Pulso_Troco.DN")], [TimerBox("TON", "Pausa_Troco", 150)]),
+        Rung([Contact("XIO", "Pulso_Troco.DN")], [Coil("OTU", "Usar_50")],
+             "Antes de cada pulso escolhe a moeda: a maior que couber"),
+        Rung([Contact("XIO", "Pulso_Troco.DN"), CompareBox("GEQ", ["Credito", "50"]), Contact("XIO", "Tubo_50_Vazio")],
+             [Coil("OTL", "Usar_50")]),
+        Rung([Contact("XIC", "Pulso_Troco.DN"), Contact("XIC", "Usar_50")], [Coil("OTE", "Ejetor_50")]),
+        Rung([Contact("XIC", "Pulso_Troco.DN"), Contact("XIO", "Usar_50"), Contact("XIO", "Tubo_25_Vazio")],
+             [Coil("OTE", "Ejetor_25")]),
+        Rung([Contact("XIC", "Ejetor_50"), Contact("XIO", "Ej50_Anterior")], [MathBox("SUB", ["Credito", "50", "Credito"])],
+             "Cada moeda devolvida sai do credito"),
+        Rung([Contact("XIC", "Ejetor_50")], [Coil("OTE", "Ej50_Anterior")]),
+        Rung([Contact("XIC", "Ejetor_25"), Contact("XIO", "Ej25_Anterior")], [MathBox("SUB", ["Credito", "25", "Credito"])]),
+        Rung([Contact("XIC", "Ejetor_25")], [Coil("OTE", "Ej25_Anterior")]),
+        Rung([Contact("XIC", "Livre"), Contact("XIO", "Porta_Servico")], [Coil("OTE", "Lampada_Pronto")], "Lampadas"),
         Rung([Contact("XIC", "Esgotou")], [Coil("OTE", "Lampada_Esgotado")]),
-        Rung([Contact("XIC", "Tubo_Troco_Vazio")], [Coil("OTE", "Lampada_Sem_Troco")]),
+        Rung([Contact("XIC", "Tubo_25_Vazio")], [Coil("OTE", "Lampada_Sem_Troco")]),
     ]
     p.rungs = rungs
     return p

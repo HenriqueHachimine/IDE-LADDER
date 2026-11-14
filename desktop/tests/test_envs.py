@@ -621,17 +621,40 @@ def test_overhead_crane_homes_counts_encoder_and_stops_at_stations():
 
 def test_vending_machine_charges_gives_change_and_refunds():
     p = Project.load(EXAMPLES / "venda.ladproj")
-    buy = [(500, "C100", True), (700, "C100", True), (900, "C100", True), (3000, "BOT_A", True), (3100, "BOT_A", False)]
+    buy = [(500, "C100", True), (700, "C100", True), (900, "C100", True), (3000, "K1", True)]
     env, alarms, sim = closed_loop(p, buy, 9000)                      # R$ 3,00 por uma lata de R$ 2,50
-    assert alarms == set() and env.sales == 1 and env.returned == 50 and sim.vm.n[0] == 0
+    assert alarms == set() and env.sales == 1 and env.change_tray == [50] and sim.vm.n[0] == 0 and sim.vm.n[4] == 0
     sold_out = []
     for k in range(3):                                                # o suco tem 2 no estoque
         t = 500 + k * 8000
-        sold_out += [(t + d, "C100", True) for d in (0, 200, 400, 600)] + [(t + 2500, "BOT_B", True),
-                                                                          (t + 2600, "BOT_B", False)]
+        sold_out += [(t + d, "C100", True) for d in (0, 200, 400, 600)] + [(t + 2500, "K2", True)]
     env, alarms, sim = closed_loop(p, sold_out, 30000)
     assert alarms == set() and env.sales == 2 and env.stock["B"] == 0
-    assert sim.vm.n[0] == env.inserted - env.returned - env.delivered > 0    # tubo vazio: o resto fica no credito
-    no_stop = Project(environment="venda", rungs=[Rung([Contact("XIC", "I0.3")], [Coil("OTL", "Q0.0")])])
-    _, alarms, _ = closed_loop(no_stop, [(500, "BOT_A", True), (600, "BOT_A", False)], 8000)
+    assert sim.vm.n[0] == env.inserted - env.returned - env.delivered > 0    # tubos vazios: o resto fica no credito
+    price = [(100, "PORTA", True), (300, "PA+", True), (500, "PA+", True), (700, "PORTA", True),
+             (1500, "C100", True), (1700, "C100", True), (1900, "C100", True), (3500, "K1", True)]
+    env, alarms, sim = closed_loop(p, price, 9000)                    # dono muda a lata para R$ 3,00
+    assert alarms == set() and env.prices["A"] == 300 and env.sales == 1 and env.change_tray == []
+    no_stop = Project(environment="venda", rungs=[Rung([CompareBox("EQU", ["N4", "1"])], [Coil("OTL", "Q0.0")])])
+    _, alarms, _ = closed_loop(no_stop, [(500, "K1", True)], 8000)
     assert any("dois produtos" in a for a in alarms) and any("prejuízo" in a for a in alarms)
+    no_clear = Project(environment="venda", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.5")])])
+    _, alarms, _ = closed_loop(no_clear, [(500, "K1", True)], 5000)
+    assert any("N4" in a for a in alarms)
+
+
+def test_vending_gives_big_coins_first_and_keeps_door_safe():
+    small_coins = Project.load(EXAMPLES / "venda.ladproj")           # nunca usa a moeda de 0,50
+    for r in small_coins.rungs:
+        for o in r.outputs:
+            if getattr(o, "operand", "") == "Usar_50" and o.kind == "OTL":
+                o.operand = "M2.0"
+    buy = [(500, "C100", True), (700, "C100", True), (900, "C100", True), (3000, "K1", True)]
+    _, alarms, _ = closed_loop(small_coins, buy, 9000)
+    assert any("moeda maior" in a for a in alarms)
+    no_door = Project.load(EXAMPLES / "venda.ladproj")
+    for r in no_door.rungs:
+        r.condition = [n for n in r.condition if getattr(n, "operand", "") != "Porta_Servico"]
+    _, alarms, _ = closed_loop(no_door, [(100, "PORTA", True), (300, "C100", True), (500, "C100", True),
+                                         (700, "C100", True), (1500, "K1", True)], 6000)
+    assert any("porta de serviço" in a for a in alarms)
