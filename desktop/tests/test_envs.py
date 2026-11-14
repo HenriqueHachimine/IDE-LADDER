@@ -753,3 +753,20 @@ def test_demand_control_sheds_loads_in_heavy_windows():
                     rungs=[Rung([Contact("XIC", f"I0.{k + 1}")], [Coil("OTE", f"Q0.{k}")]) for k in range(5)])
     env, alarms, _ = closed_loop(naive, total_ms=480000)
     assert any("Ultrapassagem" in a for a in alarms) and env.windows_over >= 2
+
+
+def test_transfer_switch_starts_generator_transfers_and_returns():
+    p = Project.load(EXAMPLES / "gerador_qta.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "AUTO", True), (5000, "FALTA", True), (60000, "FALTA", True)], 100000)
+    assert alarms == set() and env.max_outage_ms < 12000 and env.kr.closed and env.rpm == 0
+    env, alarms, _ = closed_loop(p, [(0, "AUTO", True), (5000, "PISCADA", True)], 20000)
+    assert alarms == set() and env.attempts == 0                         # piscada filtrada
+    env, alarms, sim = closed_loop(p, [(0, "AUTO", True), (500, "SEM_COMB", True), (5000, "FALTA", True)], 60000)
+    assert alarms == set() and env.attempts == 3 and sim.vm.outputs >> 6 & 1   # bloqueio e FALHA
+    env, alarms, _ = closed_loop(p, [(0, "AUTO", True), (500, "SOLDADO", True), (5000, "FALTA", True)], 40000)
+    assert alarms == set() and not env.kg.closed                            # nunca em paralelo
+    naive = Project(environment="gerador_qta", rungs=[
+        Rung([Contact("XIO", "I0.0")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1"), Coil("OTE", "Q0.3")]),
+        Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.2")])])
+    _, alarms, _ = closed_loop(naive, [(500, "SOLDADO", True), (5000, "FALTA", True)], 20000)
+    assert any("paralelo" in a for a in alarms) and any("motor já funcionando" in a for a in alarms)

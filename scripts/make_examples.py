@@ -1407,6 +1407,66 @@ def demand_control() -> Project:
     return p
 
 
+def transfer_switch() -> Project:
+    p = env_project("gerador_qta", "Transferencia rede/gerador", (
+        "Supervisao com filtros, retentativas e intertravamento. A rede so e considerada ausente depois de 3 s sem "
+        "ela (T0) e estavel depois de 10 s com ela (T1). Sem rede estavel o gerador e pedido: combustivel ligado e "
+        "arranque por no maximo 5 s (T2), descanso de 5 s (T3) e nova tentativa; C0 conta as tentativas e na "
+        "terceira sem pegar bloqueia ate o REARME. Transferencia: KG so fecha com a tensao do gerador estavel, o "
+        "contato auxiliar do KR aberto e 1 s de tempo morto (T4); KR so fecha com o KG aberto e 1 s de tempo morto "
+        "(T5). Na volta da rede o gerador sai da carga e gira 10 s sem carga (T6) antes de parar."))
+    p.symbols += [Symbol("Rede_Estavel", "M0.0", "rede presente ha 10 s"), Symbol("Pedir_Gerador", "M0.1", ""),
+                  Symbol("Descanso", "M0.2", "pausa entre tentativas de partida"),
+                  Symbol("Bloqueio", "M0.3", "falha de partida (3 tentativas)"),
+                  Symbol("Resfriando", "M0.4", "gerador girando sem carga antes de parar"),
+                  Symbol("Falta", "T0", "3 s sem rede"), Symbol("Volta", "T1", "10 s com rede"),
+                  Symbol("Tentativa", "T2", "5 s de arranque no maximo"), Symbol("Pausa", "T3", "5 s de descanso"),
+                  Symbol("Morto_KR", "T4", "1 s com KR aberto"), Symbol("Morto_KG", "T5", "1 s com KG aberto"),
+                  Symbol("Resfria", "T6", "10 s sem carga"), Symbol("Tentativas", "C0", "tentativas de partida")]
+    p.rungs = [
+        Rung([Contact("XIO", "Rede_OK")], [TimerBox("TON", "Falta", 3000)], "FILTROS da rede: 3 s para falta"),
+        Rung([Contact("XIC", "Rede_OK")], [TimerBox("TON", "Volta", 10000)], "e 10 s para estabilidade"),
+        Rung([Parallel([[Contact("XIC", "Volta.DN")], [Contact("XIC", "S0.0"), Contact("XIC", "Rede_OK")]])],
+             [Coil("OTL", "Rede_Estavel")]),
+        Rung([Contact("XIC", "Falta.DN")], [Coil("OTU", "Rede_Estavel")]),
+        Rung([Contact("XIC", "Automatico"), Contact("XIO", "Rede_Estavel"), Contact("XIO", "Bloqueio")],
+             [Coil("OTL", "Pedir_Gerador"), Coil("OTU", "Resfriando")], "PEDIDO do gerador"),
+        Rung([Contact("XIC", "Pedir_Gerador"), Contact("XIC", "Rede_Estavel"), Contact("XIC", "KR_Fechado")],
+             [Coil("OTU", "Pedir_Gerador"), Coil("OTL", "Resfriando")], "Carga de volta na rede: resfria o motor"),
+        Rung([Contact("XIC", "Resfriando")], [TimerBox("TON", "Resfria", 10000)]),
+        Rung([Contact("XIC", "Resfria.DN")], [Coil("OTU", "Resfriando")]),
+        Rung([Contact("XIC", "Pedir_Gerador"), Contact("XIO", "Gerador_Girando"), Contact("XIO", "Descanso"),
+              Contact("XIO", "Bloqueio")], [Coil("OTE", "Motor_Partida"), TimerBox("TON", "Tentativa", 5000)],
+             "PARTIDA: arranque ate o motor girar, no maximo 5 s"),
+        Rung([Contact("XIC", "Tentativa.DN")], [Coil("OTL", "Descanso"), CounterBox("CTU", "Tentativas", 3)],
+             "Nao pegou: descansa e conta a tentativa"),
+        Rung([Contact("XIC", "Descanso")], [TimerBox("TON", "Pausa", 5000)]),
+        Rung([Contact("XIC", "Pausa.DN")], [Coil("OTU", "Descanso")]),
+        Rung([Contact("XIC", "Tentativas.DN")], [Coil("OTL", "Bloqueio"), Coil("OTU", "Pedir_Gerador")],
+             "Terceira tentativa sem sucesso: bloqueio"),
+        Rung([Contact("XIC", "Gerador_Girando")], [ResetBox("Tentativas")], "Pegou: zera as tentativas"),
+        Rung([Contact("XIC", "Rearme")], [Coil("OTU", "Bloqueio"), ResetBox("Tentativas"), Coil("OTU", "Descanso")],
+             "Rearme da falha de partida"),
+        Rung([Parallel([[Contact("XIC", "Pedir_Gerador")], [Contact("XIC", "Resfriando")]]), Contact("XIO", "Bloqueio")],
+             [Coil("OTE", "Solenoide_Combustivel")], "Combustivel com o gerador pedido ou resfriando"),
+        Rung([Contact("XIO", "Contator_KR"), Contact("XIO", "KR_Fechado")], [TimerBox("TON", "Morto_KR", 1000)],
+             "TRANSFERENCIA: tempo morto depois de cada contator abrir de verdade"),
+        Rung([Contact("XIO", "Contator_KG"), Contact("XIO", "KG_Fechado")], [TimerBox("TON", "Morto_KG", 1000)]),
+        Rung([Contact("XIC", "Pedir_Gerador"), Contact("XIO", "Rede_Estavel"), Contact("XIC", "Gerador_Tensao_OK"),
+              Contact("XIO", "KR_Fechado"), Contact("XIC", "Morto_KR.DN")], [Coil("OTE", "Contator_KG")],
+             "KG: gerador estavel, KR aberto (auxiliar) e tempo morto"),
+        Rung([Contact("XIC", "Rede_Estavel"), Contact("XIO", "Contator_KG"), Contact("XIO", "KG_Fechado"),
+              Contact("XIC", "Morto_KG.DN")], [Coil("OTE", "Contator_KR")], "KR: rede estavel, KG aberto e tempo morto"),
+        Rung([Contact("XIC", "KR_Fechado")], [Coil("OTE", "Lampada_Rede")], "SINALIZACAO"),
+        Rung([Contact("XIC", "KG_Fechado")], [Coil("OTE", "Lampada_Gerador")]),
+        Rung([Parallel([[Contact("XIC", "Bloqueio")], [Contact("XIC", "Combustivel_Baixo")],
+                        [Contact("XIC", "Pedir_Gerador"), Contact("XIC", "KR_Fechado"), Contact("XIO", "Contator_KR")]])],
+             [Coil("OTE", "Lampada_Falha")], "Falha: partida, combustivel ou KR que nao abre"),
+        Rung([Contact("XIC", "Lampada_Falha"), Contact("XIC", "S0.3")], [Coil("OTE", "Buzina")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1517,7 +1577,8 @@ def main() -> int:
                "ambientes/nivel_pi.ladproj": level_pi,
                "ambientes/paletizador.ladproj": palletizer,
                "ambientes/forno_rampa.ladproj": furnace,
-               "ambientes/demanda_energia.ladproj": demand_control}
+               "ambientes/demanda_energia.ladproj": demand_control,
+               "ambientes/gerador_qta.ladproj": transfer_switch}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

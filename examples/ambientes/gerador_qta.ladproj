@@ -1,0 +1,795 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Transferencia rede/gerador",
+  "description": "Supervisao com filtros, retentativas e intertravamento. A rede so e considerada ausente depois de 3 s sem ela (T0) e estavel depois de 10 s com ela (T1). Sem rede estavel o gerador e pedido: combustivel ligado e arranque por no maximo 5 s (T2), descanso de 5 s (T3) e nova tentativa; C0 conta as tentativas e na terceira sem pegar bloqueia ate o REARME. Transferencia: KG so fecha com a tensao do gerador estavel, o contato auxiliar do KR aberto e 1 s de tempo morto (T4); KR so fecha com o KG aberto e 1 s de tempo morto (T5). Na volta da rede o gerador sai da carga e gira 10 s sem carga (T6) antes de parar.",
+  "version": "0.1.0",
+  "created": "2026-11-14T06:48:41",
+  "modified": "2026-11-14T06:48:41",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Rede_OK",
+      "address": "I0.0",
+      "comment": "Relé de monitoramento: rede presente e dentro da faixa"
+    },
+    {
+      "name": "Gerador_Girando",
+      "address": "I0.1",
+      "comment": "Motor do gerador girando (acima de 1200 rpm)"
+    },
+    {
+      "name": "Gerador_Tensao_OK",
+      "address": "I0.2",
+      "comment": "Gerador com tensão e frequência estáveis"
+    },
+    {
+      "name": "KR_Fechado",
+      "address": "I0.3",
+      "comment": "Contato auxiliar: KR fechado"
+    },
+    {
+      "name": "KG_Fechado",
+      "address": "I0.4",
+      "comment": "Contato auxiliar: KG fechado"
+    },
+    {
+      "name": "Combustivel_Baixo",
+      "address": "I0.5",
+      "comment": "Boia: combustível baixo"
+    },
+    {
+      "name": "Automatico",
+      "address": "I0.6",
+      "comment": "Chave AUTOMÁTICO"
+    },
+    {
+      "name": "Rearme",
+      "address": "I0.7",
+      "comment": "Botão REARME (após falha de partida)"
+    },
+    {
+      "name": "Motor_Partida",
+      "address": "Q0.0",
+      "comment": "Motor de partida (arranque)"
+    },
+    {
+      "name": "Solenoide_Combustivel",
+      "address": "Q0.1",
+      "comment": "Solenoide de combustível (motor funciona)"
+    },
+    {
+      "name": "Contator_KR",
+      "address": "Q0.2",
+      "comment": "Contator da rede"
+    },
+    {
+      "name": "Contator_KG",
+      "address": "Q0.3",
+      "comment": "Contator do gerador"
+    },
+    {
+      "name": "Lampada_Rede",
+      "address": "Q0.4",
+      "comment": "Lâmpada CARGA NA REDE"
+    },
+    {
+      "name": "Lampada_Gerador",
+      "address": "Q0.5",
+      "comment": "Lâmpada CARGA NO GERADOR"
+    },
+    {
+      "name": "Lampada_Falha",
+      "address": "Q0.6",
+      "comment": "Lâmpada FALHA"
+    },
+    {
+      "name": "Buzina",
+      "address": "Q0.7",
+      "comment": "Alarme sonoro"
+    },
+    {
+      "name": "Rede_Estavel",
+      "address": "M0.0",
+      "comment": "rede presente ha 10 s"
+    },
+    {
+      "name": "Pedir_Gerador",
+      "address": "M0.1",
+      "comment": ""
+    },
+    {
+      "name": "Descanso",
+      "address": "M0.2",
+      "comment": "pausa entre tentativas de partida"
+    },
+    {
+      "name": "Bloqueio",
+      "address": "M0.3",
+      "comment": "falha de partida (3 tentativas)"
+    },
+    {
+      "name": "Resfriando",
+      "address": "M0.4",
+      "comment": "gerador girando sem carga antes de parar"
+    },
+    {
+      "name": "Falta",
+      "address": "T0",
+      "comment": "3 s sem rede"
+    },
+    {
+      "name": "Volta",
+      "address": "T1",
+      "comment": "10 s com rede"
+    },
+    {
+      "name": "Tentativa",
+      "address": "T2",
+      "comment": "5 s de arranque no maximo"
+    },
+    {
+      "name": "Pausa",
+      "address": "T3",
+      "comment": "5 s de descanso"
+    },
+    {
+      "name": "Morto_KR",
+      "address": "T4",
+      "comment": "1 s com KR aberto"
+    },
+    {
+      "name": "Morto_KG",
+      "address": "T5",
+      "comment": "1 s com KG aberto"
+    },
+    {
+      "name": "Resfria",
+      "address": "T6",
+      "comment": "10 s sem carga"
+    },
+    {
+      "name": "Tentativas",
+      "address": "C0",
+      "comment": "tentativas de partida"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "FILTROS da rede: 3 s para falta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rede_OK"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Falta",
+          "preset": 3000
+        }
+      ]
+    },
+    {
+      "comment": "e 10 s para estabilidade",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rede_OK"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Volta",
+          "preset": 10000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Volta.DN"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "S0.0"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Rede_OK"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Rede_Estavel"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Falta.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rede_Estavel"
+        }
+      ]
+    },
+    {
+      "comment": "PEDIDO do gerador",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rede_Estavel"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Bloqueio"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pedir_Gerador"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Resfriando"
+        }
+      ]
+    },
+    {
+      "comment": "Carga de volta na rede: resfria o motor",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedir_Gerador"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rede_Estavel"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "KR_Fechado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedir_Gerador"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Resfriando"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Resfriando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Resfria",
+          "preset": 10000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Resfria.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Resfriando"
+        }
+      ]
+    },
+    {
+      "comment": "PARTIDA: arranque ate o motor girar, no maximo 5 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedir_Gerador"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Gerador_Girando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Descanso"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Bloqueio"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Motor_Partida"
+        },
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tentativa",
+          "preset": 5000
+        }
+      ]
+    },
+    {
+      "comment": "Nao pegou: descansa e conta a tentativa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tentativa.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Descanso"
+        },
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Tentativas",
+          "preset": 3
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Descanso"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Pausa",
+          "preset": 5000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pausa.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Descanso"
+        }
+      ]
+    },
+    {
+      "comment": "Terceira tentativa sem sucesso: bloqueio",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tentativas.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Bloqueio"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pedir_Gerador"
+        }
+      ]
+    },
+    {
+      "comment": "Pegou: zera as tentativas",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Gerador_Girando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Tentativas"
+        }
+      ]
+    },
+    {
+      "comment": "Rearme da falha de partida",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rearme"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Bloqueio"
+        },
+        {
+          "type": "reset",
+          "operand": "Tentativas"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Descanso"
+        }
+      ]
+    },
+    {
+      "comment": "Combustivel com o gerador pedido ou resfriando",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pedir_Gerador"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Resfriando"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Bloqueio"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Solenoide_Combustivel"
+        }
+      ]
+    },
+    {
+      "comment": "TRANSFERENCIA: tempo morto depois de cada contator abrir de verdade",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Contator_KR"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "KR_Fechado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Morto_KR",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Contator_KG"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "KG_Fechado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Morto_KG",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "KG: gerador estavel, KR aberto (auxiliar) e tempo morto",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pedir_Gerador"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rede_Estavel"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Gerador_Tensao_OK"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "KR_Fechado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Morto_KR.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Contator_KG"
+        }
+      ]
+    },
+    {
+      "comment": "KR: rede estavel, KG aberto e tempo morto",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rede_Estavel"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Contator_KG"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "KG_Fechado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Morto_KG.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Contator_KR"
+        }
+      ]
+    },
+    {
+      "comment": "SINALIZACAO",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "KR_Fechado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Rede"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "KG_Fechado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Gerador"
+        }
+      ]
+    },
+    {
+      "comment": "Falha: partida, combustivel ou KR que nao abre",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Bloqueio"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Combustivel_Baixo"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pedir_Gerador"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "KR_Fechado"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Contator_KR"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Falha"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Lampada_Falha"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Buzina"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T06:48:41",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 24
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x6df6726b",
+    "size": 732,
+    "instructions": 157,
+    "date": "2026-11-14T06:48:41"
+  },
+  "environment": "gerador_qta"
+}
