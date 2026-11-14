@@ -16,14 +16,46 @@ e cada ambiente fica em um arquivo independente.
 | **Linha de garrafas** (`garrafas`) | I0.0 Start, I0.1 Stop (NF), I0.2 garrafa no bico, I0.3 nível OK, I0.4 garrafa na inspeção, I0.5 chave garrafa grande, I0.6 garrafa caindo na caixa, I0.7 caixa posicionada | Q0.0 esteira de garrafas, Q0.1 válvula, Q0.2 rejeitor, Q0.3 esteira de caixas, Q0.4 RUN | `examples/ambientes/garrafas.ladproj` |
 | **Central de ar comprimido** (`compressores`) | I0.0 Start, I0.1 Stop (NF), I0.2 pressostato 1 (100/120 psi), I0.3 pressostato 2 (90/110 psi), I0.4/I0.5 relés térmicos (NF) | Q0.0 motor 1, Q0.1 motor 2, Q0.2 dreno, Q0.3 RUN, Q0.4 falha | `examples/ambientes/compressores.ladproj` |
 | **Misturador de batelada** (`misturador`) | I0.0 Start, I0.1 Stop (NF), I0.2 nível baixo, I0.3 nível alto, I0.4 termostato, I0.5/I0.6 fluxômetros (1 pulso/L) | Q0.0 bomba A, Q0.1 bomba B, Q0.2 misturador, Q0.3 bomba de saída, Q0.4 aquecedor, Q0.5 RUN, Q0.6 cheio | `examples/ambientes/misturador.ladproj` |
+| **Partida estrela-triângulo** (`estrela_triangulo`) | I0.0 Liga, I0.1 Desliga (NF), I0.2 relé térmico (NF), I0.3 rotação nominal | Q0.0 K1 linha, Q0.1 K2 estrela, Q0.2 K3 triângulo, Q0.3 ligado, Q0.4 falha | `examples/ambientes/estrela_triangulo.ladproj` |
+| **Prensa com comando bimanual** (`prensa`) | I0.0/I0.1 botões das mãos, I0.2 cortina de luz (NF), I0.3 PMS, I0.4 PMI, I0.5 emergência (NF) | Q0.0 desce, Q0.1 sobe, Q0.2 pronta | `examples/ambientes/prensa.ladproj` |
+| **Furadeira automática** (`furadeira`) | I0.0 partida, I0.1 emergência (NF), I0.2 peça, I0.3 fixador avançado, I0.4/I0.5 broca em cima/embaixo, I0.6/I0.7 ejetor recuado/avançado | Q0.0 fixador, Q0.1/Q0.2 broca desce/sobe, Q0.3 mandril, Q0.4 ejetor, Q0.5 ciclo | `examples/ambientes/furadeira.ladproj` |
+| **Passagem de nível** (`passagem_nivel`) | I0.0 aproximação oeste, I0.1 ilha, I0.2 aproximação leste, I0.3/I0.4 cancela abaixada/levantada | Q0.0/Q0.1 luzes, Q0.2 sino, Q0.3/Q0.4 cancela abaixa/levanta | `examples/ambientes/passagem_nivel.ladproj` |
+| **Estacionamento** (`estacionamento`) | I0.0 ticket, I0.1 laço de entrada, I0.2 cartão validado, I0.3 laço de saída, I0.4 zerar; painel lê N0 | Q0.0/Q0.1 cancelas, Q0.2 LIVRE, Q0.3 LOTADO | `examples/ambientes/estacionamento.ladproj` |
+| **Separação de peças** (`seletor_pecas`) | I0.0 liga, I0.1 encoder, I0.2 peça, I0.3 metal, I0.4 altura | Q0.0 esteira, Q0.1/Q0.2 desviadores A/B, Q0.3 em operação | `examples/ambientes/seletor_pecas.ladproj` |
+| **Detecção de gás 2 de 3** (`detector_gas`) | I0.0–I0.2 detectores, I0.3 reconhecer, I0.4 rearmar, I0.5 fluxo do exaustor, I0.6 teste | Q0.0 exaustor, Q0.1 válvula de gás, Q0.2 sirene, Q0.3 alarme, Q0.4 falha detector, Q0.5 falha exaustor | `examples/ambientes/detector_gas.ladproj` |
+| **Dosagem por balança** (`balanca`) | I0.0 partida, I0.1 parada (NF), I0.2 recipiente, I0.3 estável; N0 peso e N1 setpoint escritos pela balança | Q0.0/Q0.1 válvulas grossa/fina, Q0.2 esteira, Q0.3 OK, Q0.4 fora da tolerância | `examples/ambientes/balanca.ladproj` |
+| **Estufa agrícola** (`estufa`) | I0.0 automático, I0.1/I0.2 janela aberta/fechada, I0.3 chuva, I0.4 vento; N0 temperatura (décimos), N1 umidade, N2 hora | Q0.0 aquecedor, Q0.1 exaustor, Q0.2/Q0.3 janela abre/fecha, Q0.4 nebulizador, Q0.5 iluminação, Q0.6 alarme | `examples/ambientes/estufa.ladproj` |
+| **Ponte rolante** (`ponte_rolante`) | I0.0 encoder, I0.1 origem, I0.2–I0.6 chamadas das estações, I0.7 emergência (NF) | Q0.0/Q0.1 direita/esquerda, Q0.2 lenta, Q0.3 solta freio, Q0.4 em posição | `examples/ambientes/ponte_rolante.ladproj` |
+| **Máquina de venda** (`venda`) | I0.0–I0.2 moedas, I0.3/I0.4 produtos A/B, I0.5 devolver, I0.6 queda, I0.7 tubo de troco vazio; display lê N0 | Q0.0/Q0.1 espirais, Q0.2 ejetor de troco, Q0.3 pronto, Q0.4 esgotado, Q0.5 sem troco | `examples/ambientes/venda.ladproj` |
 | **Simulador de E/S e BCD** (`simulador_es`) | uma botoeira por entrada do controlador (I0.0–I1.7); tipo trocável: pulsador NA/NF ou chave NA/NF; thumbwheel BCD em N0 | uma lâmpada por saída do controlador (Q0.0–Q1.7); display BCD de N1 | `examples/ambientes/simulador_es.ladproj` |
 
-Os processos usam no máximo 8 entradas e 8 saídas digitais, como a placa. O
+Os processos usam no máximo 8 entradas e 8 saídas digitais, como a placa. Balança, estufa, estacionamento e máquina de venda trocam valores numéricos pelos registradores N (`input_words()`/`advance_words()`). O
 **Simulador de E/S** é a exceção: ele implementa `configure(n_inputs,
 n_outputs, n_words)` e refaz os pontos sempre que o controlador do projeto
 muda (ESP32: 8/8; SLC 5/05: 16/16; Arduino UNO: 8/8...). A thumbwheel e o
 display usam `input_words()` e `advance_words()`, que escrevem e leem
 registradores N; o BCD exige ao menos 2 registradores N. Grandezas analógicas do processo (pressão, temperatura, nível, vazão) chegam ao CLP como em instalações reais com entradas digitais: pressostatos e termostatos com diferencial, chaves de nível e fluxômetros de pulso.
+
+## Estilos de lógica
+
+Cada ambiente pede um jeito diferente de pensar o programa:
+
+| Ambiente | Estilo de lógica | O que o exemplo usa |
+|---|---|---|
+| Silo, garrafas | Partida/parada com selo e memória de estado | selo, OTL/OTU, RTO, CTU |
+| Semáforo | Sequência por tempo | cadeia de TON |
+| Partida estrela-triângulo | Intertravamento e tempo morto | contatos cruzados K2/K3, TON de 100 ms (os contatores levam 40 ms para abrir) |
+| Prensa bimanual | Lógica de segurança | simultaneidade de 0,5 s, anti-repetição, cortina de luz NF |
+| Furadeira | Sequência por etapas (Grafcet) | um bit M por etapa, transições pelos fins de curso |
+| Passagem de nível | Memória de sentido de eventos | o primeiro sensor define o sentido; o do outro lado é ignorado até o trem passar |
+| Estacionamento | Contagem com aritmética e display | bordas de descida, ADD/SUB, LES/GEQ, valor em N0 |
+| Separação de peças | Registrador de deslocamento | MUL por 2 a cada pulso do encoder, MEQ com máscara |
+| Detecção de gás | Votação 2 de 3 e gestão de alarmes | ramos em paralelo, disparo travado, reconhecer/rearmar, discordância |
+| Balança | Dosagem por setpoint com correção | SUB/ADD, corte antecipado adaptativo, LIM na tolerância |
+| Estufa | Controle por faixas com histerese | LES/GRT com OTL/OTU, LIM na hora do dia |
+| Ponte rolante | Posicionamento por encoder | referenciamento, contagem das duas bordas pelo sentido, MOV do destino, zona lenta |
+| Máquina de venda | Máquina de estados com dinheiro | ADD/SUB do crédito, gerador de pulsos para o troco, tempo máximo da espiral |
+| Compressores, misturador, elevador, portão | Alternância, dosagem, chamadas, fins de curso | ver os comentários de cada exemplo |
 
 Cada ambiente também detecta erros de lógica e mostra **alarmes**, por exemplo:
 produto derramado, verdes simultâneos, colisão no cruzamento, motor comandado

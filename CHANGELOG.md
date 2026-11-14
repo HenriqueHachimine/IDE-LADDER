@@ -44,6 +44,12 @@ ensaios na placa real.
   operandos acompanham o novo nome (inclusive `Nome.DN`, `Nome.ACC`).
 
 ### Adicionado
+- Onze ambientes de simulação, cada um com um estilo de lógica diferente e com programa exemplo: partida
+  estrela-triângulo (intertravamento e tempo morto), prensa bimanual (segurança), furadeira automática
+  (etapas), passagem de nível (memória de sentido), estacionamento (contagem com display em N0), separação
+  de peças (registrador de deslocamento), detecção de gás (votação 2 de 3 e alarmes), dosagem por balança
+  (setpoint com corte antecipado adaptativo), estufa (faixas com histerese e hora do dia), ponte rolante
+  (posicionamento por encoder) e máquina de venda (máquina de estados com dinheiro e troco).
 - **Variáveis de memória** (aba Variáveis): boolean, inteira e float, com endereço automático e valor inicial aplicado a cada
   partida. Bloco **MOV**, registradores `F`, constantes float e formato **LDRB 2.1**. Float igual no simulador, no firmware e
   no C++ gerado, conferido por testes. Exige regravar o firmware.
