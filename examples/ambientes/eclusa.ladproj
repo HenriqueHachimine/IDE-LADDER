@@ -1,0 +1,1102 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Eclusa de navegacao",
+  "description": "Permissivos e equalizacao. Duas sequencias: DESCER (barco a montante) D1 fecha a comporta de jusante e enche ate o nivel de montante, D2 abre montante, D3 sinal verde ate o barco parar na camara (N1 = 2), D4 fecha montante, D5 esvazia ate o nivel de jusante, D6 abre jusante, D7 espera o barco sair (N1 = 0). SUBIR faz o espelho. Permissivos em cada saida: encher so com jusante fechada, esvaziar so com montante fechada, abrir uma comporta so com o nivel igualado e a outra fechada, verde so com a comporta toda aberta. Com barcos dos dois lados, atende o lado contrario ao ultimo.",
+  "version": "0.1.0",
+  "created": "2026-11-14T06:51:57",
+  "modified": "2026-11-14T06:51:57",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Nivel_Igual_Montante",
+      "address": "I0.0",
+      "comment": "Câmara no nível de montante"
+    },
+    {
+      "name": "Nivel_Igual_Jusante",
+      "address": "I0.1",
+      "comment": "Câmara no nível de jusante"
+    },
+    {
+      "name": "Montante_Aberta",
+      "address": "I0.2",
+      "comment": "Comporta de montante aberta"
+    },
+    {
+      "name": "Montante_Fechada",
+      "address": "I0.3",
+      "comment": "Comporta de montante fechada"
+    },
+    {
+      "name": "Jusante_Aberta",
+      "address": "I0.4",
+      "comment": "Comporta de jusante aberta"
+    },
+    {
+      "name": "Jusante_Fechada",
+      "address": "I0.5",
+      "comment": "Comporta de jusante fechada"
+    },
+    {
+      "name": "Barco_Montante",
+      "address": "I0.6",
+      "comment": "Barco esperando a montante"
+    },
+    {
+      "name": "Barco_Jusante",
+      "address": "I0.7",
+      "comment": "Barco esperando a jusante"
+    },
+    {
+      "name": "Abre_Montante",
+      "address": "Q0.0",
+      "comment": "Comporta de montante: abrir"
+    },
+    {
+      "name": "Fecha_Montante",
+      "address": "Q0.1",
+      "comment": "Comporta de montante: fechar"
+    },
+    {
+      "name": "Abre_Jusante",
+      "address": "Q0.2",
+      "comment": "Comporta de jusante: abrir"
+    },
+    {
+      "name": "Fecha_Jusante",
+      "address": "Q0.3",
+      "comment": "Comporta de jusante: fechar"
+    },
+    {
+      "name": "Valvula_Enchimento",
+      "address": "Q0.4",
+      "comment": "Válvula de enchimento (vem de montante)"
+    },
+    {
+      "name": "Valvula_Esvaziamento",
+      "address": "Q0.5",
+      "comment": "Válvula de esvaziamento (vai para jusante)"
+    },
+    {
+      "name": "Verde_Montante",
+      "address": "Q0.6",
+      "comment": "Semáforo de montante verde (vermelho desligado)"
+    },
+    {
+      "name": "Verde_Jusante",
+      "address": "Q0.7",
+      "comment": "Semáforo de jusante verde (vermelho desligado)"
+    },
+    {
+      "name": "Nivel_Camara",
+      "address": "N0",
+      "comment": "cm"
+    },
+    {
+      "name": "Ocupacao",
+      "address": "N1",
+      "comment": "0 vazia, 1 passando, 2 parado"
+    },
+    {
+      "name": "Livre",
+      "address": "M0.0",
+      "comment": "eclusa sem missao"
+    },
+    {
+      "name": "Ultimo_Desceu",
+      "address": "M0.1",
+      "comment": "ultimo barco desceu"
+    },
+    {
+      "name": "D1",
+      "address": "M1.0",
+      "comment": "descer: etapa"
+    },
+    {
+      "name": "D2",
+      "address": "M1.1",
+      "comment": "descer: etapa"
+    },
+    {
+      "name": "D3",
+      "address": "M1.2",
+      "comment": "descer: etapa"
+    },
+    {
+      "name": "D4",
+      "address": "M1.3",
+      "comment": "descer: etapa"
+    },
+    {
+      "name": "D5",
+      "address": "M1.4",
+      "comment": "descer: etapa"
+    },
+    {
+      "name": "D6",
+      "address": "M1.5",
+      "comment": "descer: etapa"
+    },
+    {
+      "name": "D7",
+      "address": "M1.6",
+      "comment": "descer: etapa"
+    },
+    {
+      "name": "U1",
+      "address": "M2.0",
+      "comment": "subir: etapa"
+    },
+    {
+      "name": "U2",
+      "address": "M2.1",
+      "comment": "subir: etapa"
+    },
+    {
+      "name": "U3",
+      "address": "M2.2",
+      "comment": "subir: etapa"
+    },
+    {
+      "name": "U4",
+      "address": "M2.3",
+      "comment": "subir: etapa"
+    },
+    {
+      "name": "U5",
+      "address": "M2.4",
+      "comment": "subir: etapa"
+    },
+    {
+      "name": "U6",
+      "address": "M2.5",
+      "comment": "subir: etapa"
+    },
+    {
+      "name": "U7",
+      "address": "M2.6",
+      "comment": "subir: etapa"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "MISSOES",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "D1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "D2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "D3"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "D4"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "D5"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "D6"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "D7"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "U1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "U2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "U3"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "U4"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "U5"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "U6"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "U7"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Livre"
+        }
+      ]
+    },
+    {
+      "comment": "Barco a montante (alterna com jusante)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Livre"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Barco_Montante"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Barco_Jusante"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Ultimo_Desceu"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "D1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ultimo_Desceu"
+        }
+      ]
+    },
+    {
+      "comment": "Barco a jusante",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Livre"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Barco_Jusante"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Barco_Montante"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Ultimo_Desceu"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "U1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ultimo_Desceu"
+        }
+      ]
+    },
+    {
+      "comment": "DESCER: jusante fechada e nivel de montante",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Jusante_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Igual_Montante"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "D2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "D1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montante_Aberta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "D3"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "D2"
+        }
+      ]
+    },
+    {
+      "comment": "Barco parado na camara",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D3"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Ocupacao",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "D4"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "D3"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D4"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montante_Fechada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "D5"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "D4"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D5"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Igual_Jusante"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "D6"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "D5"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D6"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Jusante_Aberta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "D7"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "D6"
+        }
+      ]
+    },
+    {
+      "comment": "Barco saiu",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D7"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Ocupacao",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "D7"
+        }
+      ]
+    },
+    {
+      "comment": "SUBIR: montante fechada e nivel de jusante",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montante_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Igual_Jusante"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "U2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "U1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Jusante_Aberta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "U3"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "U2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U3"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Ocupacao",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "U4"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "U3"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U4"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Jusante_Fechada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "U5"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "U4"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U5"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Igual_Montante"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "U6"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "U5"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U6"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montante_Aberta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "U7"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "U6"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U7"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Ocupacao",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "U7"
+        }
+      ]
+    },
+    {
+      "comment": "SAIDAS com permissivos",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "D1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Jusante_Fechada"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "U4"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Abre_Jusante"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Fecha_Jusante"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "U1"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Montante_Fechada"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "D4"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Abre_Montante"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Fecha_Montante"
+        }
+      ]
+    },
+    {
+      "comment": "Encher: so com a jusante fechada",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "D1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "U5"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Jusante_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Nivel_Igual_Montante"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Valvula_Esvaziamento"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Enchimento"
+        }
+      ]
+    },
+    {
+      "comment": "Esvaziar: so com a montante fechada",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "U1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "D5"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montante_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Nivel_Igual_Jusante"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Esvaziamento"
+        }
+      ]
+    },
+    {
+      "comment": "Abrir: nivel igualado e a outra comporta fechada",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "D2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "U6"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Igual_Montante"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Jusante_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Montante_Aberta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Abre_Montante"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "D6"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "U2"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Nivel_Igual_Jusante"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montante_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Jusante_Aberta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Abre_Jusante"
+        }
+      ]
+    },
+    {
+      "comment": "Verde: comporta toda aberta e camara vazia",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "D3"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montante_Aberta"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Ocupacao",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Verde_Montante"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "U3"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Jusante_Aberta"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Ocupacao",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Verde_Jusante"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T06:51:57",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 25
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x3ade0ce2",
+    "size": 1032,
+    "instructions": 246,
+    "date": "2026-11-14T06:51:57"
+  },
+  "environment": "eclusa"
+}

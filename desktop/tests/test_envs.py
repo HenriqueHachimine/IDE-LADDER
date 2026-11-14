@@ -770,3 +770,15 @@ def test_transfer_switch_starts_generator_transfers_and_returns():
         Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.2")])])
     _, alarms, _ = closed_loop(naive, [(500, "SOLDADO", True), (5000, "FALTA", True)], 20000)
     assert any("paralelo" in a for a in alarms) and any("motor já funcionando" in a for a in alarms)
+
+
+def test_canal_lock_equalizes_levels_and_serves_both_sides():
+    p = Project.load(EXAMPLES / "eclusa.ladproj")
+    env, alarms, _ = closed_loop(p, total_ms=320000)
+    assert alarms == set() and env.passed >= 5
+    env, alarms, _ = closed_loop(p, [(0, "AUTO", True), (1000, "BARCO_M", True), (1500, "BARCO_J", True)], 150000)
+    assert alarms == set() and env.passed == 2
+    no_permissive = Project(environment="eclusa", rungs=[
+        Rung([Contact("XIC", "I0.6")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.6")])])
+    _, alarms, _ = closed_loop(no_permissive, [(0, "AUTO", True), (1000, "BARCO_M", True)], 20000)
+    assert any("desnível" in a for a in alarms) and any("bateu" in a for a in alarms)

@@ -1467,6 +1467,71 @@ def transfer_switch() -> Project:
     return p
 
 
+def canal_lock() -> Project:
+    p = env_project("eclusa", "Eclusa de navegacao", (
+        "Permissivos e equalizacao. Duas sequencias: DESCER (barco a montante) D1 fecha a comporta de jusante e "
+        "enche ate o nivel de montante, D2 abre montante, D3 sinal verde ate o barco parar na camara (N1 = 2), D4 "
+        "fecha montante, D5 esvazia ate o nivel de jusante, D6 abre jusante, D7 espera o barco sair (N1 = 0). SUBIR "
+        "faz o espelho. Permissivos em cada saida: encher so com jusante fechada, esvaziar so com montante fechada, "
+        "abrir uma comporta so com o nivel igualado e a outra fechada, verde so com a comporta toda aberta. Com "
+        "barcos dos dois lados, atende o lado contrario ao ultimo."))
+    p.symbols += [Symbol("Nivel_Camara", "N0", "cm"), Symbol("Ocupacao", "N1", "0 vazia, 1 passando, 2 parado"),
+                  Symbol("Livre", "M0.0", "eclusa sem missao"), Symbol("Ultimo_Desceu", "M0.1", "ultimo barco desceu")]
+    d = [f"D{k}" for k in range(1, 8)]
+    u = [f"U{k}" for k in range(1, 8)]
+    p.symbols += [Symbol(n, f"M1.{k}", "descer: etapa") for k, n in enumerate(d)]
+    p.symbols += [Symbol(n, f"M2.{k}", "subir: etapa") for k, n in enumerate(u)]
+
+    def go(cond, frm, to, comment=""):
+        return Rung([Contact("XIC", frm), *cond], [Coil("OTL", to), Coil("OTU", frm)], comment)
+
+    p.rungs = [
+        Rung([Contact("XIO", n) for n in d + u], [Coil("OTE", "Livre")], "MISSOES"),
+        Rung([Contact("XIC", "Livre"), Contact("XIC", "Barco_Montante"),
+              Parallel([[Contact("XIO", "Barco_Jusante")], [Contact("XIO", "Ultimo_Desceu")]])],
+             [Coil("OTL", d[0]), Coil("OTL", "Ultimo_Desceu")], "Barco a montante (alterna com jusante)"),
+        Rung([Contact("XIC", "Livre"), Contact("XIC", "Barco_Jusante"),
+              Parallel([[Contact("XIO", "Barco_Montante")], [Contact("XIC", "Ultimo_Desceu")]])],
+             [Coil("OTL", u[0]), Coil("OTU", "Ultimo_Desceu")], "Barco a jusante"),
+        go([Contact("XIC", "Jusante_Fechada"), Contact("XIC", "Nivel_Igual_Montante")], d[0], d[1],
+           "DESCER: jusante fechada e nivel de montante"),
+        go([Contact("XIC", "Montante_Aberta")], d[1], d[2]),
+        go([CompareBox("EQU", ["Ocupacao", "2"])], d[2], d[3], "Barco parado na camara"),
+        go([Contact("XIC", "Montante_Fechada")], d[3], d[4]),
+        go([Contact("XIC", "Nivel_Igual_Jusante")], d[4], d[5]),
+        go([Contact("XIC", "Jusante_Aberta")], d[5], d[6]),
+        Rung([Contact("XIC", d[6]), CompareBox("EQU", ["Ocupacao", "0"])], [Coil("OTU", d[6])], "Barco saiu"),
+        go([Contact("XIC", "Montante_Fechada"), Contact("XIC", "Nivel_Igual_Jusante")], u[0], u[1],
+           "SUBIR: montante fechada e nivel de jusante"),
+        go([Contact("XIC", "Jusante_Aberta")], u[1], u[2]),
+        go([CompareBox("EQU", ["Ocupacao", "2"])], u[2], u[3]),
+        go([Contact("XIC", "Jusante_Fechada")], u[3], u[4]),
+        go([Contact("XIC", "Nivel_Igual_Montante")], u[4], u[5]),
+        go([Contact("XIC", "Montante_Aberta")], u[5], u[6]),
+        Rung([Contact("XIC", u[6]), CompareBox("EQU", ["Ocupacao", "0"])], [Coil("OTU", u[6])]),
+        Rung([Parallel([[Contact("XIC", d[0]), Contact("XIO", "Jusante_Fechada")], [Contact("XIC", u[3])]]),
+              Contact("XIO", "Abre_Jusante")], [Coil("OTE", "Fecha_Jusante")], "SAIDAS com permissivos"),
+        Rung([Parallel([[Contact("XIC", u[0]), Contact("XIO", "Montante_Fechada")], [Contact("XIC", d[3])]]),
+              Contact("XIO", "Abre_Montante")], [Coil("OTE", "Fecha_Montante")]),
+        Rung([Parallel([[Contact("XIC", d[0])], [Contact("XIC", u[4])]]), Contact("XIC", "Jusante_Fechada"),
+              Contact("XIO", "Nivel_Igual_Montante"), Contact("XIO", "Valvula_Esvaziamento")],
+             [Coil("OTE", "Valvula_Enchimento")], "Encher: so com a jusante fechada"),
+        Rung([Parallel([[Contact("XIC", u[0])], [Contact("XIC", d[4])]]), Contact("XIC", "Montante_Fechada"),
+              Contact("XIO", "Nivel_Igual_Jusante")], [Coil("OTE", "Valvula_Esvaziamento")],
+             "Esvaziar: so com a montante fechada"),
+        Rung([Parallel([[Contact("XIC", d[1])], [Contact("XIC", u[5])]]), Contact("XIC", "Nivel_Igual_Montante"),
+              Contact("XIC", "Jusante_Fechada"), Contact("XIO", "Montante_Aberta")], [Coil("OTE", "Abre_Montante")],
+             "Abrir: nivel igualado e a outra comporta fechada"),
+        Rung([Parallel([[Contact("XIC", d[5])], [Contact("XIC", u[1])]]), Contact("XIC", "Nivel_Igual_Jusante"),
+              Contact("XIC", "Montante_Fechada"), Contact("XIO", "Jusante_Aberta")], [Coil("OTE", "Abre_Jusante")]),
+        Rung([Contact("XIC", d[2]), Contact("XIC", "Montante_Aberta"), CompareBox("EQU", ["Ocupacao", "0"])],
+             [Coil("OTE", "Verde_Montante")], "Verde: comporta toda aberta e camara vazia"),
+        Rung([Contact("XIC", u[2]), Contact("XIC", "Jusante_Aberta"), CompareBox("EQU", ["Ocupacao", "0"])],
+             [Coil("OTE", "Verde_Jusante")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1578,7 +1643,8 @@ def main() -> int:
                "ambientes/paletizador.ladproj": palletizer,
                "ambientes/forno_rampa.ladproj": furnace,
                "ambientes/demanda_energia.ladproj": demand_control,
-               "ambientes/gerador_qta.ladproj": transfer_switch}
+               "ambientes/gerador_qta.ladproj": transfer_switch,
+               "ambientes/eclusa.ladproj": canal_lock}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue
