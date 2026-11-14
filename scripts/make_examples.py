@@ -646,31 +646,62 @@ def level_crossing() -> Project:
 
 
 def parking() -> Project:
-    p = env_project("estacionamento", "Estacionamento", (
-        "Contagem com aritmetica: N1 (ocupadas) soma 1 quando um carro termina de passar pelo laco de entrada com a "
-        "cancela aberta (borda de descida do laco) e subtrai 1 na saida. N0 = 12 - N1 vai para o painel. A cancela "
-        "de entrada so abre com vaga (LES) e fica aberta ate o carro sair do laco, para nao descer sobre ele."))
-    p.symbols += [Symbol("Vagas_Livres", "N0", "vagas livres (painel)"), Symbol("Ocupadas", "N1", "carros dentro"),
+    p = env_project("estacionamento", "Estacionamento de dois pisos", (
+        "Contagem com aritmetica e deteccao de sentido. Entrada: quando o carro termina de passar pelo laco com a "
+        "cancela aberta (borda de descida) soma 1 no total (N3) e no piso 1 (N4); a saida subtrai. Rampa: o laco "
+        "que atua primeiro diz o sentido (A antes de B = subindo, B antes de A = descendo); quando o carro libera o "
+        "ultimo laco o carro passa de um piso para o outro (N4/N5). Vagas livres: N0 = 16 - N3, N1 = 8 - N4, "
+        "N2 = 8 - N5 (sem negativo). PISO 1 LOTADO com N4 >= 8."))
+    p.symbols += [Symbol("Vagas_Livres", "N0", "vagas livres no total (painel da entrada)"),
+                  Symbol("Livres_Piso1", "N1", "vagas livres no piso 1 (painel)"),
+                  Symbol("Livres_Piso2", "N2", "vagas livres no piso 2 (painel)"),
+                  Symbol("Ocupadas", "N3", "carros dentro"), Symbol("Carros_Piso1", "N4", "carros no piso 1"),
+                  Symbol("Carros_Piso2", "N5", "carros no piso 2"),
                   Symbol("Laco_E_Anterior", "M0.0", "laco de entrada na varredura anterior"),
                   Symbol("Laco_S_Anterior", "M0.1", "laco de saida na varredura anterior"),
                   Symbol("Abre_Entrada", "M0.2", "carro autorizado a entrar"),
-                  Symbol("Abre_Saida", "M0.3", "carro autorizado a sair")]
+                  Symbol("Abre_Saida", "M0.3", "carro autorizado a sair"),
+                  Symbol("Subindo", "M0.4", "carro na rampa: o laco A atuou primeiro"),
+                  Symbol("Descendo", "M0.5", "carro na rampa: o laco B atuou primeiro"),
+                  Symbol("Laco_A_Anterior", "M0.6", "laco A na varredura anterior"),
+                  Symbol("Laco_B_Anterior", "M0.7", "laco B na varredura anterior")]
     p.rungs = [
-        Rung([Contact("XIC", "Botao_Ticket"), Contact("XIC", "Laco_Entrada"), CompareBox("LES", ["Ocupadas", "12"])],
-             [Coil("OTL", "Abre_Entrada")], "Ticket com carro no laco e vaga disponivel"),
+        Rung([Contact("XIC", "Botao_Ticket"), Contact("XIC", "Laco_Entrada"), CompareBox("LES", ["Ocupadas", "16"])],
+             [Coil("OTL", "Abre_Entrada")], "ENTRADA: ticket com carro no laco e vaga disponivel"),
         Rung([Contact("XIO", "Laco_Entrada"), Contact("XIC", "Laco_E_Anterior"), Contact("XIC", "Abre_Entrada")],
-             [MathBox("ADD", ["Ocupadas", "1", "Ocupadas"]), Coil("OTU", "Abre_Entrada")],
-             "O carro terminou de passar: conta e fecha"),
+             [MathBox("ADD", ["Ocupadas", "1", "Ocupadas"]), MathBox("ADD", ["Carros_Piso1", "1", "Carros_Piso1"]),
+              Coil("OTU", "Abre_Entrada")], "O carro terminou de passar: conta no total e no piso 1, e fecha"),
         Rung([Contact("XIC", "Laco_Entrada")], [Coil("OTE", "Laco_E_Anterior")]),
         Rung([Contact("XIC", "Cartao_Validado"), Contact("XIC", "Laco_Saida")], [Coil("OTL", "Abre_Saida")],
-             "Cartao validado com carro no laco de saida"),
+             "SAIDA: cartao validado com carro no laco (sai sempre pelo piso 1)"),
         Rung([Contact("XIO", "Laco_Saida"), Contact("XIC", "Laco_S_Anterior"), Contact("XIC", "Abre_Saida")],
-             [MathBox("SUB", ["Ocupadas", "1", "Ocupadas"]), Coil("OTU", "Abre_Saida")]),
+             [MathBox("SUB", ["Ocupadas", "1", "Ocupadas"]), MathBox("SUB", ["Carros_Piso1", "1", "Carros_Piso1"]),
+              Coil("OTU", "Abre_Saida")]),
         Rung([Contact("XIC", "Laco_Saida")], [Coil("OTE", "Laco_S_Anterior")]),
-        Rung([Contact("XIC", "Zerar_Contagem")], [MathBox("MOV", ["0", "Ocupadas"])], "Manutencao: patio vazio"),
-        Rung([], [MathBox("SUB", ["12", "Ocupadas", "Vagas_Livres"])], "Vagas livres no painel"),
-        Rung([CompareBox("LES", ["Ocupadas", "12"])], [Coil("OTE", "Painel_Livre")]),
-        Rung([CompareBox("GEQ", ["Ocupadas", "12"])], [Coil("OTE", "Painel_Lotado")]),
+        Rung([Contact("XIC", "Rampa_Laco_A"), Contact("XIO", "Rampa_Laco_B"), Contact("XIO", "Descendo")],
+             [Coil("OTL", "Subindo")], "RAMPA: o primeiro laco que atua define o sentido"),
+        Rung([Contact("XIC", "Rampa_Laco_B"), Contact("XIO", "Rampa_Laco_A"), Contact("XIO", "Subindo")],
+             [Coil("OTL", "Descendo")]),
+        Rung([Contact("XIC", "Subindo"), Contact("XIO", "Rampa_Laco_B"), Contact("XIC", "Laco_B_Anterior"),
+              Contact("XIO", "Rampa_Laco_A")],
+             [MathBox("SUB", ["Carros_Piso1", "1", "Carros_Piso1"]), MathBox("ADD", ["Carros_Piso2", "1", "Carros_Piso2"]),
+              Coil("OTU", "Subindo")], "Subiu: liberou o laco B (o ultimo)"),
+        Rung([Contact("XIC", "Descendo"), Contact("XIO", "Rampa_Laco_A"), Contact("XIC", "Laco_A_Anterior"),
+              Contact("XIO", "Rampa_Laco_B")],
+             [MathBox("SUB", ["Carros_Piso2", "1", "Carros_Piso2"]), MathBox("ADD", ["Carros_Piso1", "1", "Carros_Piso1"]),
+              Coil("OTU", "Descendo")], "Desceu: liberou o laco A (o ultimo)"),
+        Rung([Contact("XIC", "Rampa_Laco_A")], [Coil("OTE", "Laco_A_Anterior")]),
+        Rung([Contact("XIC", "Rampa_Laco_B")], [Coil("OTE", "Laco_B_Anterior")]),
+        Rung([Contact("XIC", "Zerar_Contagem")], [MathBox("MOV", ["0", "Ocupadas"]), MathBox("MOV", ["0", "Carros_Piso1"]),
+                                                  MathBox("MOV", ["0", "Carros_Piso2"])], "Manutencao: patio vazio"),
+        Rung([], [MathBox("SUB", ["16", "Ocupadas", "Vagas_Livres"]), MathBox("SUB", ["8", "Carros_Piso1", "Livres_Piso1"]),
+                  MathBox("SUB", ["8", "Carros_Piso2", "Livres_Piso2"])], "PAINEIS: vagas livres"),
+        Rung([CompareBox("LES", ["Livres_Piso1", "0"])], [MathBox("MOV", ["0", "Livres_Piso1"])],
+             "Carros de passagem (saindo ou trocando de piso): o painel nao mostra negativo"),
+        Rung([CompareBox("LES", ["Livres_Piso2", "0"])], [MathBox("MOV", ["0", "Livres_Piso2"])]),
+        Rung([CompareBox("LES", ["Ocupadas", "16"])], [Coil("OTE", "Painel_Livre")]),
+        Rung([CompareBox("GEQ", ["Ocupadas", "16"])], [Coil("OTE", "Painel_Lotado")]),
+        Rung([CompareBox("GEQ", ["Carros_Piso1", "8"])], [Coil("OTE", "Piso1_Lotado")], "Piso 1 cheio: mande subir"),
         Rung([Contact("XIC", "Abre_Entrada")], [Coil("OTE", "Cancela_Entrada")]),
         Rung([Contact("XIC", "Abre_Saida")], [Coil("OTE", "Cancela_Saida")]),
     ]

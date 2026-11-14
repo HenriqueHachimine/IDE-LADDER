@@ -1,15 +1,15 @@
-; Estacionamento - gerado por LadderIDE compilador 1.0.0
+; Estacionamento de dois pisos - gerado por LadderIDE compilador 1.0.0
 .inputs 8
 .outputs 8
 .markers 64
 .words 32
 .safe_outputs 0x0000
-.build_id 0x206bfec6
+.build_id 0x06bbe149
 SOR ; rede 0
 XIC I0.0
 XIC I0.1
-LES N1
-ARG 12
+LES N3
+ARG 16
 OTL M0.2
 EOR
 SOR ; rede 1
@@ -17,9 +17,13 @@ XIO I0.1
 XIC M0.0
 XIC M0.2
 BST
-ADD N1
+ADD N3
 ARG 1
-ARG N1
+ARG N3
+NXB
+ADD N4
+ARG 1
+ARG N4
 NXB
 OTU M0.2
 BND
@@ -38,9 +42,13 @@ XIO I0.3
 XIC M0.1
 XIC M0.3
 BST
-SUB N1
+SUB N3
 ARG 1
-ARG N1
+ARG N3
+NXB
+SUB N4
+ARG 1
+ARG N4
 NXB
 OTU M0.3
 BND
@@ -50,30 +58,119 @@ XIC I0.3
 OTE M0.1
 EOR
 SOR ; rede 6
+XIC I0.5
+XIO I0.6
+XIO M0.5
+OTL M0.4
+EOR
+SOR ; rede 7
+XIC I0.6
+XIO I0.5
+XIO M0.4
+OTL M0.5
+EOR
+SOR ; rede 8
+XIC M0.4
+XIO I0.6
+XIC M0.7
+XIO I0.5
+BST
+SUB N4
+ARG 1
+ARG N4
+NXB
+ADD N5
+ARG 1
+ARG N5
+NXB
+OTU M0.4
+BND
+EOR
+SOR ; rede 9
+XIC M0.5
+XIO I0.5
+XIC M0.6
+XIO I0.6
+BST
+SUB N5
+ARG 1
+ARG N5
+NXB
+ADD N4
+ARG 1
+ARG N4
+NXB
+OTU M0.5
+BND
+EOR
+SOR ; rede 10
+XIC I0.5
+OTE M0.6
+EOR
+SOR ; rede 11
+XIC I0.6
+OTE M0.7
+EOR
+SOR ; rede 12
 XIC I0.4
+BST
+MOV 0
+ARG N3
+NXB
+MOV 0
+ARG N4
+NXB
+MOV 0
+ARG N5
+BND
+EOR
+SOR ; rede 13
+BST
+SUB 16
+ARG N3
+ARG N0
+NXB
+SUB 8
+ARG N4
+ARG N1
+NXB
+SUB 8
+ARG N5
+ARG N2
+BND
+EOR
+SOR ; rede 14
+LES N1
+ARG 0
 MOV 0
 ARG N1
 EOR
-SOR ; rede 7
-SUB 12
-ARG N1
-ARG N0
+SOR ; rede 15
+LES N2
+ARG 0
+MOV 0
+ARG N2
 EOR
-SOR ; rede 8
-LES N1
-ARG 12
+SOR ; rede 16
+LES N3
+ARG 16
 OTE Q0.2
 EOR
-SOR ; rede 9
-GEQ N1
-ARG 12
+SOR ; rede 17
+GEQ N3
+ARG 16
 OTE Q0.3
 EOR
-SOR ; rede 10
+SOR ; rede 18
+GEQ N4
+ARG 8
+OTE Q0.4
+EOR
+SOR ; rede 19
 XIC M0.2
 OTE Q0.0
 EOR
-SOR ; rede 11
+SOR ; rede 20
 XIC M0.3
 OTE Q0.1
 EOR

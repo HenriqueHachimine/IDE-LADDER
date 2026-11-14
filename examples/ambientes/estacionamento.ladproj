@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Estacionamento",
-  "description": "Contagem com aritmetica: N1 (ocupadas) soma 1 quando um carro termina de passar pelo laco de entrada com a cancela aberta (borda de descida do laco) e subtrai 1 na saida. N0 = 12 - N1 vai para o painel. A cancela de entrada so abre com vaga (LES) e fica aberta ate o carro sair do laco, para nao descer sobre ele.",
+  "name": "Estacionamento de dois pisos",
+  "description": "Contagem com aritmetica e deteccao de sentido. Entrada: quando o carro termina de passar pelo laco com a cancela aberta (borda de descida) soma 1 no total (N3) e no piso 1 (N4); a saida subtrai. Rampa: o laco que atua primeiro diz o sentido (A antes de B = subindo, B antes de A = descendo); quando o carro libera o ultimo laco o carro passa de um piso para o outro (N4/N5). Vagas livres: N0 = 16 - N3, N1 = 8 - N4, N2 = 8 - N5 (sem negativo). PISO 1 LOTADO com N4 >= 8.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:40:33",
-  "modified": "2026-11-13T20:40:33",
+  "created": "2026-11-13T23:22:04",
+  "modified": "2026-11-13T23:22:04",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -50,6 +50,16 @@
       "comment": "Botão de manutenção: zera a contagem"
     },
     {
+      "name": "Rampa_Laco_A",
+      "address": "I0.5",
+      "comment": "Rampa: laço A (lado do piso 1)"
+    },
+    {
+      "name": "Rampa_Laco_B",
+      "address": "I0.6",
+      "comment": "Rampa: laço B (lado do piso 2)"
+    },
+    {
       "name": "Cancela_Entrada",
       "address": "Q0.0",
       "comment": "Abre a cancela de entrada"
@@ -70,14 +80,39 @@
       "comment": "Painel LOTADO (vermelho)"
     },
     {
+      "name": "Piso1_Lotado",
+      "address": "Q0.4",
+      "comment": "Painel PISO 1 LOTADO: suba para o piso 2"
+    },
+    {
       "name": "Vagas_Livres",
       "address": "N0",
-      "comment": "vagas livres (painel)"
+      "comment": "vagas livres no total (painel da entrada)"
+    },
+    {
+      "name": "Livres_Piso1",
+      "address": "N1",
+      "comment": "vagas livres no piso 1 (painel)"
+    },
+    {
+      "name": "Livres_Piso2",
+      "address": "N2",
+      "comment": "vagas livres no piso 2 (painel)"
     },
     {
       "name": "Ocupadas",
-      "address": "N1",
+      "address": "N3",
       "comment": "carros dentro"
+    },
+    {
+      "name": "Carros_Piso1",
+      "address": "N4",
+      "comment": "carros no piso 1"
+    },
+    {
+      "name": "Carros_Piso2",
+      "address": "N5",
+      "comment": "carros no piso 2"
     },
     {
       "name": "Laco_E_Anterior",
@@ -98,12 +133,32 @@
       "name": "Abre_Saida",
       "address": "M0.3",
       "comment": "carro autorizado a sair"
+    },
+    {
+      "name": "Subindo",
+      "address": "M0.4",
+      "comment": "carro na rampa: o laco A atuou primeiro"
+    },
+    {
+      "name": "Descendo",
+      "address": "M0.5",
+      "comment": "carro na rampa: o laco B atuou primeiro"
+    },
+    {
+      "name": "Laco_A_Anterior",
+      "address": "M0.6",
+      "comment": "laco A na varredura anterior"
+    },
+    {
+      "name": "Laco_B_Anterior",
+      "address": "M0.7",
+      "comment": "laco B na varredura anterior"
     }
   ],
   "variables": [],
   "rungs": [
     {
-      "comment": "Ticket com carro no laco e vaga disponivel",
+      "comment": "ENTRADA: ticket com carro no laco e vaga disponivel",
       "condition": [
         {
           "type": "contact",
@@ -120,7 +175,7 @@
           "kind": "LES",
           "operands": [
             "Ocupadas",
-            "12"
+            "16"
           ]
         }
       ],
@@ -133,7 +188,7 @@
       ]
     },
     {
-      "comment": "O carro terminou de passar: conta e fecha",
+      "comment": "O carro terminou de passar: conta no total e no piso 1, e fecha",
       "condition": [
         {
           "type": "contact",
@@ -162,6 +217,15 @@
           ]
         },
         {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Carros_Piso1",
+            "1",
+            "Carros_Piso1"
+          ]
+        },
+        {
           "type": "coil",
           "kind": "OTU",
           "operand": "Abre_Entrada"
@@ -186,7 +250,7 @@
       ]
     },
     {
-      "comment": "Cartao validado com carro no laco de saida",
+      "comment": "SAIDA: cartao validado com carro no laco (sai sempre pelo piso 1)",
       "condition": [
         {
           "type": "contact",
@@ -237,6 +301,15 @@
           ]
         },
         {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Carros_Piso1",
+            "1",
+            "Carros_Piso1"
+          ]
+        },
+        {
           "type": "coil",
           "kind": "OTU",
           "operand": "Abre_Saida"
@@ -261,6 +334,194 @@
       ]
     },
     {
+      "comment": "RAMPA: o primeiro laco que atua define o sentido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_Laco_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rampa_Laco_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Descendo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Subindo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_Laco_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rampa_Laco_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Subindo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Descendo"
+        }
+      ]
+    },
+    {
+      "comment": "Subiu: liberou o laco B (o ultimo)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Subindo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rampa_Laco_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_B_Anterior"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rampa_Laco_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Carros_Piso1",
+            "1",
+            "Carros_Piso1"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Carros_Piso2",
+            "1",
+            "Carros_Piso2"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Subindo"
+        }
+      ]
+    },
+    {
+      "comment": "Desceu: liberou o laco A (o ultimo)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Descendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rampa_Laco_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Laco_A_Anterior"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rampa_Laco_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Carros_Piso2",
+            "1",
+            "Carros_Piso2"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Carros_Piso1",
+            "1",
+            "Carros_Piso1"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Descendo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_Laco_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Laco_A_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_Laco_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Laco_B_Anterior"
+        }
+      ]
+    },
+    {
       "comment": "Manutencao: patio vazio",
       "condition": [
         {
@@ -277,20 +538,100 @@
             "0",
             "Ocupadas"
           ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Carros_Piso1"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Carros_Piso2"
+          ]
         }
       ]
     },
     {
-      "comment": "Vagas livres no painel",
+      "comment": "PAINEIS: vagas livres",
       "condition": [],
       "outputs": [
         {
           "type": "math",
           "kind": "SUB",
           "operands": [
-            "12",
+            "16",
             "Ocupadas",
             "Vagas_Livres"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "8",
+            "Carros_Piso1",
+            "Livres_Piso1"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "8",
+            "Carros_Piso2",
+            "Livres_Piso2"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Carros de passagem (saindo ou trocando de piso): o painel nao mostra negativo",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Livres_Piso1",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Livres_Piso1"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Livres_Piso2",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Livres_Piso2"
           ]
         }
       ]
@@ -303,7 +644,7 @@
           "kind": "LES",
           "operands": [
             "Ocupadas",
-            "12"
+            "16"
           ]
         }
       ],
@@ -323,7 +664,7 @@
           "kind": "GEQ",
           "operands": [
             "Ocupadas",
-            "12"
+            "16"
           ]
         }
       ],
@@ -332,6 +673,26 @@
           "type": "coil",
           "kind": "OTE",
           "operand": "Painel_Lotado"
+        }
+      ]
+    },
+    {
+      "comment": "Piso 1 cheio: mande subir",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Carros_Piso1",
+            "8"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Piso1_Lotado"
         }
       ]
     },
@@ -372,18 +733,18 @@
   ],
   "history": [
     {
-      "date": "2026-11-13T20:40:33",
+      "date": "2026-11-13T23:22:04",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 12
+      "rungs": 21
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x206bfec6",
-    "size": 340,
-    "instructions": 72,
-    "date": "2026-11-13T20:40:33"
+    "build_id": "0x06bbe149",
+    "size": 732,
+    "instructions": 169,
+    "date": "2026-11-13T23:22:04"
   },
   "environment": "estacionamento"
 }

@@ -470,11 +470,24 @@ def test_level_crossing_needs_both_tracks_and_the_other_train_sign():
 
 def test_parking_counts_cars_and_shows_free_spaces_in_n0():
     env, alarms, sim = closed_loop(Project.load(EXAMPLES / "estacionamento.ladproj"), total_ms=300000)
-    assert alarms == set() and env.entered > 30 and env.gave_up > 0           # lotou e recusou carros
-    assert sim.vm.n[0] == 12 - env.inside == env.displayed
+    assert alarms == set() and env.entered > 40 and env.gave_up > 0           # lotou e recusou carros
+    assert env.ramp_up > 15 and env.ramp_down > 5 and env.searches == 0
+    assert sim.vm.n[0] == 16 - env.inside == env.displayed["total"]
     no_count = Project(environment="estacionamento", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")])])
     _, alarms, _ = closed_loop(no_count, total_ms=40000)
     assert any("Contagem errada" in a for a in alarms)
+
+
+def test_parking_ramp_direction_and_floor_full_sign():
+    p = Project.load(EXAMPLES / "estacionamento.ladproj")
+    no_ramp = Project.load(EXAMPLES / "estacionamento.ladproj")             # nao acompanha a rampa
+    no_ramp.rungs = [r for r in no_ramp.rungs if not any("Rampa" in getattr(n, "operand", "") for n in r.condition)]
+    _, alarms, _ = closed_loop(no_ramp, total_ms=150000)
+    assert any("(N1)" in a or "(N2)" in a for a in alarms)
+    no_sign = Project.load(EXAMPLES / "estacionamento.ladproj")
+    no_sign.rungs = [r for r in no_sign.rungs if not any(getattr(c, "operand", "") == "Piso1_Lotado" for c in r.outputs)]
+    env, alarms, _ = closed_loop(no_sign, total_ms=150000)
+    assert env.searches > 0 and any("PISO 1 LOTADO" in a for a in alarms)
 
 
 def test_sorter_shift_register_sends_each_part_to_its_bin():
