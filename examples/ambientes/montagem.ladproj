@@ -1,0 +1,696 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Estacao de montagem",
+  "description": "Duas sequencias em paralelo. O braco (Etapa, N3): 0 espera tampa, 1 desce, 2 fecha a garra (TON: ela nao tem sensor), 3 sobe, 4 avanca e espera a base, 5 desce, 6 abre a garra, 7 sobe, 8 recua. A base: quando o braco termina (Montada) e o Z ja subiu, o batente abaixa (Liberando) ate a base sair (borda de descida de I0.1). As transicoes estao escritas da ultima etapa para a primeira, para cada etapa durar ao menos uma varredura; as saidas vem das faixas de etapa (LIM).",
+  "version": "0.1.0",
+  "created": "2026-11-14T14:17:26",
+  "modified": "2026-11-14T14:17:26",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Chave LIGA"
+    },
+    {
+      "name": "Base_Na_Estacao",
+      "address": "I0.1",
+      "comment": "Base parada no batente"
+    },
+    {
+      "name": "Tampa_Pronta",
+      "address": "I0.2",
+      "comment": "Tampa no fim da esteira das tampas"
+    },
+    {
+      "name": "Braco_Na_Tampa",
+      "address": "I0.3",
+      "comment": "Braço recuado (sobre a tampa)"
+    },
+    {
+      "name": "Braco_Na_Base",
+      "address": "I0.4",
+      "comment": "Braço avançado (sobre a base)"
+    },
+    {
+      "name": "Z_Em_Cima",
+      "address": "I0.5",
+      "comment": "Z em cima"
+    },
+    {
+      "name": "Z_Embaixo",
+      "address": "I0.6",
+      "comment": "Z embaixo"
+    },
+    {
+      "name": "Esteira_Bases",
+      "address": "Q0.0",
+      "comment": "Esteiras das bases (entrada e saída)"
+    },
+    {
+      "name": "Libera_Base",
+      "address": "Q0.1",
+      "comment": "Abaixa o batente da base"
+    },
+    {
+      "name": "Esteira_Tampas",
+      "address": "Q0.2",
+      "comment": "Esteira das tampas"
+    },
+    {
+      "name": "Braco_Avanca",
+      "address": "Q0.3",
+      "comment": "Braço avança até a base (desligado volta)"
+    },
+    {
+      "name": "Z_Desce",
+      "address": "Q0.4",
+      "comment": "Desce o Z (desligado sobe)"
+    },
+    {
+      "name": "Garra",
+      "address": "Q0.5",
+      "comment": "Fecha a garra"
+    },
+    {
+      "name": "Emissores",
+      "address": "Q0.6",
+      "comment": "Emissores de bases e tampas"
+    },
+    {
+      "name": "Luz_Operando",
+      "address": "Q0.7",
+      "comment": "Lâmpada operando"
+    },
+    {
+      "name": "Etapa",
+      "address": "N3",
+      "comment": "passo do braco"
+    },
+    {
+      "name": "Montadas",
+      "address": "N10",
+      "comment": "bases montadas"
+    },
+    {
+      "name": "Montada",
+      "address": "M0.0",
+      "comment": "a base no batente ja recebeu a tampa"
+    },
+    {
+      "name": "Liberando",
+      "address": "M0.1",
+      "comment": "batente abaixado ate a base sair"
+    },
+    {
+      "name": "Base_Anterior",
+      "address": "M0.2",
+      "comment": "base no batente na varredura anterior"
+    },
+    {
+      "name": "Fechando",
+      "address": "T0",
+      "comment": "tempo para a garra fechar"
+    },
+    {
+      "name": "Abrindo",
+      "address": "T1",
+      "comment": "tempo para a garra abrir"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Liga a linha",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Bases"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Tampas"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Emissores"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Operando"
+        }
+      ]
+    },
+    {
+      "comment": "Temporizadores da garra",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Fechando",
+          "preset": 400
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "6"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Abrindo",
+          "preset": 250
+        }
+      ]
+    },
+    {
+      "comment": "BRACO (transicoes da ultima para a primeira)",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "8"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Braco_Na_Tampa"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "7: subiu, recua",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "7"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "6: tampa solta na base",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "6"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abrindo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Montada"
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Montadas",
+            "1",
+            "Montadas"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "7",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "5"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "6",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "4: sobre a base, espera uma base sem tampa",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "4"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Braco_Na_Base"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Base_Na_Estacao"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Montada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Liberando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "5",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "3"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "4",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "2: garra fechada",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "2"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fechando.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "1"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "0: tampa pronta, desce para pegar",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "0"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tampa_Pronta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Braco_Na_Tampa"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "BASE: montada e Z em cima, abaixa o batente",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Montada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Base_Na_Estacao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Liberando"
+        }
+      ]
+    },
+    {
+      "comment": "A base saiu: o batente sobe",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Base_Na_Estacao"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Base_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Liberando"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Montada"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liberando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Libera_Base"
+        }
+      ]
+    },
+    {
+      "comment": "SAIDAS: Z desce nas etapas 1-2 e 5-6",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "1",
+                  "Etapa",
+                  "2"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "5",
+                  "Etapa",
+                  "6"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Z_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "Garra fechada de 2 a 5",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "2",
+            "Etapa",
+            "5"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Garra"
+        }
+      ]
+    },
+    {
+      "comment": "Braco avancado de 4 a 7",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "4",
+            "Etapa",
+            "7"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Braco_Avanca"
+        }
+      ]
+    },
+    {
+      "comment": "Imagem anterior",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Base_Na_Estacao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Base_Anterior"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T14:17:26",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 19
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0xe79f333d",
+    "size": 676,
+    "instructions": 146,
+    "date": "2026-11-14T14:17:26"
+  },
+  "environment": "montagem"
+}

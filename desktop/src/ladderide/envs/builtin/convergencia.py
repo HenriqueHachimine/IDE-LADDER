@@ -164,8 +164,8 @@ class MergeEnvironment(Environment):
 
     def sensors(self) -> dict[str, bool]:
         zone = any(i.back < ZONE_END for i in self.main.items) or bool(self.diag.items)
-        bat_a = self.acc["A"].at(BLADE - 1) or any(i.covers(BLADE - 1) for i in self.main.items)
-        bat_b = self.acc["B"].at(BLADE - 1) or any(i.x < BOX_L - 1 for i in self.diag.items)
+        bat_a = self.acc["A"].at(BLADE - 0.5) or any(i.covers(BLADE - 0.5) for i in self.main.items)
+        bat_b = self.acc["B"].at(BLADE - 0.5) or any(i.x < BOX_L - 0.5 for i in self.diag.items)
         return {"BAT_A": bat_a, "BAT_B": bat_b,
                 "LONGA_A": self.acc["A"].at(LONG_X), "LONGA_B": self.acc["B"].at(LONG_X), "JUNCAO": zone}
 

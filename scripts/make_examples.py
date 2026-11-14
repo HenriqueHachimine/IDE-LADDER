@@ -1870,6 +1870,58 @@ def merge() -> Project:
     return p
 
 
+def assembly() -> Project:
+    p = env_project("montagem", "Estacao de montagem", (
+        "Duas sequencias em paralelo. O braco (Etapa, N3): 0 espera tampa, 1 desce, 2 fecha a garra (TON: ela nao "
+        "tem sensor), 3 sobe, 4 avanca e espera a base, 5 desce, 6 abre a garra, 7 sobe, 8 recua. A base: quando o "
+        "braco termina (Montada) e o Z ja subiu, o batente abaixa (Liberando) ate a base sair (borda de descida de "
+        "I0.1). As transicoes estao escritas da ultima etapa para a primeira, para cada etapa durar ao menos uma "
+        "varredura; as saidas vem das faixas de etapa (LIM)."))
+    p.symbols += [Symbol("Etapa", "N3", "passo do braco"), Symbol("Montadas", "N10", "bases montadas"),
+                  Symbol("Montada", "M0.0", "a base no batente ja recebeu a tampa"),
+                  Symbol("Liberando", "M0.1", "batente abaixado ate a base sair"),
+                  Symbol("Base_Anterior", "M0.2", "base no batente na varredura anterior"),
+                  Symbol("Fechando", "T0", "tempo para a garra fechar"),
+                  Symbol("Abrindo", "T1", "tempo para a garra abrir")]
+
+    def step(n, *cond):
+        return [CompareBox("EQU", ["Etapa", str(n)]), *cond]
+
+    def go(n):
+        return MathBox("MOV", [str(n), "Etapa"])
+
+    p.rungs = [
+        Rung([Contact("XIC", "Liga")], [Coil("OTE", "Esteira_Bases"), Coil("OTE", "Esteira_Tampas"),
+                                        Coil("OTE", "Emissores"), Coil("OTE", "Luz_Operando")], "Liga a linha"),
+        Rung(step(2), [TimerBox("TON", "Fechando", 400)], "Temporizadores da garra"),
+        Rung(step(6), [TimerBox("TON", "Abrindo", 250)]),
+        Rung(step(8, Contact("XIC", "Braco_Na_Tampa")), [go(0)], "BRACO (transicoes da ultima para a primeira)"),
+        Rung(step(7, Contact("XIC", "Z_Em_Cima")), [go(8)], "7: subiu, recua"),
+        Rung(step(6, Contact("XIC", "Abrindo.DN")),
+             [Coil("OTL", "Montada"), MathBox("ADD", ["Montadas", "1", "Montadas"]), go(7)],
+             "6: tampa solta na base"),
+        Rung(step(5, Contact("XIC", "Z_Embaixo")), [go(6)]),
+        Rung(step(4, Contact("XIC", "Braco_Na_Base"), Contact("XIC", "Base_Na_Estacao"), Contact("XIO", "Montada"),
+                  Contact("XIO", "Liberando")), [go(5)], "4: sobre a base, espera uma base sem tampa"),
+        Rung(step(3, Contact("XIC", "Z_Em_Cima")), [go(4)]),
+        Rung(step(2, Contact("XIC", "Fechando.DN")), [go(3)], "2: garra fechada"),
+        Rung(step(1, Contact("XIC", "Z_Embaixo")), [go(2)]),
+        Rung(step(0, Contact("XIC", "Liga"), Contact("XIC", "Tampa_Pronta"), Contact("XIC", "Braco_Na_Tampa"),
+                  Contact("XIC", "Z_Em_Cima")), [go(1)], "0: tampa pronta, desce para pegar"),
+        Rung([Contact("XIC", "Montada"), Contact("XIC", "Z_Em_Cima"), Contact("XIC", "Base_Na_Estacao")],
+             [Coil("OTL", "Liberando")], "BASE: montada e Z em cima, abaixa o batente"),
+        Rung([Contact("XIO", "Base_Na_Estacao"), Contact("XIC", "Base_Anterior")],
+             [Coil("OTU", "Liberando"), Coil("OTU", "Montada")], "A base saiu: o batente sobe"),
+        Rung([Contact("XIC", "Liberando")], [Coil("OTE", "Libera_Base")]),
+        Rung([Parallel([[CompareBox("LIM", ["1", "Etapa", "2"])], [CompareBox("LIM", ["5", "Etapa", "6"])]])],
+             [Coil("OTE", "Z_Desce")], "SAIDAS: Z desce nas etapas 1-2 e 5-6"),
+        Rung([CompareBox("LIM", ["2", "Etapa", "5"])], [Coil("OTE", "Garra")], "Garra fechada de 2 a 5"),
+        Rung([CompareBox("LIM", ["4", "Etapa", "7"])], [Coil("OTE", "Braco_Avanca")], "Braco avancado de 4 a 7"),
+        Rung([Contact("XIC", "Base_Na_Estacao")], [Coil("OTE", "Base_Anterior")], "Imagem anterior"),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1988,7 +2040,8 @@ def main() -> int:
                "ambientes/pick_place.ladproj": pick_place,
                "ambientes/armazem.ladproj": warehouse,
                "ambientes/separacao_peso.ladproj": weight_sorting,
-               "ambientes/convergencia.ladproj": merge}
+               "ambientes/convergencia.ladproj": merge,
+               "ambientes/montagem.ladproj": assembly}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

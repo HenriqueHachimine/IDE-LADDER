@@ -879,3 +879,19 @@ def test_merge_releases_one_box_at_a_time_and_alternates_lanes():
                 r.condition = [Contact("XIC", "Solta_" + lane)]
     _, alarms, _ = closed_loop(pulse, [(0, "LIGA", True)], 30000)
     assert any("subiu embaixo de uma caixa" in a for a in alarms)
+
+
+def test_assembly_runs_arm_and_base_sequences_in_parallel():
+    p = Project.load(EXAMPLES / "montagem.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True)], 90000)
+    assert alarms == set() and env.assembled >= 15 and env.missing == 0 and env.dropped == 0
+    hasty = Project.load(EXAMPLES / "montagem.ladproj")                    # nao espera a garra fechar
+    rung = next(r for r in hasty.rungs if r.comment.startswith("2: garra fechada"))
+    rung.condition = rung.condition[:1]
+    env, alarms, _ = closed_loop(hasty, [(0, "LIGA", True)], 30000)
+    assert env.assembled == 0 and any("sem tampa" in a for a in alarms)
+    early = Project.load(EXAMPLES / "montagem.ladproj")                    # solta a base com o Z embaixo
+    rung = next(r for r in early.rungs if r.comment.startswith("BASE: montada"))
+    rung.condition = [Contact("XIC", "Montada"), Contact("XIC", "Base_Na_Estacao")]
+    _, alarms, _ = closed_loop(early, [(0, "LIGA", True)], 30000)
+    assert any("garra encostada" in a for a in alarms)
