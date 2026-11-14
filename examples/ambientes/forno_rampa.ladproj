@@ -1,0 +1,941 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Forno com rampa e patamar",
+  "description": "Gerador de perfil e controle proporcional ao tempo. O setpoint e calculado em decimos de grau (N2) e muda a cada 100 ms: +10 (10 degC/s) na rampa 1 ate 6000, patamar de 20 s, +5 (5 degC/s) na rampa 2 ate 8500, patamar de 30 s e -8 (8 degC/s) no resfriamento ate 3000. N1 = N2 / 10 vai para o forno. Potencia: Duty = Erro x 25 ms + (SP - 25) / 2 (antecipacao da perda) e a resistencia 1 fica ligada enquanto o ACC do ciclo de 1 s (T1) for menor que o Duty; a 2 ajuda com erro acima de 20 degC. No resfriamento o ventilador usa o mesmo ciclo com o erro negativo. A porta fica travada durante o ciclo e acima de 200 degC.",
+  "version": "0.1.0",
+  "created": "2026-11-14T06:37:00",
+  "modified": "2026-11-14T06:37:00",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Partida",
+      "address": "I0.0",
+      "comment": "Botão PARTIDA do ciclo (NA)"
+    },
+    {
+      "name": "Parada",
+      "address": "I0.1",
+      "comment": "Botão PARADA (NF: lê 1 quando solto)"
+    },
+    {
+      "name": "Porta_Fechada",
+      "address": "I0.2",
+      "comment": "Porta fechada"
+    },
+    {
+      "name": "Termostato",
+      "address": "I0.3",
+      "comment": "Termostato de segurança (NF: lê 0 acima de 950 °C)"
+    },
+    {
+      "name": "Fluxo_Ventilador",
+      "address": "I0.4",
+      "comment": "Pressostato: ventilador com fluxo"
+    },
+    {
+      "name": "Resistencia_1",
+      "address": "Q0.0",
+      "comment": "Banco de resistências 1"
+    },
+    {
+      "name": "Resistencia_2",
+      "address": "Q0.1",
+      "comment": "Banco de resistências 2"
+    },
+    {
+      "name": "Ventilador",
+      "address": "Q0.2",
+      "comment": "Ventilador de resfriamento"
+    },
+    {
+      "name": "Trava_Porta",
+      "address": "Q0.3",
+      "comment": "Trava da porta (energizada = travada)"
+    },
+    {
+      "name": "Lampada_Ciclo",
+      "address": "Q0.4",
+      "comment": "Lâmpada CICLO EM ANDAMENTO"
+    },
+    {
+      "name": "Lampada_Fim",
+      "address": "Q0.5",
+      "comment": "Lâmpada FIM DE CICLO (pode abrir)"
+    },
+    {
+      "name": "Lampada_Alarme",
+      "address": "Q0.6",
+      "comment": "Lâmpada ALARME"
+    },
+    {
+      "name": "Temperatura",
+      "address": "N0",
+      "comment": "termopar (degC)"
+    },
+    {
+      "name": "Setpoint",
+      "address": "N1",
+      "comment": "perfil (degC)"
+    },
+    {
+      "name": "SP_x10",
+      "address": "N2",
+      "comment": "perfil em decimos de grau"
+    },
+    {
+      "name": "Erro",
+      "address": "N3",
+      "comment": "setpoint - temperatura"
+    },
+    {
+      "name": "Duty",
+      "address": "N4",
+      "comment": "ms ligados por ciclo de 1 s"
+    },
+    {
+      "name": "Duty_Frio",
+      "address": "N5",
+      "comment": "ms de ventilador"
+    },
+    {
+      "name": "Antecipacao",
+      "address": "N6",
+      "comment": "potencia para segurar a temperatura (ms)"
+    },
+    {
+      "name": "Ciclo",
+      "address": "M0.0",
+      "comment": "ciclo em andamento"
+    },
+    {
+      "name": "Rampa_1",
+      "address": "M0.1",
+      "comment": "20 -> 600 degC"
+    },
+    {
+      "name": "Patamar_1",
+      "address": "M0.2",
+      "comment": "600 degC"
+    },
+    {
+      "name": "Rampa_2",
+      "address": "M0.3",
+      "comment": "600 -> 850 degC"
+    },
+    {
+      "name": "Patamar_2",
+      "address": "M0.4",
+      "comment": "850 degC (tempera)"
+    },
+    {
+      "name": "Resfriamento",
+      "address": "M0.5",
+      "comment": "850 -> 300 degC"
+    },
+    {
+      "name": "Fim",
+      "address": "M0.6",
+      "comment": "ciclo terminado"
+    },
+    {
+      "name": "Tick",
+      "address": "T0",
+      "comment": "100 ms do gerador de perfil"
+    },
+    {
+      "name": "Ciclo_PWM",
+      "address": "T1",
+      "comment": "ciclo de 1 s"
+    },
+    {
+      "name": "Tempo_P1",
+      "address": "T2",
+      "comment": "20 s"
+    },
+    {
+      "name": "Tempo_P2",
+      "address": "T3",
+      "comment": "30 s"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "PARTIDA: o perfil comeca na temperatura atual",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Partida"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Porta_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Termostato"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ciclo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Temperatura",
+            "10",
+            "SP_x10"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Ciclo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Rampa_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Fim"
+        }
+      ]
+    },
+    {
+      "comment": "PARADA (NF) ou sobretemperatura",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Parada"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Termostato"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rampa_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Patamar_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rampa_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Patamar_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Resfriamento"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ciclo"
+        }
+      ]
+    },
+    {
+      "comment": "Gerador de perfil: um passo a cada 100 ms",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Tick.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tick",
+          "preset": 100
+        }
+      ]
+    },
+    {
+      "comment": "Rampa 1: 10 degC/s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tick.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "SP_x10",
+            "10",
+            "SP_x10"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_1"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "SP_x10",
+            "6000"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "6000",
+            "SP_x10"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rampa_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Patamar_1"
+        }
+      ]
+    },
+    {
+      "comment": "Patamar 1: 20 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Patamar_1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_P1",
+          "preset": 20000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_P1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Patamar_1"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Rampa_2"
+        }
+      ]
+    },
+    {
+      "comment": "Rampa 2: 5 degC/s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tick.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "SP_x10",
+            "5",
+            "SP_x10"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rampa_2"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "SP_x10",
+            "8500"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8500",
+            "SP_x10"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rampa_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Patamar_2"
+        }
+      ]
+    },
+    {
+      "comment": "Patamar 2 (tempera): 30 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Patamar_2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_P2",
+          "preset": 30000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_P2.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Patamar_2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Resfriamento"
+        }
+      ]
+    },
+    {
+      "comment": "Resfriamento: 8 degC/s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tick.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Resfriamento"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "SP_x10",
+            "8",
+            "SP_x10"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Resfriamento"
+        },
+        {
+          "type": "compare",
+          "kind": "LEQ",
+          "operands": [
+            "SP_x10",
+            "3000"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3000",
+            "SP_x10"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Resfriamento"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Ciclo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Fim"
+        }
+      ]
+    },
+    {
+      "comment": "CONTROLE: 25 ms por degC de erro + antecipacao da perda pelas paredes ((SP - 25) / 2)",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "SP_x10",
+            "10",
+            "Setpoint"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Setpoint",
+            "Temperatura",
+            "Erro"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Erro",
+            "25",
+            "Duty"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "NEG",
+          "operands": [
+            "Duty",
+            "Duty_Frio"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Setpoint",
+            "25",
+            "Antecipacao"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Antecipacao",
+            "2",
+            "Antecipacao"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Duty",
+            "Antecipacao",
+            "Duty"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Ciclo de 1 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ciclo_PWM.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Ciclo_PWM",
+          "preset": 1000
+        }
+      ]
+    },
+    {
+      "comment": "Resistencia 1: ligada uma fracao do ciclo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ciclo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Resfriamento"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Porta_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Termostato"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Ciclo_PWM.ACC",
+            "Duty"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Resistencia_1"
+        }
+      ]
+    },
+    {
+      "comment": "Resistencia 2: reforco com erro grande",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ciclo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Resfriamento"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Porta_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Termostato"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Erro",
+            "20"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Resistencia_2"
+        }
+      ]
+    },
+    {
+      "comment": "Ventilador proporcional no resfriamento; depois, ate 190 degC",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Resfriamento"
+              },
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Ciclo_PWM.ACC",
+                  "Duty_Frio"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Fim"
+              },
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Temperatura",
+                  "190"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ventilador"
+        }
+      ]
+    },
+    {
+      "comment": "Porta travada no ciclo e acima de 200 degC",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Ciclo"
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Temperatura",
+                  "200"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Trava_Porta"
+        }
+      ]
+    },
+    {
+      "comment": "Sinalizacao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ciclo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Ciclo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Porta_Fechada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Fim"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fim"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Temperatura",
+            "200"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Fim"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Termostato"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Ventilador"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Fluxo_Ventilador"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Alarme"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T06:37:00",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 23
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x6f1fabe7",
+    "size": 1008,
+    "instructions": 223,
+    "date": "2026-11-14T06:37:00"
+  },
+  "environment": "forno_rampa"
+}

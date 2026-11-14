@@ -717,3 +717,29 @@ def test_palletizer_nested_counters_build_interlocked_pallets():
     no_stop = Project(environment="paletizador", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.6")])])
     _, alarms, _ = closed_loop(no_stop, [(0, "LIGA", True)], 15000)
     assert any("Mais de 3 caixas" in a for a in alarms)
+
+
+def test_furnace_follows_ramp_and_soak_profile():
+    p = Project.load(EXAMPLES / "forno_rampa.ladproj")
+    env = create("forno_rampa")
+    sim = Simulator(compile_project(p), 10)
+    sim.attach_plant(EnvironmentPlant(env))
+    sim.start()
+    alarms = set()
+    for t in range(0, 300000, 10):
+        if t == 500:
+            env.press("START", True)
+        if t == 700:
+            env.press("START", False)
+        if env.out.get("FIM") and env.piece:
+            env.want_open = True                                        # operador tira a peca no fim
+        sim.scan_once()
+        alarms.update(env.alarms())
+    assert alarms == set() and env.good == 1 and env.bad == 0
+    bang = Project(environment="forno_rampa", rungs=[Rung([CompareBox("LES", ["N0", "850"])],
+                                                          [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1")])])
+    env, alarms, _ = closed_loop(bang, total_ms=60000)
+    assert any("Choque térmico" in a for a in alarms)
+    unlocked = Project(environment="forno_rampa", rungs=[Rung([CompareBox("LES", ["N0", "500"])], [Coil("OTE", "Q0.0")])])
+    env, alarms, _ = closed_loop(unlocked, [(40000, "PORTA", True)], 45000)
+    assert any("acima de 200" in a for a in alarms)

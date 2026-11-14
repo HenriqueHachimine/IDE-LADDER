@@ -1266,6 +1266,76 @@ def palletizer() -> Project:
     return p
 
 
+def furnace() -> Project:
+    p = env_project("forno_rampa", "Forno com rampa e patamar", (
+        "Gerador de perfil e controle proporcional ao tempo. O setpoint e calculado em decimos de grau (N2) e muda a "
+        "cada 100 ms: +10 (10 degC/s) na rampa 1 ate 6000, patamar de 20 s, +5 (5 degC/s) na rampa 2 ate 8500, "
+        "patamar de 30 s e -8 (8 degC/s) no resfriamento ate 3000. N1 = N2 / 10 vai para o forno. Potencia: "
+        "Duty = Erro x 25 ms + (SP - 25) / 2 (antecipacao da perda) e a resistencia 1 fica ligada enquanto o ACC do ciclo de 1 s (T1) for menor "
+        "que o Duty; a 2 ajuda com erro acima de 20 degC. No resfriamento o ventilador usa o mesmo ciclo com o erro "
+        "negativo. A porta fica travada durante o ciclo e acima de 200 degC."))
+    p.symbols += [Symbol("Temperatura", "N0", "termopar (degC)"), Symbol("Setpoint", "N1", "perfil (degC)"),
+                  Symbol("SP_x10", "N2", "perfil em decimos de grau"), Symbol("Erro", "N3", "setpoint - temperatura"),
+                  Symbol("Duty", "N4", "ms ligados por ciclo de 1 s"), Symbol("Duty_Frio", "N5", "ms de ventilador"),
+                  Symbol("Antecipacao", "N6", "potencia para segurar a temperatura (ms)"),
+                  Symbol("Ciclo", "M0.0", "ciclo em andamento"), Symbol("Rampa_1", "M0.1", "20 -> 600 degC"),
+                  Symbol("Patamar_1", "M0.2", "600 degC"), Symbol("Rampa_2", "M0.3", "600 -> 850 degC"),
+                  Symbol("Patamar_2", "M0.4", "850 degC (tempera)"), Symbol("Resfriamento", "M0.5", "850 -> 300 degC"),
+                  Symbol("Fim", "M0.6", "ciclo terminado"),
+                  Symbol("Tick", "T0", "100 ms do gerador de perfil"), Symbol("Ciclo_PWM", "T1", "ciclo de 1 s"),
+                  Symbol("Tempo_P1", "T2", "20 s"), Symbol("Tempo_P2", "T3", "30 s")]
+    steps = ["Rampa_1", "Patamar_1", "Rampa_2", "Patamar_2", "Resfriamento"]
+    p.rungs = [
+        Rung([Contact("XIC", "Partida"), Contact("XIC", "Porta_Fechada"), Contact("XIC", "Termostato"),
+              Contact("XIO", "Ciclo")],
+             [MathBox("MUL", ["Temperatura", "10", "SP_x10"]), Coil("OTL", "Ciclo"), Coil("OTL", "Rampa_1"),
+              Coil("OTU", "Fim")], "PARTIDA: o perfil comeca na temperatura atual"),
+        Rung([Parallel([[Contact("XIO", "Parada")], [Contact("XIO", "Termostato")]])],
+             [*[Coil("OTU", s) for s in steps], Coil("OTU", "Ciclo")], "PARADA (NF) ou sobretemperatura"),
+        Rung([Contact("XIO", "Tick.DN")], [TimerBox("TON", "Tick", 100)], "Gerador de perfil: um passo a cada 100 ms"),
+        Rung([Contact("XIC", "Tick.DN"), Contact("XIC", "Rampa_1")], [MathBox("ADD", ["SP_x10", "10", "SP_x10"])],
+             "Rampa 1: 10 degC/s"),
+        Rung([Contact("XIC", "Rampa_1"), CompareBox("GEQ", ["SP_x10", "6000"])],
+             [MathBox("MOV", ["6000", "SP_x10"]), Coil("OTU", "Rampa_1"), Coil("OTL", "Patamar_1")]),
+        Rung([Contact("XIC", "Patamar_1")], [TimerBox("TON", "Tempo_P1", 20000)], "Patamar 1: 20 s"),
+        Rung([Contact("XIC", "Tempo_P1.DN")], [Coil("OTU", "Patamar_1"), Coil("OTL", "Rampa_2")]),
+        Rung([Contact("XIC", "Tick.DN"), Contact("XIC", "Rampa_2")], [MathBox("ADD", ["SP_x10", "5", "SP_x10"])],
+             "Rampa 2: 5 degC/s"),
+        Rung([Contact("XIC", "Rampa_2"), CompareBox("GEQ", ["SP_x10", "8500"])],
+             [MathBox("MOV", ["8500", "SP_x10"]), Coil("OTU", "Rampa_2"), Coil("OTL", "Patamar_2")]),
+        Rung([Contact("XIC", "Patamar_2")], [TimerBox("TON", "Tempo_P2", 30000)], "Patamar 2 (tempera): 30 s"),
+        Rung([Contact("XIC", "Tempo_P2.DN")], [Coil("OTU", "Patamar_2"), Coil("OTL", "Resfriamento")]),
+        Rung([Contact("XIC", "Tick.DN"), Contact("XIC", "Resfriamento")], [MathBox("SUB", ["SP_x10", "8", "SP_x10"])],
+             "Resfriamento: 8 degC/s"),
+        Rung([Contact("XIC", "Resfriamento"), CompareBox("LEQ", ["SP_x10", "3000"])],
+             [MathBox("MOV", ["3000", "SP_x10"]), Coil("OTU", "Resfriamento"), Coil("OTU", "Ciclo"), Coil("OTL", "Fim")]),
+        Rung([], [MathBox("DIV", ["SP_x10", "10", "Setpoint"]), MathBox("SUB", ["Setpoint", "Temperatura", "Erro"]),
+                  MathBox("MUL", ["Erro", "25", "Duty"]), MathBox("NEG", ["Duty", "Duty_Frio"]),
+                  MathBox("SUB", ["Setpoint", "25", "Antecipacao"]), MathBox("DIV", ["Antecipacao", "2", "Antecipacao"]),
+                  MathBox("ADD", ["Duty", "Antecipacao", "Duty"])],
+             "CONTROLE: 25 ms por degC de erro + antecipacao da perda pelas paredes ((SP - 25) / 2)"),
+        Rung([Contact("XIO", "Ciclo_PWM.DN")], [TimerBox("TON", "Ciclo_PWM", 1000)], "Ciclo de 1 s"),
+        Rung([Contact("XIC", "Ciclo"), Contact("XIO", "Resfriamento"), Contact("XIC", "Porta_Fechada"),
+              Contact("XIC", "Termostato"), CompareBox("LES", ["Ciclo_PWM.ACC", "Duty"])],
+             [Coil("OTE", "Resistencia_1")], "Resistencia 1: ligada uma fracao do ciclo"),
+        Rung([Contact("XIC", "Ciclo"), Contact("XIO", "Resfriamento"), Contact("XIC", "Porta_Fechada"),
+              Contact("XIC", "Termostato"), CompareBox("GRT", ["Erro", "20"])], [Coil("OTE", "Resistencia_2")],
+             "Resistencia 2: reforco com erro grande"),
+        Rung([Parallel([[Contact("XIC", "Resfriamento"), CompareBox("LES", ["Ciclo_PWM.ACC", "Duty_Frio"])],
+                        [Contact("XIC", "Fim"), CompareBox("GEQ", ["Temperatura", "190"])]])],
+             [Coil("OTE", "Ventilador")], "Ventilador proporcional no resfriamento; depois, ate 190 degC"),
+        Rung([Parallel([[Contact("XIC", "Ciclo")], [CompareBox("GEQ", ["Temperatura", "200"])]])],
+             [Coil("OTE", "Trava_Porta")], "Porta travada no ciclo e acima de 200 degC"),
+        Rung([Contact("XIC", "Ciclo")], [Coil("OTE", "Lampada_Ciclo")], "Sinalizacao"),
+        Rung([Contact("XIO", "Porta_Fechada")], [Coil("OTU", "Fim")]),
+        Rung([Contact("XIC", "Fim"), CompareBox("LES", ["Temperatura", "200"])], [Coil("OTE", "Lampada_Fim")]),
+        Rung([Parallel([[Contact("XIO", "Termostato")],
+                        [Contact("XIC", "Ventilador"), Contact("XIO", "Fluxo_Ventilador")]])],
+             [Coil("OTE", "Lampada_Alarme")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1374,7 +1444,8 @@ def main() -> int:
                "ambientes/estufa.ladproj": greenhouse, "ambientes/ponte_rolante.ladproj": overhead_crane,
                "ambientes/venda.ladproj": vending,
                "ambientes/nivel_pi.ladproj": level_pi,
-               "ambientes/paletizador.ladproj": palletizer}
+               "ambientes/paletizador.ladproj": palletizer,
+               "ambientes/forno_rampa.ladproj": furnace}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue
