@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Prensa com comando bimanual",
-  "description": "Logica de seguranca: os dois botoes precisam ser acionados em ate 0,5 s (T0 conta desde o primeiro), mantidos durante a descida e soltos antes do proximo golpe (anti-repeticao, M0.0). Soltar uma mao, chegar ao PMI ou interromper a cortina faz o martelo subir.",
+  "name": "Prensa hidraulica bimanual",
+  "description": "Logica de seguranca: os dois botoes em ate 0,5 s (T0 conta desde o primeiro), mantidos durante a descida e soltos antes do proximo golpe (anti-repeticao). A descida liga DESCE e a valvula de seguranca juntas. Monitoramento: com DESCE desligada o carretel tem de voltar ao repouso (I0.7) em 200 ms, senao a falha e travada, a seguranca fica desligada e FALHA acende ate a emergencia ser acionada e liberada. Modo ajuste liga a velocidade lenta. A cada 20 golpes a bomba lubrifica 2 s com o martelo no PMS.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:58:09",
-  "modified": "2026-11-13T20:58:09",
+  "created": "2026-11-13T23:01:30",
+  "modified": "2026-11-13T23:01:30",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -55,6 +55,16 @@
       "comment": "Emergência com trava (NF: lê 1 quando liberada)"
     },
     {
+      "name": "Modo_Ajuste",
+      "address": "I0.6",
+      "comment": "Chave de modo: 1 = ajuste (velocidade lenta)"
+    },
+    {
+      "name": "Valvula_Repouso",
+      "address": "I0.7",
+      "comment": "Carretel da válvula DESCE em repouso (fechada)"
+    },
+    {
       "name": "Valvula_Desce",
       "address": "Q0.0",
       "comment": "Válvula: martelo desce"
@@ -68,6 +78,26 @@
       "name": "Lampada_Pronta",
       "address": "Q0.2",
       "comment": "Lâmpada PRONTA para o golpe"
+    },
+    {
+      "name": "Velocidade_Lenta",
+      "address": "Q0.3",
+      "comment": "Válvula de velocidade lenta (modo ajuste)"
+    },
+    {
+      "name": "Valvula_Seguranca",
+      "address": "Q0.4",
+      "comment": "Válvula de segurança em série com a DESCE"
+    },
+    {
+      "name": "Lampada_Falha",
+      "address": "Q0.5",
+      "comment": "Lâmpada FALHA da válvula"
+    },
+    {
+      "name": "Bomba_Lubrificacao",
+      "address": "Q0.6",
+      "comment": "Bomba de lubrificação centralizada"
     },
     {
       "name": "Rearmado",
@@ -85,13 +115,117 @@
       "comment": "martelo voltando ao PMS"
     },
     {
+      "name": "Falha_Valvula",
+      "address": "M0.3",
+      "comment": "carretel da DESCE nao voltou ao repouso"
+    },
+    {
+      "name": "Lubrificar",
+      "address": "M0.4",
+      "comment": "20 golpes desde a ultima lubrificacao"
+    },
+    {
       "name": "Simultaneidade",
       "address": "T0",
       "comment": "0,5 s desde o primeiro botao"
+    },
+    {
+      "name": "Monitor_Valvula",
+      "address": "T1",
+      "comment": "200 ms para o carretel voltar"
+    },
+    {
+      "name": "Tempo_Lubrificacao",
+      "address": "T2",
+      "comment": "2 s de bomba"
+    },
+    {
+      "name": "Golpes_Lubrificacao",
+      "address": "C0",
+      "comment": "golpes desde a lubrificacao"
     }
   ],
   "variables": [],
   "rungs": [
+    {
+      "comment": "Monitoramento: DESCE desligada e carretel fora do repouso",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Valvula_Desce"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Valvula_Repouso"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Monitor_Valvula",
+          "preset": 200
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Monitor_Valvula.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Falha_Valvula"
+        }
+      ]
+    },
+    {
+      "comment": "Rearme da falha: acionar a emergencia (com a valvula ja em repouso)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Valvula_Repouso"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Falha_Valvula"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Falha_Valvula"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Falha"
+        }
+      ]
+    },
     {
       "comment": "Conta o tempo desde que a primeira mao apertou",
       "condition": [
@@ -147,7 +281,7 @@
       ]
     },
     {
-      "comment": "Inicio do golpe: simultaneo, rearmado e no PMS",
+      "comment": "Inicio do golpe: simultaneo, rearmado, no PMS, seguro e sem lubrificar",
       "condition": [
         {
           "type": "contact",
@@ -187,7 +321,17 @@
         {
           "type": "contact",
           "kind": "XIO",
+          "operand": "Falha_Valvula"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
           "operand": "Retorno"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Bomba_Lubrificacao"
         }
       ],
       "outputs": [
@@ -248,6 +392,13 @@
                 "kind": "XIO",
                 "operand": "Emergencia"
               }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Falha_Valvula"
+              }
             ]
           ]
         }
@@ -266,7 +417,7 @@
       ]
     },
     {
-      "comment": "Desce so com as duas maos e zona livre",
+      "comment": "Desce com as DUAS valvulas em serie, so com as maos e a zona livre",
       "condition": [
         {
           "type": "contact",
@@ -296,6 +447,11 @@
         {
           "type": "contact",
           "kind": "XIO",
+          "operand": "Falha_Valvula"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
           "operand": "PMI"
         }
       ],
@@ -304,6 +460,28 @@
           "type": "coil",
           "kind": "OTE",
           "operand": "Valvula_Desce"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_Seguranca"
+        }
+      ]
+    },
+    {
+      "comment": "Modo ajuste: velocidade lenta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Modo_Ajuste"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Velocidade_Lenta"
         }
       ]
     },
@@ -357,6 +535,85 @@
       ]
     },
     {
+      "comment": "Conta os golpes",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "PMI"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Golpes_Lubrificacao",
+          "preset": 20
+        }
+      ]
+    },
+    {
+      "comment": "A cada 20 golpes lubrifica com o martelo em cima",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Golpes_Lubrificacao.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "PMS"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ciclo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba_Lubrificacao"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Bomba_Lubrificacao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Lubrificacao",
+          "preset": 2000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Lubrificacao.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "reset",
+          "operand": "Golpes_Lubrificacao"
+        }
+      ]
+    },
+    {
       "comment": "Pronta para o proximo golpe",
       "condition": [
         {
@@ -382,7 +639,17 @@
         {
           "type": "contact",
           "kind": "XIO",
+          "operand": "Falha_Valvula"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
           "operand": "Ciclo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Bomba_Lubrificacao"
         }
       ],
       "outputs": [
@@ -396,18 +663,18 @@
   ],
   "history": [
     {
-      "date": "2026-11-13T20:58:09",
+      "date": "2026-11-13T23:01:30",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 8
+      "rungs": 17
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x60d9effd",
-    "size": 348,
-    "instructions": 75,
-    "date": "2026-11-13T20:58:09"
+    "build_id": "0x6fd814fb",
+    "size": 576,
+    "instructions": 126,
+    "date": "2026-11-13T23:01:30"
   },
   "environment": "prensa"
 }

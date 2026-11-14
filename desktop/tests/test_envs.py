@@ -385,9 +385,31 @@ def test_two_hand_press_needs_simultaneous_hands_and_release():
     assert env.strokes == 2 and alarms == set()
     env, alarms, _ = closed_loop(p, [(100, "AMBAS", True), (1200, "MAO", True)], 4000)   # mao no meio do golpe
     assert env.strokes == 0 and env.pos < 5 and alarms == set()                        # voltou antes de chegar
-    one_hand = Project(environment="prensa", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0")])])
+    one_hand = Project(environment="prensa", rungs=[Rung([Contact("XIC", "I0.0")],
+                                                         [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.4")])])
     _, alarms, _ = closed_loop(one_hand, [(100, "ESQ", True), (200, "MAO", True)], 3000)
     assert any("sem as duas" in a for a in alarms) and any("PERIGO" in a for a in alarms)
+
+
+def test_press_monitors_stuck_valve_lubricates_and_slows_in_setup_mode():
+    p = Project.load(EXAMPLES / "prensa.ladproj")
+    strokes = [a for k in range(25) for a in ((100 + k * 6000, "AMBAS", True), (4600 + k * 6000, "AMBAS", True))]
+    env, alarms, _ = closed_loop(p, strokes, 151000)
+    assert env.strokes == 25 and env.lube_total == 1 and alarms == set()
+    stuck = [(100, "AMBAS", True), (4600, "AMBAS", True), (6000, "TRAVADA", True), (7000, "AMBAS", True),
+             (9000, "AMBAS", True), (10000, "TRAVADA", True), (11000, "EMERG", True), (11500, "EMERG", True),
+             (12000, "AMBAS", True), (16500, "AMBAS", True)]
+    env, alarms, sim = closed_loop(p, stuck, 18000)    # travada: bloqueia; depois do rearme volta a golpear
+    assert env.strokes == 2 and env.uncommanded == 0 and alarms == set()
+    env, alarms, _ = closed_loop(p, [(50, "AJUSTE", True), (100, "AMBAS", True)], 12000)
+    assert env.strokes == 1 and alarms == set()
+    naive = Project(environment="prensa", rungs=[
+        Rung([Contact("XIC", "I0.0"), Contact("XIC", "I0.1"), Contact("XIO", "I0.4")], [Coil("OTE", "Q0.0")]),
+        Rung([Contact("XIC", "I0.5")], [Coil("OTE", "Q0.4")]),                      # seguranca sempre ligada
+        Rung([Contact("XIC", "I0.4"), Contact("XIO", "I0.0")], [Coil("OTL", "Q0.1")]),
+        Rung([Contact("XIC", "I0.3")], [Coil("OTU", "Q0.1")])])
+    _, alarms, _ = closed_loop(naive, [(100, "AMBAS", True), (4000, "AMBAS", True), (8000, "TRAVADA", True)], 12000)
+    assert any("desceu sem comando" in a for a in alarms) and any("sem a lâmpada FALHA" in a for a in alarms)
 
 
 def test_drill_sequence_makes_good_parts_and_breaks_bit_without_spindle():

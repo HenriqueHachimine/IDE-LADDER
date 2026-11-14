@@ -1,12 +1,33 @@
-; Prensa com comando bimanual - gerado por LadderIDE compilador 1.0.0
+; Prensa hidraulica bimanual - gerado por LadderIDE compilador 1.0.0
 .inputs 8
 .outputs 8
 .markers 64
 .words 32
 .safe_outputs 0x0000
-.build_id 0x60d9effd
+.build_id 0x6fd814fb
 .timer T0 TON 500
+.timer T1 TON 200
+.timer T2 TON 2000
+.counter C0 UP 20
 SOR ; rede 0
+XIO Q0.0
+XIO I0.7
+TON T1
+EOR
+SOR ; rede 1
+XIC T1.DN
+OTL M0.3
+EOR
+SOR ; rede 2
+XIO I0.5
+XIC I0.7
+OTU M0.3
+EOR
+SOR ; rede 3
+XIC M0.3
+OTE Q0.5
+EOR
+SOR ; rede 4
 BST
 XIC I0.0
 NXB
@@ -14,12 +35,12 @@ XIC I0.1
 BND
 TON T0
 EOR
-SOR ; rede 1
+SOR ; rede 5
 XIO I0.0
 XIO I0.1
 OTL M0.0
 EOR
-SOR ; rede 2
+SOR ; rede 6
 XIC I0.0
 XIC I0.1
 XIO T0.DN
@@ -27,14 +48,16 @@ XIC M0.0
 XIC I0.3
 XIC I0.2
 XIC I0.5
+XIO M0.3
 XIO M0.2
+XIO Q0.6
 BST
 OTL M0.1
 NXB
 OTU M0.0
 BND
 EOR
-SOR ; rede 3
+SOR ; rede 7
 XIC M0.1
 BST
 XIC I0.4
@@ -46,6 +69,8 @@ NXB
 XIO I0.2
 NXB
 XIO I0.5
+NXB
+XIC M0.3
 BND
 BST
 OTL M0.2
@@ -53,31 +78,60 @@ NXB
 OTU M0.1
 BND
 EOR
-SOR ; rede 4
+SOR ; rede 8
 XIC M0.1
 XIC I0.0
 XIC I0.1
 XIC I0.2
 XIC I0.5
+XIO M0.3
 XIO I0.4
+BST
 OTE Q0.0
+NXB
+OTE Q0.4
+BND
 EOR
-SOR ; rede 5
+SOR ; rede 9
+XIC I0.6
+OTE Q0.3
+EOR
+SOR ; rede 10
 XIC M0.2
 XIC I0.5
 XIO I0.3
 OTE Q0.1
 EOR
-SOR ; rede 6
+SOR ; rede 11
 XIC M0.2
 XIC I0.3
 OTU M0.2
 EOR
-SOR ; rede 7
+SOR ; rede 12
+XIC I0.4
+CTU C0
+EOR
+SOR ; rede 13
+XIC C0.DN
+XIC I0.3
+XIO M0.1
+OTE Q0.6
+EOR
+SOR ; rede 14
+XIC Q0.6
+TON T2
+EOR
+SOR ; rede 15
+XIC T2.DN
+RES C0
+EOR
+SOR ; rede 16
 XIC I0.3
 XIC M0.0
 XIC I0.2
 XIC I0.5
+XIO M0.3
 XIO M0.1
+XIO Q0.6
 OTE Q0.2
 EOR

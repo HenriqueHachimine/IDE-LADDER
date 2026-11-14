@@ -461,37 +461,61 @@ def star_delta() -> Project:
 
 
 def two_hand_press() -> Project:
-    p = env_project("prensa", "Prensa com comando bimanual", (
-        "Logica de seguranca: os dois botoes precisam ser acionados em ate 0,5 s (T0 conta desde o primeiro), "
-        "mantidos durante a descida e soltos antes do proximo golpe (anti-repeticao, M0.0). Soltar uma mao, "
-        "chegar ao PMI ou interromper a cortina faz o martelo subir."))
+    p = env_project("prensa", "Prensa hidraulica bimanual", (
+        "Logica de seguranca: os dois botoes em ate 0,5 s (T0 conta desde o primeiro), mantidos durante a descida "
+        "e soltos antes do proximo golpe (anti-repeticao). A descida liga DESCE e a valvula de seguranca juntas. "
+        "Monitoramento: com DESCE desligada o carretel tem de voltar ao repouso (I0.7) em 200 ms, senao a falha "
+        "e travada, a seguranca fica desligada e FALHA acende ate a emergencia ser acionada e liberada. Modo "
+        "ajuste liga a velocidade lenta. A cada 20 golpes a bomba lubrifica 2 s com o martelo no PMS."))
     p.symbols += [Symbol("Rearmado", "M0.0", "os dois botoes foram soltos desde o ultimo golpe"),
                   Symbol("Ciclo", "M0.1", "golpe em andamento (descida)"),
                   Symbol("Retorno", "M0.2", "martelo voltando ao PMS"),
-                  Symbol("Simultaneidade", "T0", "0,5 s desde o primeiro botao")]
+                  Symbol("Falha_Valvula", "M0.3", "carretel da DESCE nao voltou ao repouso"),
+                  Symbol("Lubrificar", "M0.4", "20 golpes desde a ultima lubrificacao"),
+                  Symbol("Simultaneidade", "T0", "0,5 s desde o primeiro botao"),
+                  Symbol("Monitor_Valvula", "T1", "200 ms para o carretel voltar"),
+                  Symbol("Tempo_Lubrificacao", "T2", "2 s de bomba"),
+                  Symbol("Golpes_Lubrificacao", "C0", "golpes desde a lubrificacao")]
+
     def both():
         return [Contact("XIC", "Botao_Esquerdo"), Contact("XIC", "Botao_Direito")]
 
+    def safe():
+        return [Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"), Contact("XIO", "Falha_Valvula")]
+
     p.rungs = [
+        Rung([Contact("XIO", "Valvula_Desce"), Contact("XIO", "Valvula_Repouso")],
+             [TimerBox("TON", "Monitor_Valvula", 200)], "Monitoramento: DESCE desligada e carretel fora do repouso"),
+        Rung([Contact("XIC", "Monitor_Valvula.DN")], [Coil("OTL", "Falha_Valvula")]),
+        Rung([Contact("XIO", "Emergencia"), Contact("XIC", "Valvula_Repouso")], [Coil("OTU", "Falha_Valvula")],
+             "Rearme da falha: acionar a emergencia (com a valvula ja em repouso)"),
+        Rung([Contact("XIC", "Falha_Valvula")], [Coil("OTE", "Lampada_Falha")]),
         Rung([Parallel([[Contact("XIC", "Botao_Esquerdo")], [Contact("XIC", "Botao_Direito")]])],
              [TimerBox("TON", "Simultaneidade", 500)], "Conta o tempo desde que a primeira mao apertou"),
         Rung([Contact("XIO", "Botao_Esquerdo"), Contact("XIO", "Botao_Direito")], [Coil("OTL", "Rearmado")],
              "Anti-repeticao: so rearma com as duas maos soltas"),
         Rung([*both(), Contact("XIO", "Simultaneidade.DN"), Contact("XIC", "Rearmado"), Contact("XIC", "PMS"),
-              Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"), Contact("XIO", "Retorno")],
-             [Coil("OTL", "Ciclo"), Coil("OTU", "Rearmado")], "Inicio do golpe: simultaneo, rearmado e no PMS"),
+              *safe(), Contact("XIO", "Retorno"), Contact("XIO", "Bomba_Lubrificacao")],
+             [Coil("OTL", "Ciclo"), Coil("OTU", "Rearmado")],
+             "Inicio do golpe: simultaneo, rearmado, no PMS, seguro e sem lubrificar"),
         Rung([Contact("XIC", "Ciclo"),
               Parallel([[Contact("XIC", "PMI")], [Contact("XIO", "Botao_Esquerdo")], [Contact("XIO", "Botao_Direito")],
-                        [Contact("XIO", "Cortina_Luz")], [Contact("XIO", "Emergencia")]])],
+                        [Contact("XIO", "Cortina_Luz")], [Contact("XIO", "Emergencia")], [Contact("XIC", "Falha_Valvula")]])],
              [Coil("OTL", "Retorno"), Coil("OTU", "Ciclo")], "Fim do golpe ou condicao insegura: volta"),
-        Rung([Contact("XIC", "Ciclo"), *both(), Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"),
-              Contact("XIO", "PMI")], [Coil("OTE", "Valvula_Desce")], "Desce so com as duas maos e zona livre"),
+        Rung([Contact("XIC", "Ciclo"), *both(), *safe(), Contact("XIO", "PMI")],
+             [Coil("OTE", "Valvula_Desce"), Coil("OTE", "Valvula_Seguranca")],
+             "Desce com as DUAS valvulas em serie, so com as maos e a zona livre"),
+        Rung([Contact("XIC", "Modo_Ajuste")], [Coil("OTE", "Velocidade_Lenta")], "Modo ajuste: velocidade lenta"),
         Rung([Contact("XIC", "Retorno"), Contact("XIC", "Emergencia"), Contact("XIO", "PMS")],
              [Coil("OTE", "Valvula_Sobe")], "Sobe ate o PMS"),
         Rung([Contact("XIC", "Retorno"), Contact("XIC", "PMS")], [Coil("OTU", "Retorno")]),
-        Rung([Contact("XIC", "PMS"), Contact("XIC", "Rearmado"), Contact("XIC", "Cortina_Luz"),
-              Contact("XIC", "Emergencia"), Contact("XIO", "Ciclo")], [Coil("OTE", "Lampada_Pronta")],
-             "Pronta para o proximo golpe"),
+        Rung([Contact("XIC", "PMI")], [CounterBox("CTU", "Golpes_Lubrificacao", 20)], "Conta os golpes"),
+        Rung([Contact("XIC", "Golpes_Lubrificacao.DN"), Contact("XIC", "PMS"), Contact("XIO", "Ciclo")],
+             [Coil("OTE", "Bomba_Lubrificacao")], "A cada 20 golpes lubrifica com o martelo em cima"),
+        Rung([Contact("XIC", "Bomba_Lubrificacao")], [TimerBox("TON", "Tempo_Lubrificacao", 2000)]),
+        Rung([Contact("XIC", "Tempo_Lubrificacao.DN")], [ResetBox("Golpes_Lubrificacao")]),
+        Rung([Contact("XIC", "PMS"), Contact("XIC", "Rearmado"), *safe(), Contact("XIO", "Ciclo"),
+              Contact("XIO", "Bomba_Lubrificacao")], [Coil("OTE", "Lampada_Pronta")], "Pronta para o proximo golpe"),
     ]
     return p
 
