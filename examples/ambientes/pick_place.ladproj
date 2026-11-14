@@ -1,0 +1,828 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Pick & place XY",
+  "description": "Coordenadas calculadas e etapas numa palavra. Etapa (N3) guarda o passo do ciclo: 0 espera, 1 vai a coleta, 2 desce, 3 pega, 4 sobe, 5 vai a vaga, 6 desce, 7 solta, 8 sobe, 9 e 10 trocam o pallet. A vaga vem do Indice (N2, 0 a 5): Linha = Indice / 3, Coluna = Indice - Linha x 3, X = 330 + Coluna x 90 e Y = 100 + Linha x 100. Depois de mudar o destino o programa espera 300 ms (o eixo comeca a andar) antes de olhar Em_Posicao; o Z so desce com X e Y parados e os eixos so andam com o Z em cima.",
+  "version": "0.1.0",
+  "created": "2026-11-14T07:15:46",
+  "modified": "2026-11-14T07:15:46",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Chave LIGA"
+    },
+    {
+      "name": "Em_Posicao",
+      "address": "I0.1",
+      "comment": "Eixos X e Y parados no destino"
+    },
+    {
+      "name": "Z_Em_Cima",
+      "address": "I0.2",
+      "comment": "Eixo Z recolhido"
+    },
+    {
+      "name": "Z_Embaixo",
+      "address": "I0.3",
+      "comment": "Eixo Z estendido"
+    },
+    {
+      "name": "Peca_Presa",
+      "address": "I0.4",
+      "comment": "Vácuo: peça presa na ventosa"
+    },
+    {
+      "name": "Peca_Na_Coleta",
+      "address": "I0.5",
+      "comment": "Peça parada no fim da esteira"
+    },
+    {
+      "name": "Pallet_Presente",
+      "address": "I0.6",
+      "comment": "Pallet vazio ou em montagem no lugar"
+    },
+    {
+      "name": "Esteira_Pecas",
+      "address": "Q0.0",
+      "comment": "Esteira de peças"
+    },
+    {
+      "name": "Z_Desce",
+      "address": "Q0.1",
+      "comment": "Eixo Z: desce"
+    },
+    {
+      "name": "Ventosa",
+      "address": "Q0.2",
+      "comment": "Ventosa (vácuo)"
+    },
+    {
+      "name": "Esteira_Pallets",
+      "address": "Q0.3",
+      "comment": "Esteira de pallets (troca o pallet)"
+    },
+    {
+      "name": "Luz_Operando",
+      "address": "Q0.4",
+      "comment": "Lâmpada operando"
+    },
+    {
+      "name": "Indice",
+      "address": "N2",
+      "comment": "vaga atual do pallet (0 a 5)"
+    },
+    {
+      "name": "Etapa",
+      "address": "N3",
+      "comment": "passo do ciclo"
+    },
+    {
+      "name": "Linha",
+      "address": "N4",
+      "comment": "linha da vaga"
+    },
+    {
+      "name": "Coluna",
+      "address": "N5",
+      "comment": "coluna da vaga"
+    },
+    {
+      "name": "Destino_X",
+      "address": "N10",
+      "comment": "setpoint do eixo X (mm)"
+    },
+    {
+      "name": "Destino_Y",
+      "address": "N11",
+      "comment": "setpoint do eixo Y (mm)"
+    },
+    {
+      "name": "Partiu_Coleta",
+      "address": "T0",
+      "comment": "espera o eixo sair rumo a coleta"
+    },
+    {
+      "name": "Partiu_Vaga",
+      "address": "T1",
+      "comment": "espera o eixo sair rumo a vaga"
+    },
+    {
+      "name": "Soltando",
+      "address": "T2",
+      "comment": "tempo para o vacuo acabar"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Liga",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Operando"
+        }
+      ]
+    },
+    {
+      "comment": "Esteira traz a proxima peca ate a coleta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Peca_Na_Coleta"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Pecas"
+        }
+      ]
+    },
+    {
+      "comment": "0 -> 1: destino = coleta (X 90, Y 150)",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "0"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peca_Na_Coleta"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pallet_Presente"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "90",
+            "Destino_X"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "150",
+            "Destino_Y"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Partiu_Coleta",
+          "preset": 300
+        }
+      ]
+    },
+    {
+      "comment": "1 -> 2: parado sobre a peca",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "1"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Partiu_Coleta.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Em_Posicao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "2 -> 3: Z embaixo",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "2"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "3 -> 4: vacuo pegou",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "3"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peca_Presa"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "4",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "4 -> 5: COORDENADAS da vaga pelo indice",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "4"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Indice",
+            "3",
+            "Linha"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Linha",
+            "3",
+            "Coluna"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Indice",
+            "Coluna",
+            "Coluna"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Coluna",
+            "90",
+            "Destino_X"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Destino_X",
+            "330",
+            "Destino_X"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Linha",
+            "100",
+            "Destino_Y"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Destino_Y",
+            "100",
+            "Destino_Y"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "5",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "5"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Partiu_Vaga",
+          "preset": 300
+        }
+      ]
+    },
+    {
+      "comment": "5 -> 6: parado sobre a vaga",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "5"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Partiu_Vaga.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Em_Posicao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "6",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "6 -> 7: Z embaixo",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "6"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "7",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "7"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Soltando",
+          "preset": 300
+        }
+      ]
+    },
+    {
+      "comment": "7 -> 8: peca solta",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "7"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Soltando.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "8: vaga feita",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "8"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Indice",
+            "1",
+            "Indice"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Pallet cheio: troca",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "8"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Indice",
+            "6"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "9",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "8"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Z_Em_Cima"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Indice",
+            "6"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "9 -> 10: o pallet cheio saiu",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "9"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Pallet_Presente"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "10",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "10 -> 0: pallet vazio no lugar",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "10"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pallet_Presente"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Indice"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "SAIDAS: Z desce nas etapas 2, 3, 6 e 7",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "2",
+                  "Etapa",
+                  "3"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "6",
+                  "Etapa",
+                  "7"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Z_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "Ventosa da pega ate descer na vaga",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "3",
+            "Etapa",
+            "6"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ventosa"
+        }
+      ]
+    },
+    {
+      "comment": "Troca do pallet",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "9",
+            "Etapa",
+            "10"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Pallets"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T07:15:46",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 21
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x652d5056",
+    "size": 892,
+    "instructions": 192,
+    "date": "2026-11-14T07:15:46"
+  },
+  "environment": "pick_place"
+}

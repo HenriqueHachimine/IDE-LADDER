@@ -1620,6 +1620,68 @@ def height_sorting() -> Project:
     return p
 
 
+def pick_place() -> Project:
+    p = env_project("pick_place", "Pick & place XY", (
+        "Coordenadas calculadas e etapas numa palavra. Etapa (N3) guarda o passo do ciclo: 0 espera, 1 vai a "
+        "coleta, 2 desce, 3 pega, 4 sobe, 5 vai a vaga, 6 desce, 7 solta, 8 sobe, 9 e 10 trocam o pallet. A vaga "
+        "vem do Indice (N2, 0 a 5): Linha = Indice / 3, Coluna = Indice - Linha x 3, X = 330 + Coluna x 90 e "
+        "Y = 100 + Linha x 100. Depois de mudar o destino o programa espera 300 ms (o eixo comeca a andar) antes de "
+        "olhar Em_Posicao; o Z so desce com X e Y parados e os eixos so andam com o Z em cima."))
+    p.symbols += [Symbol("Indice", "N2", "vaga atual do pallet (0 a 5)"), Symbol("Etapa", "N3", "passo do ciclo"),
+                  Symbol("Linha", "N4", "linha da vaga"), Symbol("Coluna", "N5", "coluna da vaga"),
+                  Symbol("Destino_X", "N10", "setpoint do eixo X (mm)"),
+                  Symbol("Destino_Y", "N11", "setpoint do eixo Y (mm)"),
+                  Symbol("Partiu_Coleta", "T0", "espera o eixo sair rumo a coleta"),
+                  Symbol("Partiu_Vaga", "T1", "espera o eixo sair rumo a vaga"),
+                  Symbol("Soltando", "T2", "tempo para o vacuo acabar")]
+
+    def step(n, *cond):
+        return [CompareBox("EQU", ["Etapa", str(n)]), *cond]
+
+    def go(n):
+        return MathBox("MOV", [str(n), "Etapa"])
+
+    p.rungs = [
+        Rung([Contact("XIC", "Liga")], [Coil("OTE", "Luz_Operando")], "Liga"),
+        Rung([Contact("XIC", "Liga"), Contact("XIO", "Peca_Na_Coleta")], [Coil("OTE", "Esteira_Pecas")],
+             "Esteira traz a proxima peca ate a coleta"),
+        Rung(step(0, Contact("XIC", "Liga"), Contact("XIC", "Peca_Na_Coleta"), Contact("XIC", "Pallet_Presente"),
+                  Contact("XIC", "Z_Em_Cima")),
+             [MathBox("MOV", ["90", "Destino_X"]), MathBox("MOV", ["150", "Destino_Y"]), go(1)],
+             "0 -> 1: destino = coleta (X 90, Y 150)"),
+        Rung(step(1), [TimerBox("TON", "Partiu_Coleta", 300)]),
+        Rung(step(1, Contact("XIC", "Partiu_Coleta.DN"), Contact("XIC", "Em_Posicao")), [go(2)],
+             "1 -> 2: parado sobre a peca"),
+        Rung(step(2, Contact("XIC", "Z_Embaixo")), [go(3)], "2 -> 3: Z embaixo"),
+        Rung(step(3, Contact("XIC", "Peca_Presa")), [go(4)], "3 -> 4: vacuo pegou"),
+        Rung(step(4, Contact("XIC", "Z_Em_Cima")),
+             [MathBox("DIV", ["Indice", "3", "Linha"]), MathBox("MUL", ["Linha", "3", "Coluna"]),
+              MathBox("SUB", ["Indice", "Coluna", "Coluna"]), MathBox("MUL", ["Coluna", "90", "Destino_X"]),
+              MathBox("ADD", ["Destino_X", "330", "Destino_X"]), MathBox("MUL", ["Linha", "100", "Destino_Y"]),
+              MathBox("ADD", ["Destino_Y", "100", "Destino_Y"]), go(5)],
+             "4 -> 5: COORDENADAS da vaga pelo indice"),
+        Rung(step(5), [TimerBox("TON", "Partiu_Vaga", 300)]),
+        Rung(step(5, Contact("XIC", "Partiu_Vaga.DN"), Contact("XIC", "Em_Posicao")), [go(6)],
+             "5 -> 6: parado sobre a vaga"),
+        Rung(step(6, Contact("XIC", "Z_Embaixo")), [go(7)], "6 -> 7: Z embaixo"),
+        Rung(step(7), [TimerBox("TON", "Soltando", 300)]),
+        Rung(step(7, Contact("XIC", "Soltando.DN")), [go(8)], "7 -> 8: peca solta"),
+        Rung(step(8, Contact("XIC", "Z_Em_Cima")), [MathBox("ADD", ["Indice", "1", "Indice"])],
+             "8: vaga feita"),
+        Rung(step(8, Contact("XIC", "Z_Em_Cima"), CompareBox("GEQ", ["Indice", "6"])), [go(9)],
+             "Pallet cheio: troca"),
+        Rung(step(8, Contact("XIC", "Z_Em_Cima"), CompareBox("LES", ["Indice", "6"])), [go(0)]),
+        Rung(step(9, Contact("XIO", "Pallet_Presente")), [go(10)], "9 -> 10: o pallet cheio saiu"),
+        Rung(step(10, Contact("XIC", "Pallet_Presente")), [MathBox("MOV", ["0", "Indice"]), go(0)],
+             "10 -> 0: pallet vazio no lugar"),
+        Rung([Parallel([[CompareBox("LIM", ["2", "Etapa", "3"])], [CompareBox("LIM", ["6", "Etapa", "7"])]])],
+             [Coil("OTE", "Z_Desce")], "SAIDAS: Z desce nas etapas 2, 3, 6 e 7"),
+        Rung([CompareBox("LIM", ["3", "Etapa", "6"])], [Coil("OTE", "Ventosa")], "Ventosa da pega ate descer na vaga"),
+        Rung([CompareBox("LIM", ["9", "Etapa", "10"])], [Coil("OTE", "Esteira_Pallets")], "Troca do pallet"),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1734,7 +1796,8 @@ def main() -> int:
                "ambientes/gerador_qta.ladproj": transfer_switch,
                "ambientes/eclusa.ladproj": canal_lock,
                "ambientes/lava_rapido.ladproj": car_wash,
-               "ambientes/separacao_altura.ladproj": height_sorting}
+               "ambientes/separacao_altura.ladproj": height_sorting,
+               "ambientes/pick_place.ladproj": pick_place}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

@@ -812,3 +812,19 @@ def test_height_sorting_tracks_boxes_with_encoder_shift_register():
         Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1"), Coil("OTE", "Q0.4")])])
     _, alarms, _ = closed_loop(stopped, [(0, "LIGA", True)], 20000)
     assert any("presa no desviador" in a for a in alarms)
+
+
+def test_pick_place_computes_slot_coordinates_and_swaps_pallets():
+    p = Project.load(EXAMPLES / "pick_place.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True)], 100000)
+    assert alarms == set() and env.shipped >= 2 and env.placed >= 15
+    hasty = Project.load(EXAMPLES / "pick_place.ladproj")                   # nao espera o eixo comecar a andar
+    for r in hasty.rungs:
+        for o in r.outputs:
+            if getattr(o, "operand", "") in ("Partiu_Coleta", "Partiu_Vaga"):
+                o.preset = 0
+    _, alarms, _ = closed_loop(hasty, [(0, "LIGA", True)], 30000)
+    assert any("Z abaixado" in a for a in alarms)
+    far = Project(environment="pick_place", rungs=[Rung([], [MathBox("MOV", ["900", "N10"])])])
+    _, alarms, _ = closed_loop(far, total_ms=1000)
+    assert any("fora do curso" in a for a in alarms)
