@@ -828,3 +828,16 @@ def test_pick_place_computes_slot_coordinates_and_swaps_pallets():
     far = Project(environment="pick_place", rungs=[Rung([], [MathBox("MOV", ["900", "N10"])])])
     _, alarms, _ = closed_loop(far, total_ms=1000)
     assert any("fora do curso" in a for a in alarms)
+
+
+def test_warehouse_keeps_occupancy_map_and_serves_requests():
+    p = Project.load(EXAMPLES / "armazem.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True)], 320000)
+    assert alarms == set() and len(env.cells) >= 13 and env.delivered >= 8
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True), (40000, "CEL3", True)], 60000)
+    assert alarms == set() and env.delivered == 1 and 3 not in env.cells
+    blind = Project.load(EXAMPLES / "armazem.ladproj")                      # nao marca a ocupacao
+    for r in blind.rungs:
+        r.outputs = [o for o in r.outputs if getattr(o, "operands", None) != ["Ocupacao", "Peso", "Ocupacao"]]
+    _, alarms, _ = closed_loop(blind, [(0, "LIGA", True)], 40000)
+    assert any("bateu em outra caixa" in a for a in alarms)

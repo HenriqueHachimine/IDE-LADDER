@@ -1682,6 +1682,71 @@ def pick_place() -> Project:
     return p
 
 
+def warehouse() -> Project:
+    p = env_project("armazem", "Armazem automatico", (
+        "Mapa de ocupacao e etapas com transicoes em ordem inversa. Ocupacao (N20) tem um bit por celula: a "
+        "celula n vale 2^(n-1), que a tabela do inicio poe em Peso conforme o Destino. Livre (N12) e a primeira "
+        "celula com o bit em 0 (MEQ Ocupacao Peso_n 0, de 15 para 1: a ultima escrita vence); 0 = cheio. As "
+        "transicoes estao escritas da ultima etapa para a primeira: a etapa que acabou de comecar so e testada na "
+        "varredura seguinte, quando Em_Posicao ja corresponde ao destino novo. Guardar: etapas 1 a 8; retirar o "
+        "pedido de N1: etapas 21 a 28. Pedidos tem prioridade."))
+    p.symbols += [Symbol("Pedido_Operador", "N1", "celula pedida (o programa zera ao aceitar)"),
+                  Symbol("Etapa", "N3", "passo do ciclo"), Symbol("Destino", "N10", "posicao do transelevador"),
+                  Symbol("Livre", "N12", "primeira celula livre (0 = cheio)"),
+                  Symbol("Peso", "N13", "bit da celula de Destino"), Symbol("Ocupacao", "N20", "um bit por celula")]
+
+    def step(n, *cond):
+        return [CompareBox("EQU", ["Etapa", str(n)]), *cond]
+
+    def go(n):
+        return MathBox("MOV", [str(n), "Etapa"])
+
+    rungs = []
+    for n in range(1, 16):
+        rungs.append(Rung([CompareBox("EQU", ["Destino", str(n)])], [MathBox("MOV", [str(1 << (n - 1)), "Peso"])],
+                          "TABELA: peso (bit) da celula de destino" if n == 1 else ""))
+    rungs.append(Rung([], [MathBox("MOV", ["0", "Livre"])], "PRIMEIRA CELULA LIVRE (de 15 para 1)"))
+    for n in range(15, 0, -1):
+        rungs.append(Rung([CompareBox("MEQ", ["Ocupacao", str(1 << (n - 1)), "0"])], [MathBox("MOV", [str(n), "Livre"])]))
+    rungs += [
+        Rung(step(28, Contact("XIC", "Garfo_Centro")), [go(0)], "RETIRAR (transicoes da ultima para a primeira)"),
+        Rung(step(27, Contact("XIC", "Garfo_Embaixo")), [go(28)], "27: desceu, caixa na saida"),
+        Rung(step(26, Contact("XIC", "Garfo_Estendido")), [go(27)]),
+        Rung(step(25, Contact("XIC", "Em_Posicao"), Contact("XIC", "Saida_Livre")), [go(26)]),
+        Rung(step(24, Contact("XIC", "Garfo_Centro")),
+             [MathBox("SUB", ["Ocupacao", "Peso", "Ocupacao"]), MathBox("MOV", ["16", "Destino"]), go(25)],
+             "24: caixa no garfo, celula vazia; vai para a saida"),
+        Rung(step(23, Contact("XIC", "Garfo_Em_Cima")), [go(24)]),
+        Rung(step(22, Contact("XIC", "Garfo_Estendido")), [go(23)]),
+        Rung(step(21, Contact("XIC", "Em_Posicao")), [go(22)]),
+        Rung(step(8, Contact("XIC", "Garfo_Centro")), [go(0)], "GUARDAR"),
+        Rung(step(7, Contact("XIC", "Garfo_Embaixo")), [MathBox("ADD", ["Ocupacao", "Peso", "Ocupacao"]), go(8)],
+             "7: caixa deixada na celula: marca ocupada"),
+        Rung(step(6, Contact("XIC", "Garfo_Estendido")), [go(7)]),
+        Rung(step(5, Contact("XIC", "Em_Posicao")), [go(6)]),
+        Rung(step(4, Contact("XIC", "Garfo_Centro")), [MathBox("MOV", ["Livre", "Destino"]), go(5)],
+             "4: caixa no garfo; vai para a primeira celula livre"),
+        Rung(step(3, Contact("XIC", "Garfo_Em_Cima")), [go(4)]),
+        Rung(step(2, Contact("XIC", "Garfo_Estendido")), [go(3)]),
+        Rung(step(1, Contact("XIC", "Em_Posicao")), [go(2)]),
+        Rung(step(0, Contact("XIC", "Liga"), CompareBox("GRT", ["Pedido_Operador", "0"])),
+             [MathBox("MOV", ["Pedido_Operador", "Destino"]), MathBox("MOV", ["0", "Pedido_Operador"]), go(21)],
+             "0: pedido do operador primeiro"),
+        Rung(step(0, Contact("XIC", "Liga"), Contact("XIC", "Caixa_Na_Entrada"), CompareBox("GRT", ["Livre", "0"])),
+             [MathBox("MOV", ["0", "Destino"]), go(1)], "0: caixa esperando e lugar livre"),
+        Rung([Parallel([[CompareBox("LIM", ["2", "Etapa", "3"])], [CompareBox("LIM", ["6", "Etapa", "7"])],
+                        [CompareBox("LIM", ["22", "Etapa", "23"])], [CompareBox("LIM", ["26", "Etapa", "27"])]])],
+             [Coil("OTE", "Garfo_Avanca")], "SAIDAS: garfo avanca para pegar (2-3) e para deixar (6-7)"),
+        Rung([Parallel([[CompareBox("LIM", ["3", "Etapa", "6"])], [CompareBox("LIM", ["23", "Etapa", "26"])]])],
+             [Coil("OTE", "Garfo_Sobe")], "Garfo alto da pega ate deixar"),
+        Rung([Contact("XIC", "Liga")], [Coil("OTE", "Esteira_Entrada"), Coil("OTE", "Esteira_Saida"),
+                                        Coil("OTE", "Luz_Operando")]),
+        Rung([CompareBox("EQU", ["Livre", "0"])], [Coil("OTE", "Luz_Cheio")], "Armazem cheio"),
+    ]
+    p.rungs = rungs
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1797,7 +1862,8 @@ def main() -> int:
                "ambientes/eclusa.ladproj": canal_lock,
                "ambientes/lava_rapido.ladproj": car_wash,
                "ambientes/separacao_altura.ladproj": height_sorting,
-               "ambientes/pick_place.ladproj": pick_place}
+               "ambientes/pick_place.ladproj": pick_place,
+               "ambientes/armazem.ladproj": warehouse}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

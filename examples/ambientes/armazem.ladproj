@@ -1,0 +1,1601 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Armazem automatico",
+  "description": "Mapa de ocupacao e etapas com transicoes em ordem inversa. Ocupacao (N20) tem um bit por celula: a celula n vale 2^(n-1), que a tabela do inicio poe em Peso conforme o Destino. Livre (N12) e a primeira celula com o bit em 0 (MEQ Ocupacao Peso_n 0, de 15 para 1: a ultima escrita vence); 0 = cheio. As transicoes estao escritas da ultima etapa para a primeira: a etapa que acabou de comecar so e testada na varredura seguinte, quando Em_Posicao ja corresponde ao destino novo. Guardar: etapas 1 a 8; retirar o pedido de N1: etapas 21 a 28. Pedidos tem prioridade.",
+  "version": "0.1.0",
+  "created": "2026-11-14T07:20:04",
+  "modified": "2026-11-14T07:20:04",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Chave LIGA"
+    },
+    {
+      "name": "Em_Posicao",
+      "address": "I0.1",
+      "comment": "Transelevador parado no destino"
+    },
+    {
+      "name": "Garfo_Centro",
+      "address": "I0.2",
+      "comment": "Garfo recolhido"
+    },
+    {
+      "name": "Garfo_Estendido",
+      "address": "I0.3",
+      "comment": "Garfo avançado"
+    },
+    {
+      "name": "Caixa_Na_Entrada",
+      "address": "I0.4",
+      "comment": "Caixa no fim da esteira de entrada"
+    },
+    {
+      "name": "Saida_Livre",
+      "address": "I0.5",
+      "comment": "Início da esteira de saída livre"
+    },
+    {
+      "name": "Garfo_Em_Cima",
+      "address": "I0.6",
+      "comment": "Garfo levantado"
+    },
+    {
+      "name": "Garfo_Embaixo",
+      "address": "I0.7",
+      "comment": "Garfo abaixado"
+    },
+    {
+      "name": "Esteira_Entrada",
+      "address": "Q0.0",
+      "comment": "Esteira de entrada"
+    },
+    {
+      "name": "Garfo_Avanca",
+      "address": "Q0.1",
+      "comment": "Garfo: avança"
+    },
+    {
+      "name": "Garfo_Sobe",
+      "address": "Q0.2",
+      "comment": "Garfo: sobe"
+    },
+    {
+      "name": "Esteira_Saida",
+      "address": "Q0.3",
+      "comment": "Esteira de saída"
+    },
+    {
+      "name": "Luz_Cheio",
+      "address": "Q0.4",
+      "comment": "Lâmpada ARMAZÉM CHEIO"
+    },
+    {
+      "name": "Luz_Operando",
+      "address": "Q0.5",
+      "comment": "Lâmpada operando"
+    },
+    {
+      "name": "Pedido_Operador",
+      "address": "N1",
+      "comment": "celula pedida (o programa zera ao aceitar)"
+    },
+    {
+      "name": "Etapa",
+      "address": "N3",
+      "comment": "passo do ciclo"
+    },
+    {
+      "name": "Destino",
+      "address": "N10",
+      "comment": "posicao do transelevador"
+    },
+    {
+      "name": "Livre",
+      "address": "N12",
+      "comment": "primeira celula livre (0 = cheio)"
+    },
+    {
+      "name": "Peso",
+      "address": "N13",
+      "comment": "bit da celula de Destino"
+    },
+    {
+      "name": "Ocupacao",
+      "address": "N20",
+      "comment": "um bit por celula"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "TABELA: peso (bit) da celula de destino",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "3"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "4",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "4"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "5"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "16",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "6"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "32",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "7"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "64",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "8"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "128",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "9"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "256",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "10"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "512",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "11"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1024",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "12"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2048",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "13"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "4096",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "14"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8192",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Destino",
+            "15"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "16384",
+            "Peso"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "PRIMEIRA CELULA LIVRE (de 15 para 1)",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "16384",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "15",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "8192",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "14",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "4096",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "13",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "2048",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "12",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "1024",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "11",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "512",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "10",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "256",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "9",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "128",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "64",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "7",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "32",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "6",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "16",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "5",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "8",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "4",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "4",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "2",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Ocupacao",
+            "1",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Livre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "RETIRAR (transicoes da ultima para a primeira)",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "28"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Centro"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "27: desceu, caixa na saida",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "27"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "28",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "26"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Estendido"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "27",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "25"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Em_Posicao"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Saida_Livre"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "26",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "24: caixa no garfo, celula vazia; vai para a saida",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "24"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Centro"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Ocupacao",
+            "Peso",
+            "Ocupacao"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "16",
+            "Destino"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "25",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "23"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "24",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "22"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Estendido"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "23",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "21"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Em_Posicao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "22",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "GUARDAR",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "8"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Centro"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "7: caixa deixada na celula: marca ocupada",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "7"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Ocupacao",
+            "Peso",
+            "Ocupacao"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "6"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Estendido"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "7",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "5"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Em_Posicao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "6",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "4: caixa no garfo; vai para a primeira celula livre",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "4"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Centro"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Livre",
+            "Destino"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "5",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "3"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Em_Cima"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "4",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "2"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Garfo_Estendido"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "1"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Em_Posicao"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "0: pedido do operador primeiro",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "0"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Pedido_Operador",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Pedido_Operador",
+            "Destino"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Pedido_Operador"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "21",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "0: caixa esperando e lugar livre",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Etapa",
+            "0"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_Na_Entrada"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Livre",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Destino"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Etapa"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "SAIDAS: garfo avanca para pegar (2-3) e para deixar (6-7)",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "2",
+                  "Etapa",
+                  "3"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "6",
+                  "Etapa",
+                  "7"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "22",
+                  "Etapa",
+                  "23"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "26",
+                  "Etapa",
+                  "27"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Garfo_Avanca"
+        }
+      ]
+    },
+    {
+      "comment": "Garfo alto da pega ate deixar",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "3",
+                  "Etapa",
+                  "6"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LIM",
+                "operands": [
+                  "23",
+                  "Etapa",
+                  "26"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Garfo_Sobe"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Entrada"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Saida"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Operando"
+        }
+      ]
+    },
+    {
+      "comment": "Armazem cheio",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Livre",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Cheio"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T07:20:04",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 53
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0xddca69c6",
+    "size": 1824,
+    "instructions": 411,
+    "date": "2026-11-14T07:20:04"
+  },
+  "environment": "armazem"
+}
