@@ -1207,6 +1207,65 @@ def level_pi() -> Project:
     return p
 
 
+def palletizer() -> Project:
+    p = env_project("paletizador", "Paletizador de camadas", (
+        "Contadores aninhados: C0 conta as caixas da fila (3, borda de descida da fotocelula), C1 as filas da camada "
+        "(2) e C2 as camadas do pallet (4). Fila completa: a esteira para e o empurrador leva a fila para a placa; "
+        "a cada fila empurrada C0 zera e C1 conta. Segunda fila: C2 conta a camada (assim a proxima caixa ja entra "
+        "com a amarracao da camada seguinte: girador ligado quando C2.ACC e impar, MEQ com mascara 1), a placa abre "
+        "800 ms sobre a pilha alinhada e o elevador desce ate alinhar de novo. Quarta camada: desce ao fundo, troca "
+        "o pallet (6 s) e sobe o vazio ate alinhar."))
+    p.symbols += [Symbol("Caixas", "C0", "caixas na fila"), Symbol("Filas", "C1", "filas na placa"),
+                  Symbol("Camadas", "C2", "camadas no pallet"),
+                  Symbol("Empurrando", "M0.0", "empurrador levando a fila"), Symbol("Abrindo", "M0.1", "placa aberta"),
+                  Symbol("Descer_Camada", "M0.2", "descendo uma camada"), Symbol("Foto_Anterior", "M0.3", ""),
+                  Symbol("Pallet_Pronto", "M0.4", "quatro camadas: trocar o pallet"),
+                  Symbol("Subir_Pallet", "M0.5", "levando o pallet vazio ate a placa"),
+                  Symbol("Tempo_Placa", "T0", "800 ms de placa aberta"), Symbol("Troca_Pallet", "T1", "6 s de esteira")]
+    p.rungs = [
+        Rung([Contact("XIC", "S0.0")], [Coil("OTL", "Subir_Pallet")], "Partida: alinha o pallet com a placa"),
+        Rung([Contact("XIO", "Caixa_Entrando"), Contact("XIC", "Foto_Anterior")], [CounterBox("CTU", "Caixas", 3)],
+             "CAIXAS: conta quando a caixa termina de entrar na mesa"),
+        Rung([Contact("XIC", "Caixa_Entrando")], [Coil("OTE", "Foto_Anterior")]),
+        Rung([Contact("XIC", "Liga"), Contact("XIO", "Caixas.DN"), Contact("XIO", "Empurrando"),
+              Contact("XIC", "Empurrador_Recuado")], [Coil("OTE", "Esteira_Entrada")], "Esteira ate completar a fila"),
+        Rung([CompareBox("MEQ", ["Camadas.ACC", "1", "1"])], [Coil("OTE", "Girador")],
+             "Amarracao: camadas pares (C2.ACC impar) com as caixas giradas"),
+        Rung([Contact("XIC", "Caixas.DN"), Contact("XIO", "Filas.DN"), Contact("XIO", "Camadas.DN"),
+              Contact("XIC", "Placa_Fechada"), Contact("XIC", "Empurrador_Recuado"), Contact("XIO", "Esteira_Entrada")],
+             [Coil("OTL", "Empurrando")], "FILAS: fila completa, lugar na placa e pallet ainda nao completo"),
+        Rung([Contact("XIC", "Empurrando")], [Coil("OTE", "Empurrador")]),
+        Rung([Contact("XIC", "Empurrando"), Contact("XIC", "Empurrador_Avancado")],
+             [Coil("OTU", "Empurrando"), ResetBox("Caixas"), CounterBox("CTU", "Filas", 2)], "Empurrou: conta a fila"),
+        Rung([Contact("XIC", "Filas.DN")], [CounterBox("CTU", "Camadas", 4)], "CAMADAS: segunda fila forma a camada"),
+        Rung([Contact("XIC", "Filas.DN"), Contact("XIC", "Pilha_Alinhada"), Contact("XIC", "Empurrador_Recuado"),
+              Contact("XIO", "Descer_Camada")], [Coil("OTL", "Abrindo")], "Pilha alinhada: abre a placa"),
+        Rung([Contact("XIC", "Abrindo")], [Coil("OTE", "Abre_Placa"), TimerBox("TON", "Tempo_Placa", 800)]),
+        Rung([Contact("XIC", "Tempo_Placa.DN"), Contact("XIO", "Camadas.DN")],
+             [Coil("OTL", "Descer_Camada")], "Camada solta: desce uma camada"),
+        Rung([Contact("XIC", "Tempo_Placa.DN"), Contact("XIC", "Camadas.DN")], [Coil("OTL", "Pallet_Pronto")],
+             "Quarta camada: pallet pronto"),
+        Rung([Contact("XIC", "Tempo_Placa.DN")], [Coil("OTU", "Abrindo"), ResetBox("Filas")]),
+        Rung([Contact("XIC", "Descer_Camada"), Contact("XIC", "Placa_Fechada"), Contact("XIC", "Pilha_Alinhada")],
+             [Coil("OTU", "Descer_Camada")], "Desceu ate alinhar de novo"),
+        Rung([Contact("XIC", "Pallet_Pronto"), Contact("XIC", "Elevador_Embaixo")], [TimerBox("TON", "Troca_Pallet", 6000)],
+             "PALLET: no fundo, troca pelo vazio"),
+        Rung([Contact("XIC", "Troca_Pallet.DN"), Contact("XIC", "Pallet_Presente")],
+             [Coil("OTU", "Pallet_Pronto"), ResetBox("Camadas"), Coil("OTL", "Subir_Pallet")]),
+        Rung([Contact("XIC", "Subir_Pallet"), Contact("XIC", "Pilha_Alinhada")], [Coil("OTU", "Subir_Pallet")],
+             "Pallet vazio alinhado"),
+        Rung([Contact("XIC", "Pallet_Pronto"), Contact("XIC", "Elevador_Embaixo"), Contact("XIO", "Troca_Pallet.DN")],
+             [Coil("OTE", "Esteira_Pallets")]),
+        Rung([Parallel([[Contact("XIC", "Descer_Camada"), Contact("XIC", "Placa_Fechada"), Contact("XIO", "Pilha_Alinhada")],
+                        [Contact("XIC", "Pallet_Pronto"), Contact("XIC", "Placa_Fechada"), Contact("XIO", "Elevador_Embaixo")]])],
+             [Coil("OTE", "Elevador_Desce")], "ELEVADOR"),
+        Rung([Contact("XIC", "Subir_Pallet"), Contact("XIC", "Pallet_Presente"), Contact("XIO", "Pilha_Alinhada"),
+              Contact("XIO", "Pallet_Pronto")], [Coil("OTE", "Elevador_Sobe")]),
+        Rung([Contact("XIC", "Pallet_Pronto")], [Coil("OTE", "Lampada_Completo")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1314,7 +1373,8 @@ def main() -> int:
                "ambientes/detector_gas.ladproj": gas_detection, "ambientes/balanca.ladproj": scale,
                "ambientes/estufa.ladproj": greenhouse, "ambientes/ponte_rolante.ladproj": overhead_crane,
                "ambientes/venda.ladproj": vending,
-               "ambientes/nivel_pi.ladproj": level_pi}
+               "ambientes/nivel_pi.ladproj": level_pi,
+               "ambientes/paletizador.ladproj": palletizer}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

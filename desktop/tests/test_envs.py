@@ -704,3 +704,16 @@ def test_level_pi_tracks_setpoint_through_demand_changes():
         Rung([], [MathBox("SUB", ["N2", "N0", "N1"])]), Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.0")])])
     _, alarms, _ = closed_loop(raw, total_ms=5000)
     assert any("fora de 0 a 100" in a for a in alarms)
+
+
+def test_palletizer_nested_counters_build_interlocked_pallets():
+    p = Project.load(EXAMPLES / "paletizador.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True)], 240000)
+    assert alarms == set() and env.shipped >= 4
+    no_turn = Project.load(EXAMPLES / "paletizador.ladproj")                # sem o girador
+    no_turn.rungs = [r for r in no_turn.rungs if not any(getattr(c, "operand", "") == "Girador" for c in r.outputs)]
+    _, alarms, _ = closed_loop(no_turn, [(0, "LIGA", True)], 60000)
+    assert any("Amarração" in a for a in alarms)
+    no_stop = Project(environment="paletizador", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.6")])])
+    _, alarms, _ = closed_loop(no_stop, [(0, "LIGA", True)], 15000)
+    assert any("Mais de 3 caixas" in a for a in alarms)

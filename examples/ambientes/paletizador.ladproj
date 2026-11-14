@@ -1,0 +1,751 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Paletizador de camadas",
+  "description": "Contadores aninhados: C0 conta as caixas da fila (3, borda de descida da fotocelula), C1 as filas da camada (2) e C2 as camadas do pallet (4). Fila completa: a esteira para e o empurrador leva a fila para a placa; a cada fila empurrada C0 zera e C1 conta. Segunda fila: C2 conta a camada (assim a proxima caixa ja entra com a amarracao da camada seguinte: girador ligado quando C2.ACC e impar, MEQ com mascara 1), a placa abre 800 ms sobre a pilha alinhada e o elevador desce ate alinhar de novo. Quarta camada: desce ao fundo, troca o pallet (6 s) e sobe o vazio ate alinhar.",
+  "version": "0.1.0",
+  "created": "2026-11-14T06:33:11",
+  "modified": "2026-11-14T06:33:11",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Liga",
+      "address": "I0.0",
+      "comment": "Chave LIGA"
+    },
+    {
+      "name": "Caixa_Entrando",
+      "address": "I0.1",
+      "comment": "Fotocélula na entrada da mesa"
+    },
+    {
+      "name": "Empurrador_Recuado",
+      "address": "I0.2",
+      "comment": "Empurrador recuado"
+    },
+    {
+      "name": "Empurrador_Avancado",
+      "address": "I0.3",
+      "comment": "Empurrador avançado"
+    },
+    {
+      "name": "Placa_Fechada",
+      "address": "I0.4",
+      "comment": "Placa de camada fechada"
+    },
+    {
+      "name": "Pilha_Alinhada",
+      "address": "I0.5",
+      "comment": "Topo da pilha logo abaixo da placa"
+    },
+    {
+      "name": "Elevador_Embaixo",
+      "address": "I0.6",
+      "comment": "Elevador no fundo"
+    },
+    {
+      "name": "Pallet_Presente",
+      "address": "I0.7",
+      "comment": "Pallet vazio ou em formação no elevador"
+    },
+    {
+      "name": "Esteira_Entrada",
+      "address": "Q0.0",
+      "comment": "Esteira de entrada das caixas"
+    },
+    {
+      "name": "Empurrador",
+      "address": "Q0.1",
+      "comment": "Empurrador de fila (avança; mola recua)"
+    },
+    {
+      "name": "Abre_Placa",
+      "address": "Q0.2",
+      "comment": "Abre a placa de camada"
+    },
+    {
+      "name": "Elevador_Desce",
+      "address": "Q0.3",
+      "comment": "Elevador: desce"
+    },
+    {
+      "name": "Elevador_Sobe",
+      "address": "Q0.4",
+      "comment": "Elevador: sobe"
+    },
+    {
+      "name": "Esteira_Pallets",
+      "address": "Q0.5",
+      "comment": "Esteira de pallets (troca o pallet)"
+    },
+    {
+      "name": "Girador",
+      "address": "Q0.6",
+      "comment": "Girador de caixas (camadas pares)"
+    },
+    {
+      "name": "Lampada_Completo",
+      "address": "Q0.7",
+      "comment": "Lâmpada PALLET COMPLETO"
+    },
+    {
+      "name": "Caixas",
+      "address": "C0",
+      "comment": "caixas na fila"
+    },
+    {
+      "name": "Filas",
+      "address": "C1",
+      "comment": "filas na placa"
+    },
+    {
+      "name": "Camadas",
+      "address": "C2",
+      "comment": "camadas no pallet"
+    },
+    {
+      "name": "Empurrando",
+      "address": "M0.0",
+      "comment": "empurrador levando a fila"
+    },
+    {
+      "name": "Abrindo",
+      "address": "M0.1",
+      "comment": "placa aberta"
+    },
+    {
+      "name": "Descer_Camada",
+      "address": "M0.2",
+      "comment": "descendo uma camada"
+    },
+    {
+      "name": "Foto_Anterior",
+      "address": "M0.3",
+      "comment": ""
+    },
+    {
+      "name": "Pallet_Pronto",
+      "address": "M0.4",
+      "comment": "quatro camadas: trocar o pallet"
+    },
+    {
+      "name": "Subir_Pallet",
+      "address": "M0.5",
+      "comment": "levando o pallet vazio ate a placa"
+    },
+    {
+      "name": "Tempo_Placa",
+      "address": "T0",
+      "comment": "800 ms de placa aberta"
+    },
+    {
+      "name": "Troca_Pallet",
+      "address": "T1",
+      "comment": "6 s de esteira"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Partida: alinha o pallet com a placa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.0"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Subir_Pallet"
+        }
+      ]
+    },
+    {
+      "comment": "CAIXAS: conta quando a caixa termina de entrar na mesa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixa_Entrando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Foto_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Caixas",
+          "preset": 3
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixa_Entrando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Foto_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Esteira ate completar a fila",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Liga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Caixas.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Empurrando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Empurrador_Recuado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Entrada"
+        }
+      ]
+    },
+    {
+      "comment": "Amarracao: camadas pares (C2.ACC impar) com as caixas giradas",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Camadas.ACC",
+            "1",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Girador"
+        }
+      ]
+    },
+    {
+      "comment": "FILAS: fila completa, lugar na placa e pallet ainda nao completo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Caixas.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Filas.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Camadas.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Placa_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Empurrador_Recuado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Esteira_Entrada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Empurrando"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Empurrando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Empurrador"
+        }
+      ]
+    },
+    {
+      "comment": "Empurrou: conta a fila",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Empurrando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Empurrador_Avancado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Empurrando"
+        },
+        {
+          "type": "reset",
+          "operand": "Caixas"
+        },
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Filas",
+          "preset": 2
+        }
+      ]
+    },
+    {
+      "comment": "CAMADAS: segunda fila forma a camada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Filas.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "counter",
+          "kind": "CTU",
+          "operand": "Camadas",
+          "preset": 4
+        }
+      ]
+    },
+    {
+      "comment": "Pilha alinhada: abre a placa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Filas.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pilha_Alinhada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Empurrador_Recuado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Descer_Camada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Abrindo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Abrindo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Abre_Placa"
+        },
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Placa",
+          "preset": 800
+        }
+      ]
+    },
+    {
+      "comment": "Camada solta: desce uma camada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Placa.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Camadas.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Descer_Camada"
+        }
+      ]
+    },
+    {
+      "comment": "Quarta camada: pallet pronto",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Placa.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Camadas.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Pallet_Pronto"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Placa.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Abrindo"
+        },
+        {
+          "type": "reset",
+          "operand": "Filas"
+        }
+      ]
+    },
+    {
+      "comment": "Desceu ate alinhar de novo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Descer_Camada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Placa_Fechada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pilha_Alinhada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Descer_Camada"
+        }
+      ]
+    },
+    {
+      "comment": "PALLET: no fundo, troca pelo vazio",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pallet_Pronto"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Elevador_Embaixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Troca_Pallet",
+          "preset": 6000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Troca_Pallet.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pallet_Presente"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Pallet_Pronto"
+        },
+        {
+          "type": "reset",
+          "operand": "Camadas"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Subir_Pallet"
+        }
+      ]
+    },
+    {
+      "comment": "Pallet vazio alinhado",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Subir_Pallet"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pilha_Alinhada"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Subir_Pallet"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pallet_Pronto"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Elevador_Embaixo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Troca_Pallet.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Esteira_Pallets"
+        }
+      ]
+    },
+    {
+      "comment": "ELEVADOR",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Descer_Camada"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Placa_Fechada"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Pilha_Alinhada"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Pallet_Pronto"
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Placa_Fechada"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Elevador_Embaixo"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Elevador_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Subir_Pallet"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pallet_Presente"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Pilha_Alinhada"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Pallet_Pronto"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Elevador_Sobe"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pallet_Pronto"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Completo"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T06:33:11",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 22
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0xa12769af",
+    "size": 656,
+    "instructions": 143,
+    "date": "2026-11-14T06:33:11"
+  },
+  "environment": "paletizador"
+}

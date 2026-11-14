@@ -1,0 +1,155 @@
+; Paletizador de camadas - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0xa12769af
+.timer T0 TON 800
+.timer T1 TON 6000
+.counter C0 UP 3
+.counter C1 UP 2
+.counter C2 UP 4
+SOR ; rede 0
+XIC S0.0
+OTL M0.5
+EOR
+SOR ; rede 1
+XIO I0.1
+XIC M0.3
+CTU C0
+EOR
+SOR ; rede 2
+XIC I0.1
+OTE M0.3
+EOR
+SOR ; rede 3
+XIC I0.0
+XIO C0.DN
+XIO M0.0
+XIC I0.2
+OTE Q0.0
+EOR
+SOR ; rede 4
+MEQ C2.ACC
+ARG 1
+ARG 1
+OTE Q0.6
+EOR
+SOR ; rede 5
+XIC C0.DN
+XIO C1.DN
+XIO C2.DN
+XIC I0.4
+XIC I0.2
+XIO Q0.0
+OTL M0.0
+EOR
+SOR ; rede 6
+XIC M0.0
+OTE Q0.1
+EOR
+SOR ; rede 7
+XIC M0.0
+XIC I0.3
+BST
+OTU M0.0
+NXB
+RES C0
+NXB
+CTU C1
+BND
+EOR
+SOR ; rede 8
+XIC C1.DN
+CTU C2
+EOR
+SOR ; rede 9
+XIC C1.DN
+XIC I0.5
+XIC I0.2
+XIO M0.2
+OTL M0.1
+EOR
+SOR ; rede 10
+XIC M0.1
+BST
+OTE Q0.2
+NXB
+TON T0
+BND
+EOR
+SOR ; rede 11
+XIC T0.DN
+XIO C2.DN
+OTL M0.2
+EOR
+SOR ; rede 12
+XIC T0.DN
+XIC C2.DN
+OTL M0.4
+EOR
+SOR ; rede 13
+XIC T0.DN
+BST
+OTU M0.1
+NXB
+RES C1
+BND
+EOR
+SOR ; rede 14
+XIC M0.2
+XIC I0.4
+XIC I0.5
+OTU M0.2
+EOR
+SOR ; rede 15
+XIC M0.4
+XIC I0.6
+TON T1
+EOR
+SOR ; rede 16
+XIC T1.DN
+XIC I0.7
+BST
+OTU M0.4
+NXB
+RES C2
+NXB
+OTL M0.5
+BND
+EOR
+SOR ; rede 17
+XIC M0.5
+XIC I0.5
+OTU M0.5
+EOR
+SOR ; rede 18
+XIC M0.4
+XIC I0.6
+XIO T1.DN
+OTE Q0.5
+EOR
+SOR ; rede 19
+BST
+XIC M0.2
+XIC I0.4
+XIO I0.5
+NXB
+XIC M0.4
+XIC I0.4
+XIO I0.6
+BND
+OTE Q0.3
+EOR
+SOR ; rede 20
+XIC M0.5
+XIC I0.7
+XIO I0.5
+XIO M0.4
+OTE Q0.4
+EOR
+SOR ; rede 21
+XIC M0.4
+OTE Q0.7
+EOR
