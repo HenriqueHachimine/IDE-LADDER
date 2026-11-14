@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Estufa agricola",
-  "description": "Controle por faixas com histerese: cada atuador liga num limite e desliga em outro (OTL com LES/GRT, OTU do outro lado), para nao ficar ligando e desligando. Aquecedor 19-21 degC, exaustor 27-25 degC, janela 26-23,5 degC (fechada com chuva ou vento), nebulizador abaixo de 60% de umidade com calor. A iluminacao suplementar usa a hora do dia (LIM 18..21 em N2). Umidade acima de 85% com calor liga o exaustor.",
+  "name": "Estufa agricola com irrigacao",
+  "description": "Controle por faixas com histerese: cada atuador liga num limite e desliga em outro (OTL com LES/GRT, OTU do outro lado), para nao ficar ligando e desligando. Aquecedor 19-21 degC, exaustor 27-25 degC, janela 26-23,5 degC (fechada com chuva ou vento), nebulizador abaixo de 60% de umidade com calor. A iluminacao suplementar usa a hora do dia (LIM 18..21 em N2). Umidade acima de 85% com calor liga o exaustor. Irrigacao: faixa do solo 40-60% (N3), bloqueada das 11 h as 14:59 (LIM 11..14) salvo com o solo abaixo de 25%, e nunca com o reservatorio baixo.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:50:34",
-  "modified": "2026-11-13T20:50:34",
+  "created": "2026-11-13T23:35:57",
+  "modified": "2026-11-13T23:35:57",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -50,6 +50,11 @@
       "comment": "Anemômetro: vento forte"
     },
     {
+      "name": "Reservatorio_Baixo",
+      "address": "I0.5",
+      "comment": "Reservatório abaixo de 10%"
+    },
+    {
       "name": "Aquecedor",
       "address": "Q0.0",
       "comment": "Aquecedor a gás"
@@ -83,6 +88,11 @@
       "name": "Alarme",
       "address": "Q0.6",
       "comment": "Lâmpada de alarme"
+    },
+    {
+      "name": "Bomba_Irrigacao",
+      "address": "Q0.7",
+      "comment": "Bomba da irrigação por gotejamento"
     },
     {
       "name": "Temperatura",
@@ -123,6 +133,21 @@
       "name": "Desumidificar",
       "address": "M0.4",
       "comment": "umidade alta com calor: renovar o ar"
+    },
+    {
+      "name": "Umidade_Solo",
+      "address": "N3",
+      "comment": "%, escrito pela estufa"
+    },
+    {
+      "name": "Irrigar",
+      "address": "M0.5",
+      "comment": "faixa da irrigacao"
+    },
+    {
+      "name": "Sol_Forte",
+      "address": "M0.6",
+      "comment": "11 h as 14:59"
     }
   ],
   "variables": [],
@@ -593,7 +618,117 @@
       ]
     },
     {
-      "comment": "Alarme fora dos limites",
+      "comment": "Irrigacao: 40% liga, 60% desliga",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Umidade_Solo",
+            "40"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Irrigar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Umidade_Solo",
+            "60"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Irrigar"
+        }
+      ]
+    },
+    {
+      "comment": "Sol forte: 11 h as 14:59",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "11",
+            "Hora",
+            "14"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Sol_Forte"
+        }
+      ]
+    },
+    {
+      "comment": "Bomba: fora do sol forte (ou solo muito seco) e com agua",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Irrigar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Reservatorio_Baixo"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Sol_Forte"
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Umidade_Solo",
+                  "25"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba_Irrigacao"
+        }
+      ]
+    },
+    {
+      "comment": "Alarme fora dos limites ou reservatorio baixo",
       "condition": [
         {
           "type": "parallel",
@@ -627,6 +762,23 @@
                   "90"
                 ]
               }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Umidade_Solo",
+                  "20"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Reservatorio_Baixo"
+              }
             ]
           ]
         }
@@ -642,18 +794,18 @@
   ],
   "history": [
     {
-      "date": "2026-11-13T20:50:34",
+      "date": "2026-11-13T23:35:57",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 17
+      "rungs": 21
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0xd50ed297",
-    "size": 620,
-    "instructions": 129,
-    "date": "2026-11-13T20:50:34"
+    "build_id": "0xed30797c",
+    "size": 772,
+    "instructions": 162,
+    "date": "2026-11-13T23:35:57"
   },
   "environment": "estufa"
 }

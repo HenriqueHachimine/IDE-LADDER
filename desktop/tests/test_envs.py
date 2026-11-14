@@ -594,9 +594,16 @@ def test_greenhouse_bands_keep_climate_for_days_with_rain_and_wind():
     env, alarms, sim = closed_loop(Project.load(EXAMPLES / "estufa.ladproj"), [(0, "AUTO", True)], 2 * 240000 + 5000)
     assert alarms == set() and env.in_band_ms > 0.65 * env.time_ms                # 2 dias, chuva e vento no 1o
     assert sim.vm.n[2] == env.hour and abs(sim.vm.n[0] - env.T * 10) <= 5
+    assert 35 <= env.soil <= 65 and env.pump_ms > 0 and env.growth > 0.4           # irrigou e as plantas cresceram
     wasteful = Project(environment="estufa", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.2")])])
     _, alarms, _ = closed_loop(wasteful, total_ms=120000)
     assert any("desperdício" in a for a in alarms) and any("chuva" in a for a in alarms)
+
+
+def test_greenhouse_irrigation_respects_noon_and_dry_tank():
+    always = Project(environment="estufa", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.7")])])
+    _, alarms, _ = closed_loop(always, total_ms=100000)
+    assert any("sol forte" in a for a in alarms) and any("a seco" in a for a in alarms)
 
 
 def test_overhead_crane_homes_counts_encoder_and_stops_at_stations():

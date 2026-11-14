@@ -1,10 +1,10 @@
-; Estufa agricola - gerado por LadderIDE compilador 1.0.0
+; Estufa agricola com irrigacao - gerado por LadderIDE compilador 1.0.0
 .inputs 8
 .outputs 8
 .markers 64
 .words 32
 .safe_outputs 0x0000
-.build_id 0xd50ed297
+.build_id 0xed30797c
 SOR ; rede 0
 LES N0
 ARG 190
@@ -122,6 +122,34 @@ ARG 21
 OTE Q0.5
 EOR
 SOR ; rede 16
+LES N3
+ARG 40
+OTL M0.5
+EOR
+SOR ; rede 17
+GRT N3
+ARG 60
+OTU M0.5
+EOR
+SOR ; rede 18
+LIM 11
+ARG N2
+ARG 14
+OTE M0.6
+EOR
+SOR ; rede 19
+XIC I0.0
+XIC M0.5
+XIO I0.5
+BST
+XIO M0.6
+NXB
+LES N3
+ARG 25
+BND
+OTE Q0.7
+EOR
+SOR ; rede 20
 BST
 GRT N0
 ARG 350
@@ -131,6 +159,11 @@ ARG 80
 NXB
 GRT N1
 ARG 90
+NXB
+LES N3
+ARG 20
+NXB
+XIC I0.5
 BND
 OTE Q0.6
 EOR

@@ -919,16 +919,20 @@ def scale() -> Project:
 
 
 def greenhouse() -> Project:
-    p = env_project("estufa", "Estufa agricola", (
+    p = env_project("estufa", "Estufa agricola com irrigacao", (
         "Controle por faixas com histerese: cada atuador liga num limite e desliga em outro (OTL com LES/GRT, OTU "
         "do outro lado), para nao ficar ligando e desligando. Aquecedor 19-21 degC, exaustor 27-25 degC, janela "
         "26-23,5 degC (fechada com chuva ou vento), nebulizador abaixo de 60% de umidade com calor. A iluminacao "
-        "suplementar usa a hora do dia (LIM 18..21 em N2). Umidade acima de 85% com calor liga o exaustor."))
+        "suplementar usa a hora do dia (LIM 18..21 em N2). Umidade acima de 85% com calor liga o exaustor. "
+        "Irrigacao: faixa do solo 40-60% (N3), bloqueada das 11 h as 14:59 (LIM 11..14) salvo com o solo abaixo de "
+        "25%, e nunca com o reservatorio baixo."))
     p.symbols += [Symbol("Temperatura", "N0", "decimos de degC, escrito pela estufa"),
                   Symbol("Umidade", "N1", "%, escrito pela estufa"), Symbol("Hora", "N2", "0 a 23, escrito pela estufa"),
                   Symbol("Aquecer", "M0.0", "faixa do aquecedor"), Symbol("Ventilar", "M0.1", "faixa do exaustor"),
                   Symbol("Abrir", "M0.2", "faixa da janela"), Symbol("Nebulizar", "M0.3", "faixa do nebulizador"),
-                  Symbol("Desumidificar", "M0.4", "umidade alta com calor: renovar o ar")]
+                  Symbol("Desumidificar", "M0.4", "umidade alta com calor: renovar o ar"),
+                  Symbol("Umidade_Solo", "N3", "%, escrito pela estufa"),
+                  Symbol("Irrigar", "M0.5", "faixa da irrigacao"), Symbol("Sol_Forte", "M0.6", "11 h as 14:59")]
     weather = Parallel([[Contact("XIC", "Sensor_Chuva")], [Contact("XIC", "Sensor_Vento")]])
     p.rungs = [
         Rung([CompareBox("LES", ["Temperatura", "190"])], [Coil("OTL", "Aquecer")], "Aquecedor: liga abaixo de 19 degC"),
@@ -958,8 +962,16 @@ def greenhouse() -> Project:
         Rung([Contact("XIC", "Automatico"), Contact("XIC", "Nebulizar")], [Coil("OTE", "Nebulizador")]),
         Rung([Contact("XIC", "Automatico"), CompareBox("LIM", ["18", "Hora", "21"])], [Coil("OTE", "Iluminacao")],
              "Fotoperiodo: 18 h as 21 h"),
+        Rung([CompareBox("LES", ["Umidade_Solo", "40"])], [Coil("OTL", "Irrigar")], "Irrigacao: 40% liga, 60% desliga"),
+        Rung([CompareBox("GRT", ["Umidade_Solo", "60"])], [Coil("OTU", "Irrigar")]),
+        Rung([CompareBox("LIM", ["11", "Hora", "14"])], [Coil("OTE", "Sol_Forte")], "Sol forte: 11 h as 14:59"),
+        Rung([Contact("XIC", "Automatico"), Contact("XIC", "Irrigar"), Contact("XIO", "Reservatorio_Baixo"),
+              Parallel([[Contact("XIO", "Sol_Forte")], [CompareBox("LES", ["Umidade_Solo", "25"])]])],
+             [Coil("OTE", "Bomba_Irrigacao")], "Bomba: fora do sol forte (ou solo muito seco) e com agua"),
         Rung([Parallel([[CompareBox("GRT", ["Temperatura", "350"])], [CompareBox("LES", ["Temperatura", "80"])],
-                        [CompareBox("GRT", ["Umidade", "90"])]])], [Coil("OTE", "Alarme")], "Alarme fora dos limites"),
+                        [CompareBox("GRT", ["Umidade", "90"])], [CompareBox("LES", ["Umidade_Solo", "20"])],
+                        [Contact("XIC", "Reservatorio_Baixo")]])], [Coil("OTE", "Alarme")],
+             "Alarme fora dos limites ou reservatorio baixo"),
     ]
     return p
 
