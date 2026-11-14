@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Ponte rolante",
-  "description": "Posicionamento por encoder: conta as duas bordas do encoder (cada uma = 10 mm) somando ou subtraindo conforme o sentido do ultimo movimento. Ao ligar, anda para a esquerda ate a chave de origem e zera a posicao (referenciamento). Cada botao carrega o destino (MOV); Diferenca = Destino - Posicao decide o sentido, e a menos de 200 mm passa para a velocidade lenta. Antes de partir ou inverter espera 0,4 s parada, senao a contagem erra o sentido.",
+  "name": "Ponte rolante com guincho",
+  "description": "Posicionamento por encoder mais sequencia de transporte. Conta as duas bordas do encoder (10 mm cada) pelo sentido do ultimo movimento; ao ligar, referencia na chave de origem. Tarefa: E1 vai a estacao de origem (N10 convertido em posicao), E2 espera 3 s o balanco e desce ate apoiar, E3 liga o eletroima ate a carga prender, E4 sobe ao topo, E5 vai ao destino (N11), E6 espera e desce, E7 solta, E8 sobe vazio. A translacao so anda nas etapas E1/E5 (gancho no topo). Sem chapa na origem a tarefa aborta e a lampada pisca.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:55:44",
-  "modified": "2026-11-13T20:55:44",
+  "created": "2026-11-14T06:25:17",
+  "modified": "2026-11-14T06:25:17",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -35,29 +35,29 @@
       "comment": "Chave de origem (posição 0 mm)"
     },
     {
-      "name": "Chama_1",
+      "name": "Gancho_Topo",
       "address": "I0.2",
-      "comment": "Botão chamar estação 1"
+      "comment": "Gancho em cima (fim de curso do guincho)"
     },
     {
-      "name": "Chama_2",
+      "name": "Gancho_Apoiado",
       "address": "I0.3",
-      "comment": "Botão chamar estação 2"
+      "comment": "Gancho apoiado (cabo frouxo: tocou a chapa ou o piso)"
     },
     {
-      "name": "Chama_3",
+      "name": "Carga_Presa",
       "address": "I0.4",
-      "comment": "Botão chamar estação 3"
+      "comment": "Eletroímã segurando uma chapa"
     },
     {
-      "name": "Chama_4",
+      "name": "Iniciar",
       "address": "I0.5",
-      "comment": "Botão chamar estação 4"
+      "comment": "Botão INICIAR transporte"
     },
     {
-      "name": "Chama_5",
+      "name": "Carga_Sob_Gancho",
       "address": "I0.6",
-      "comment": "Botão chamar estação 5"
+      "comment": "Sensor: chapa embaixo do gancho"
     },
     {
       "name": "Emergencia",
@@ -67,12 +67,12 @@
     {
       "name": "Motor_Direita",
       "address": "Q0.0",
-      "comment": "Motor de translação: direita"
+      "comment": "Translação: direita"
     },
     {
       "name": "Motor_Esquerda",
       "address": "Q0.1",
-      "comment": "Motor de translação: esquerda"
+      "comment": "Translação: esquerda"
     },
     {
       "name": "Velocidade_Lenta",
@@ -85,9 +85,24 @@
       "comment": "Solta o freio (sem energia o freio atua)"
     },
     {
-      "name": "Lampada_Em_Posicao",
+      "name": "Lampada_Pronta",
       "address": "Q0.4",
-      "comment": "Lâmpada EM POSIÇÃO"
+      "comment": "Lâmpada PRONTA (pisca com erro)"
+    },
+    {
+      "name": "Guincho_Sobe",
+      "address": "Q0.5",
+      "comment": "Guincho: sobe"
+    },
+    {
+      "name": "Guincho_Desce",
+      "address": "Q0.6",
+      "comment": "Guincho: desce"
+    },
+    {
+      "name": "Eletroima",
+      "address": "Q0.7",
+      "comment": "Eletroímã do gancho"
     },
     {
       "name": "Posicao",
@@ -97,12 +112,22 @@
     {
       "name": "Destino",
       "address": "N1",
-      "comment": "estacao chamada"
+      "comment": "posicao da estacao alvo"
     },
     {
       "name": "Diferenca",
       "address": "N2",
       "comment": "Destino - Posicao"
+    },
+    {
+      "name": "Estacao_Origem",
+      "address": "N10",
+      "comment": "1 a 5, escolhida no painel"
+    },
+    {
+      "name": "Estacao_Destino",
+      "address": "N11",
+      "comment": "1 a 5, escolhida no painel"
     },
     {
       "name": "Referenciado",
@@ -125,15 +150,90 @@
       "comment": "ultimo movimento para a direita"
     },
     {
+      "name": "Erro",
+      "address": "M0.4",
+      "comment": "tarefa abortada"
+    },
+    {
+      "name": "Andar",
+      "address": "M0.5",
+      "comment": "translacao liberada"
+    },
+    {
+      "name": "No_Alvo",
+      "address": "M0.6",
+      "comment": "parada na estacao alvo"
+    },
+    {
       "name": "Parada",
       "address": "T0",
       "comment": "0,4 s com o motor desligado"
+    },
+    {
+      "name": "Assenta",
+      "address": "T1",
+      "comment": "3 s de espera do balanco"
+    },
+    {
+      "name": "Prende",
+      "address": "T2",
+      "comment": "0,5 s de eletroima"
+    },
+    {
+      "name": "Solta",
+      "address": "T3",
+      "comment": "0,5 s sem eletroima"
+    },
+    {
+      "name": "E0_Livre",
+      "address": "M1.0",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E1_Ir_Origem",
+      "address": "M1.1",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E2_Descer_Pegar",
+      "address": "M1.2",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E3_Pegar",
+      "address": "M1.3",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E4_Subir_Carga",
+      "address": "M1.4",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E5_Ir_Destino",
+      "address": "M1.5",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E6_Descer_Pousar",
+      "address": "M1.6",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E7_Soltar",
+      "address": "M1.7",
+      "comment": "etapa da tarefa"
+    },
+    {
+      "name": "E8_Subir_Vazio",
+      "address": "M2.0",
+      "comment": "etapa da tarefa"
     }
   ],
   "variables": [],
   "rungs": [
     {
-      "comment": "Borda de subida ou de descida do encoder: 10 mm",
+      "comment": "ENCODER: borda de subida ou de descida = 10 mm",
       "condition": [
         {
           "type": "parallel",
@@ -311,12 +411,27 @@
           "type": "coil",
           "kind": "OTL",
           "operand": "Referenciado"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E0_Livre"
         }
       ]
     },
     {
-      "comment": "Estacoes: 400, 1200, 2000, 2800 e 3600 mm (/10)",
+      "comment": "TAREFA: INICIAR com o gancho no topo",
       "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E0_Livre"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Iniciar"
+        },
         {
           "type": "contact",
           "kind": "XIC",
@@ -325,7 +440,69 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Chama_1"
+          "operand": "Gancho_Topo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Erro"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E1_Ir_Origem"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E0_Livre"
+        }
+      ]
+    },
+    {
+      "comment": "Carga no topo: vai ao destino (antes da tabela, para o alvo ja mudar nesta varredura)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E4_Subir_Carga"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Gancho_Topo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E5_Ir_Destino"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E4_Subir_Carga"
+        }
+      ]
+    },
+    {
+      "comment": "Estacao de origem em posicao (passos de 10 mm)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E1_Ir_Origem"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Origem",
+            "1"
+          ]
         }
       ],
       "outputs": [
@@ -345,12 +522,15 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Referenciado"
+          "operand": "E1_Ir_Origem"
         },
         {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Chama_2"
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Origem",
+            "2"
+          ]
         }
       ],
       "outputs": [
@@ -370,12 +550,15 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Referenciado"
+          "operand": "E1_Ir_Origem"
         },
         {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Chama_3"
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Origem",
+            "3"
+          ]
         }
       ],
       "outputs": [
@@ -395,12 +578,15 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Referenciado"
+          "operand": "E1_Ir_Origem"
         },
         {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Chama_4"
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Origem",
+            "4"
+          ]
         }
       ],
       "outputs": [
@@ -420,12 +606,155 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Referenciado"
+          "operand": "E1_Ir_Origem"
         },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Origem",
+            "5"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "360",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Estacao de destino em posicao",
+      "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Chama_5"
+          "operand": "E5_Ir_Destino"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Destino",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "40",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E5_Ir_Destino"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Destino",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "120",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E5_Ir_Destino"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Destino",
+            "3"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "200",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E5_Ir_Destino"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Destino",
+            "4"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "280",
+            "Destino"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E5_Ir_Destino"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Estacao_Destino",
+            "5"
+          ]
         }
       ],
       "outputs": [
@@ -451,6 +780,388 @@
             "Posicao",
             "Diferenca"
           ]
+        }
+      ]
+    },
+    {
+      "comment": "Parada na estacao",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Diferenca",
+            "0"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Parada.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "No_Alvo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E1_Ir_Origem"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "No_Alvo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E2_Descer_Pegar"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E1_Ir_Origem"
+        }
+      ]
+    },
+    {
+      "comment": "Espera o balanco parar antes de descer",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E2_Descer_Pegar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E6_Descer_Pousar"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Assenta",
+          "preset": 3000
+        }
+      ]
+    },
+    {
+      "comment": "Sem chapa na origem: aborta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E2_Descer_Pegar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Carga_Sob_Gancho"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Erro"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E0_Livre"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E2_Descer_Pegar"
+        }
+      ]
+    },
+    {
+      "comment": "Apoiou na chapa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E2_Descer_Pegar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Gancho_Apoiado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Assenta.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E3_Pegar"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E2_Descer_Pegar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E3_Pegar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Prende",
+          "preset": 500
+        }
+      ]
+    },
+    {
+      "comment": "Eletroima segurando",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E3_Pegar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Prende.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Carga_Presa"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E4_Subir_Carga"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E3_Pegar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E5_Ir_Destino"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "No_Alvo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E6_Descer_Pousar"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E5_Ir_Destino"
+        }
+      ]
+    },
+    {
+      "comment": "Chapa apoiada no destino",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E6_Descer_Pousar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Gancho_Apoiado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Assenta.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E7_Soltar"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E6_Descer_Pousar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E7_Soltar"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Solta",
+          "preset": 500
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E7_Soltar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Solta.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Carga_Presa"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E8_Subir_Vazio"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E7_Soltar"
+        }
+      ]
+    },
+    {
+      "comment": "Fim da tarefa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E8_Subir_Vazio"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Gancho_Topo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "E0_Livre"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "E8_Subir_Vazio"
+        }
+      ]
+    },
+    {
+      "comment": "TRANSLACAO: so nas etapas de viagem e com o gancho no topo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Gancho_Topo"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E1_Ir_Origem"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E5_Ir_Destino"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Referenciado"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Andar"
         }
       ]
     },
@@ -483,7 +1194,7 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Emergencia"
+          "operand": "Andar"
         },
         {
           "type": "contact",
@@ -537,7 +1248,7 @@
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Emergencia"
+          "operand": "Andar"
         },
         {
           "type": "contact",
@@ -657,50 +1368,188 @@
       ]
     },
     {
-      "comment": "Chegou e parou",
+      "comment": "GUINCHO: desce ate apoiar",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Referenciado"
+          "operand": "Emergencia"
         },
         {
-          "type": "compare",
-          "kind": "EQU",
-          "operands": [
-            "Diferenca",
-            "0"
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E2_Descer_Pegar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E6_Descer_Pousar"
+              }
+            ]
           ]
         },
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Parada.DN"
+          "operand": "Assenta.DN"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Gancho_Apoiado"
         }
       ],
       "outputs": [
         {
           "type": "coil",
           "kind": "OTE",
-          "operand": "Lampada_Em_Posicao"
+          "operand": "Guincho_Desce"
+        }
+      ]
+    },
+    {
+      "comment": "sobe ate o topo",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E4_Subir_Carga"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E8_Subir_Vazio"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Gancho_Topo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Guincho_Sobe"
+        }
+      ]
+    },
+    {
+      "comment": "Eletroima de pegar ate pousar",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E3_Pegar"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E4_Subir_Carga"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E5_Ir_Destino"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "E6_Descer_Pousar"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Eletroima"
+        }
+      ]
+    },
+    {
+      "comment": "Pronta (pisca depois de um erro)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "E0_Livre"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Erro"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "S0.3"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Pronta"
         }
       ]
     }
   ],
   "history": [
     {
-      "date": "2026-11-13T20:55:44",
+      "date": "2026-11-14T06:25:17",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 19
+      "rungs": 42
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x9362fcb6",
-    "size": 648,
-    "instructions": 141,
-    "date": "2026-11-13T20:55:44"
+    "build_id": "0x42506acc",
+    "size": 1532,
+    "instructions": 352,
+    "date": "2026-11-14T06:25:17"
   },
   "environment": "ponte_rolante"
 }

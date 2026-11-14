@@ -1,11 +1,11 @@
-"""Ponte rolante com encoder incremental: referenciamento, contagem de posicao e aproximacao lenta."""
+"""Ponte rolante com encoder e guincho com eletroima: referenciamento, posicionamento e tarefas de transporte."""
 from __future__ import annotations
 
 import math
 import random
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPen
 
 from .. import draw
 from ..base import BUTTON, SWITCH, Environment, IOPoint
@@ -19,75 +19,117 @@ ACCEL, DECEL = 400.0, 800.0   # mm/s^2 acelerando e reduzindo com o motor
 BRAKE, COAST = 1500.0, 150.0  # mm/s^2 com o freio e solta (sem motor nem freio)
 END_LEFT, END_RIGHT = -100.0, 3900.0   # batentes
 TOLERANCE = 20.0              # parada aceita a +-20 mm da estacao
+PLACE_TOL = 30.0              # carga pousada a mais de 30 mm da estacao: fora do lugar
+STATION_WIN = 60.0            # o gancho "ve" a pilha da estacao a +-60 mm
 START_X = 2130.0
-PX0, PX = 40.0, 0.14          # desenho: 0 mm em x = 40, 0,14 px/mm
-RAIL_Y = 70.0
+HOIST_S = 4.0                 # o gancho percorre a altura toda em 4 s
+PLATE = 0.15                  # altura de uma chapa (fracao da altura do gancho)
+MAX_STACK = 3
+GRAB_MS = 300                 # o eletroima prende a chapa em 0,3 s
+SWAY_DAMPING = 0.6            # 1/s: amortecimento do balanco (cabo e carga)
+SWAY_LIMIT = 0.022           # rad: balanco maximo para baixar uma carga
+TASK_WORDS = (10, 11)         # N10 estacao de origem, N11 estacao de destino (1 a 5)
+PX0, PX = 50.0, 0.155         # desenho: 0 mm em x = 50, 0,155 px/mm
+RAIL_Y, HOOK_TOP, FLOOR_Y = 64.0, 112.0, 372.0
 
 
 @register
 class OverheadCraneEnvironment(Environment):
     id = "ponte_rolante"
-    name = "Ponte rolante com encoder"
-    description = ("A ponte liga sem saber onde está: é preciso referenciar (andar para a esquerda até a chave de "
-                   "origem em 0 mm). O encoder alterna 1 e 0 a cada 10 mm, sem indicar o sentido: o programa conta as "
-                   "bordas lembrando o sentido do último movimento (cada borda = 10 mm; a 400 mm/s são 25 ms entre "
-                   "bordas, mais que a varredura de 10 ms). As estações 1 a 5 "
-                   "ficam em 400, 1200, 2000, 2800 e 3600 mm. Em alta (400 mm/s) o freio deixa a ponte andar ~5 cm; "
-                   "em baixa (80 mm/s) só ~2 mm. Para ser aceita, a parada precisa ficar a ±20 mm da estação. "
-                   "Inverter com a ponte andando confunde a contagem.")
+    name = "Ponte rolante com guincho"
+    description = ("A ponte liga sem saber onde está: referencie andando para a esquerda até a chave de origem (0 mm). "
+                   "O encoder alterna 1 e 0 a cada 10 mm, sem sentido: conte as bordas pelo sentido do último "
+                   "movimento. Estações 1 a 5 em 400, 1200, 2000, 2800 e 3600 mm. Escolha a origem (N10) e o destino "
+                   "(N11) e aperte INICIAR: a ponte vai à origem, desce o gancho até apoiar na chapa (I0.3), liga o "
+                   "eletroímã (I0.4 confirma), sobe até o topo (I0.2), leva à estação de destino, espera o balanço "
+                   "parar, desce, solta e sobe. Não ande com o gancho baixo, não baixe a carga balançando e não solte "
+                   "a chapa no alto. I0.6 indica chapa sob o gancho.")
     example = "ambientes/ponte_rolante.ladproj"
+    size = (720, 460)
     inputs = [
         IOPoint("ENCODER", "I0.0", "Encoder", "Encoder incremental (1 ciclo / 20 mm)"),
         IOPoint("HOME", "I0.1", "Origem", "Chave de origem (posição 0 mm)"),
-        IOPoint("CH1", "I0.2", "Chama_1", "Botão chamar estação 1", BUTTON),
-        IOPoint("CH2", "I0.3", "Chama_2", "Botão chamar estação 2", BUTTON),
-        IOPoint("CH3", "I0.4", "Chama_3", "Botão chamar estação 3", BUTTON),
-        IOPoint("CH4", "I0.5", "Chama_4", "Botão chamar estação 4", BUTTON),
-        IOPoint("CH5", "I0.6", "Chama_5", "Botão chamar estação 5", BUTTON),
+        IOPoint("TOPO", "I0.2", "Gancho_Topo", "Gancho em cima (fim de curso do guincho)"),
+        IOPoint("EMBAIXO", "I0.3", "Gancho_Apoiado", "Gancho apoiado (cabo frouxo: tocou a chapa ou o piso)"),
+        IOPoint("PRESA", "I0.4", "Carga_Presa", "Eletroímã segurando uma chapa"),
+        IOPoint("INICIAR", "I0.5", "Iniciar", "Botão INICIAR transporte", BUTTON),
+        IOPoint("SOB", "I0.6", "Carga_Sob_Gancho", "Sensor: chapa embaixo do gancho"),
         IOPoint("EMERG", "I0.7", "Emergencia", "Emergência com trava (NF: lê 1 quando liberada)", SWITCH,
                 normally_closed=True),
     ]
     outputs = [
-        IOPoint("DIR", "Q0.0", "Motor_Direita", "Motor de translação: direita"),
-        IOPoint("ESQ", "Q0.1", "Motor_Esquerda", "Motor de translação: esquerda"),
+        IOPoint("DIR", "Q0.0", "Motor_Direita", "Translação: direita"),
+        IOPoint("ESQ", "Q0.1", "Motor_Esquerda", "Translação: esquerda"),
         IOPoint("LENTA", "Q0.2", "Velocidade_Lenta", "Velocidade baixa (aproximação)"),
         IOPoint("FREIO", "Q0.3", "Libera_Freio", "Solta o freio (sem energia o freio atua)"),
-        IOPoint("POSICAO", "Q0.4", "Lampada_Em_Posicao", "Lâmpada EM POSIÇÃO"),
+        IOPoint("PRONTA", "Q0.4", "Lampada_Pronta", "Lâmpada PRONTA (pisca com erro)"),
+        IOPoint("SOBE", "Q0.5", "Guincho_Sobe", "Guincho: sobe"),
+        IOPoint("DESCE", "Q0.6", "Guincho_Desce", "Guincho: desce"),
+        IOPoint("IMA", "Q0.7", "Eletroima", "Eletroímã do gancho"),
     ]
 
     def reset(self) -> None:
         self.rng = random.Random(9)
         self.auto = getattr(self, "auto", False)
+        self.origin = getattr(self, "origin", 1)
+        self.dest = getattr(self, "dest", 3)
         self.x = START_X
         self.v = 0.0
+        self.h = 0.0                       # gancho: 0 = em cima, 1 = no piso
+        self.stacks = {1: 1, 2: 0, 3: 0, 4: 1, 5: 0}
+        self.carrying = False
+        self.grab_ms = 0
         self.sway = 0.0
         self.sway_v = 0.0
         self.crash_speed = 0.0
         self.both_ms = 0
+        self.hoist_both_ms = 0
         self.drag_ms = 0
         self.dragged = False
-        self.bad_stop: float | None = None
-        self.moving_lamp = False
         self.emergency_moves = 0
-        self.arrivals = 0
-        self.last_error: float | None = None
-        self._lamp = False
+        self.flags: dict[str, str] = {}
+        self.delivered = 0
+        self.wrong = 0
         self.next_auto_ms = 4000
         self._driver_press: dict[str, int] = {}
+        self.drop_anim: list[list[float]] = []
+
+    # ---------------------------------------------------------- operador
+    def input_words(self) -> dict[int, int]:
+        return {TASK_WORDS[0]: self.origin, TASK_WORDS[1]: self.dest}
 
     def on_control(self, key: str, down: bool) -> None:
-        if down and key == "AUTO":
+        if not down:
+            return
+        if key == "AUTO":
             self.auto = not self.auto
+        elif key == "ORIG":
+            self.origin = self.origin % 5 + 1
+        elif key == "DEST":
+            self.dest = self.dest % 5 + 1
 
     def press(self, key: str, down: bool) -> None:
-        if key == "AUTO":
+        if key in ("AUTO", "ORIG", "DEST"):
             self.on_control(key, down)
         else:
             super().press(key, down)
 
-    def _nearest(self) -> float:
-        return min(abs(self.x - s) for s in [0.0, *STATIONS])
+    def _station_at(self, tol: float = STATION_WIN) -> int | None:
+        for k, s in enumerate(STATIONS):
+            if abs(self.x - s) <= tol:
+                return k + 1
+        return None
 
+    def _contact(self) -> float:
+        """Altura em que o gancho (ou a chapa presa) apoia."""
+        st = self._station_at()
+        stack = self.stacks[st] if st else 0
+        return 1.0 - PLATE * stack - (PLATE if self.carrying else 0.0)
+
+    def _flag(self, key: str, text: str) -> None:
+        self.flags.setdefault(key, text)
+
+    # ------------------------------------------------------------- fisica
     def step(self, dt_ms: int, out: dict[str, bool]) -> None:
         dt = dt_ms / 1000.0
         now = self.time_ms
@@ -95,12 +137,17 @@ class OverheadCraneEnvironment(Environment):
             if now >= until:
                 self.operator[key] = False
                 del self._driver_press[key]
-        if self.auto and now >= self.next_auto_ms and abs(self.v) < 1 and out["POSICAO"]:
-            key = f"CH{self.rng.randint(1, 5)}"
-            self.operator[key] = True
-            self.clicked.add(key)
-            self._driver_press[key] = now + 300
-            self.next_auto_ms = now + 8000
+        if self.auto and now >= self.next_auto_ms and abs(self.v) < 1 and out["PRONTA"] and self.h < 0.03 \
+                and not self.carrying:
+            full = [k for k, n in self.stacks.items() if n > 0]
+            if full:
+                self.origin = self.rng.choice(full)
+                self.dest = self.rng.choice([k for k, n in self.stacks.items() if k != self.origin and n < MAX_STACK])
+                self.operator["INICIAR"] = True
+                self.clicked.add("INICIAR")
+                self._driver_press["INICIAR"] = now + 300
+                self.next_auto_ms = now + 5000
+        # translacao
         right, left = out["DIR"], out["ESQ"]
         self.both_ms = self.both_ms + dt_ms if (right and left) else 0
         cmd = 0 if right == left else (1 if right else -1)
@@ -128,114 +175,175 @@ class OverheadCraneEnvironment(Environment):
                 if abs(self.v) > 30:
                     self.crash_speed = max(self.crash_speed, abs(self.v))
                 self.x, self.v = end, 0.0
-        # balanco da carga (pendulo de 1,5 m, amortecido)
+        if abs(self.v) > 20 and self.h > 0.1:
+            self._flag("low", "A ponte andou com o gancho baixo: suba até o topo (I0.2) antes de andar")
+        # balanco da carga (pendulo amortecido; o gancho vazio quase nao balanca)
         accel = (self.v - old_v) / dt if dt else 0.0
-        self.sway_v += (-9.81 / 1.5 * self.sway - accel / 1000 / 1.5 - 0.6 * self.sway_v) * dt
+        length = 1.5 + 2.5 * self.h
+        self.sway_v += (-9.81 / length * self.sway - accel / 1000 / length - SWAY_DAMPING * self.sway_v) * dt
         self.sway += self.sway_v * dt
-        # lampada em posicao
-        lamp = out["POSICAO"]
-        if lamp and not self._lamp and abs(self.v) < 5:
-            error = self._nearest()
-            self.last_error = error
-            if error > TOLERANCE and self.bad_stop is None:
-                self.bad_stop = error
-            elif error <= TOLERANCE and self.x > 200:
-                self.arrivals += 1
-        if lamp and abs(self.v) > 50:
-            self.moving_lamp = True
-        self._lamp = lamp
+        # guincho
+        up, down = out["SOBE"], out["DESCE"]
+        self.hoist_both_ms = self.hoist_both_ms + dt_ms if (up and down) else 0
+        if up and down:
+            self._flag("hoist", "Guincho comandado para subir e descer ao mesmo tempo")
+        contact = self._contact()
+        if down and not up:
+            if self.carrying and abs(self.sway) > SWAY_LIMIT and self.h > 0.05:
+                self._flag("sway", "A carga desceu balançando: espere o balanço parar antes de baixar")
+            self.h = min(contact, self.h + dt / HOIST_S)
+        elif up and not down:
+            self.h = max(0.0, self.h - dt / HOIST_S)
+        self.h = min(self.h, contact)                    # apoiado: o cabo afrouxa
+        resting = self.h >= contact - 0.005
+        st = self._station_at()
+        # eletroima
+        if out["IMA"] and not self.carrying and resting and st and self.stacks[st] > 0:
+            self.grab_ms += dt_ms
+            if self.grab_ms >= GRAB_MS:
+                if abs(self.x - STATIONS[st - 1]) > PLACE_TOL:
+                    self._flag("offset", "O gancho desceu fora do centro da estação (mais de 30 mm)")
+                self.stacks[st] -= 1
+                self.carrying = True
+                self.grab_ms = 0
+        else:
+            self.grab_ms = 0
+        if self.carrying and not out["IMA"]:
+            if not resting:
+                self._flag("drop", "A chapa caiu do alto: só desligue o eletroímã com ela apoiada (I0.3)")
+                self.drop_anim.append([self.x, self.h])
+            target = self._station_at()
+            if target is None or abs(self.x - STATIONS[target - 1]) > PLACE_TOL:
+                self._flag("offset", "Chapa pousada fora do centro da estação (mais de 30 mm)")
+            if target is not None:
+                self.stacks[target] = min(MAX_STACK, self.stacks[target] + 1)
+                if target == self.dest:
+                    self.delivered += 1
+                else:
+                    self.wrong += 1
+                    self._flag("wrong", "Chapa entregue numa estação diferente do destino (N11)")
+            self.carrying = False
+        self.drop_anim = [[x, h + dt * 2] for x, h in self.drop_anim if h < 1.0]
 
     def sensors(self) -> dict[str, bool]:
-        return {"ENCODER": (self.x % PITCH) < PITCH / 2, "HOME": self.x <= 0.0}
+        st = self._station_at()
+        return {"ENCODER": (self.x % PITCH) < PITCH / 2, "HOME": self.x <= 0.0, "TOPO": self.h <= 0.01,
+                "EMBAIXO": self.h >= self._contact() - 0.005, "PRESA": self.carrying,
+                "SOB": bool(st and self.stacks[st] > 0)}
 
     def alarms(self) -> list[str]:
         out = []
         if self.crash_speed:
-            out.append(f"A ponte bateu no batente a {self.crash_speed:.0f} mm/s")
+            out.append("A ponte bateu no batente")
         if self.both_ms > 0:
             out.append("Motor comandado para a direita e a esquerda ao mesmo tempo")
         if self.dragged:
             out.append("Motor ligado com o freio aplicado: solte o freio (Q0.3) junto com o motor")
-        if self.bad_stop is not None:
-            out.append(f"EM POSIÇÃO com a ponte a {self.bad_stop:.0f} mm da estação (tolerância ±20 mm)")
-        if self.moving_lamp:
-            out.append("Lâmpada EM POSIÇÃO acesa com a ponte andando")
         if self.emergency_moves:
             out.append("A ponte andou com a emergência acionada")
-        return out
+        return out + list(self.flags.values())
 
     def stats(self) -> list[str]:
-        err = "-" if self.last_error is None else f"{self.last_error:.0f} mm"
-        return [f"Posição real: {self.x:.0f} mm | velocidade {self.v:+.0f} mm/s",
-                f"Chegadas às estações: {self.arrivals} | erro da última parada: {err}"
+        st = " ".join(f"{k}:{n}" for k, n in self.stacks.items())
+        return [f"Posição real: {self.x:.0f} mm | velocidade {self.v:+.0f} mm/s | gancho {self.h * 100:.0f}% | "
+                f"balanço {math.degrees(self.sway):+.1f}°",
+                f"Tarefa: {self.origin} → {self.dest} | entregas: {self.delivered} | chapas por estação {st}"
                 + (" | Automático" if self.auto else "")]
 
     # ------------------------------------------------------------ desenho
     def controls(self):
-        c = {f"CH{k + 1}": (self._px(s) - 40, 330, 80, 28) for k, s in enumerate(STATIONS)}
-        c.update({"EMERG": (16, 372, 150, 28), "AUTO": (474, 372, 150, 28)})
-        return c
+        return {"ORIG": (14, 410, 112, 40), "DEST": (132, 410, 112, 40), "INICIAR": (250, 416, 130, 28),
+                "EMERG": (390, 416, 150, 28), "AUTO": (550, 416, 156, 28)}
 
     def _px(self, mm: float) -> float:
         return PX0 + mm * PX
 
+    def _plate(self, p: QPainter, cx: float, bottom: float, h: float) -> None:
+        r = QRectF(cx - 34, bottom - h, 68, h - 2)
+        g = QLinearGradient(r.topLeft(), r.bottomLeft())
+        g.setColorAt(0, QColor("#cbd5e1"))
+        g.setColorAt(1, QColor("#475569"))
+        p.setPen(QPen(QColor("#1e293b"), 1))
+        p.setBrush(g)
+        p.drawRect(r)
+
     def paint(self, p: QPainter) -> None:
-        p.setRenderHint(QPainter.Antialiasing)
-        p.fillRect(QRectF(0, 0, 640, 420), QColor("#f1f5f9"))
-        # galpao: pilares, viga de rolamento e piso
-        p.fillRect(QRectF(0, 300, 640, 20), QColor("#94a3b8"))
-        p.setPen(QPen(QColor("#334155"), 1))
-        p.setBrush(QColor("#475569"))
-        p.drawRect(QRectF(self._px(END_LEFT) - 14, RAIL_Y - 10, self._px(END_RIGHT) - self._px(END_LEFT) + 28, 10))
+        draw.background(p, 720, 460, "#e2e8f0", "#cbd5e1")
+        draw.ground(p, FLOOR_Y, 720, 460, hazard_edge=False)
+        out = self.out
+        sens = self.sensors()
+        span = FLOOR_Y - HOOK_TOP
+        plate_px = PLATE * span
+        # pilares e trilho
+        for x in (24, 696):
+            draw.metal(p, QRectF(x - 8, RAIL_Y, 16, FLOOR_Y - RAIL_Y), "#64748b", 2, vertical=True)
+        draw.metal(p, QRectF(16, RAIL_Y - 8, 688, 10), "#334155", 2)
         for end in (END_LEFT, END_RIGHT):
-            p.setBrush(QColor("#1e293b"))
-            p.drawRect(QRectF(self._px(end) - (12 if end == END_LEFT else -2), RAIL_Y - 22, 10, 22))
-        # estacoes no piso
+            draw.hazard(p, QRectF(self._px(end) - 5, RAIL_Y - 16, 10, 16))
+        # estacoes e pilhas
         for k, s in enumerate(STATIONS):
             x = self._px(s)
+            p.setPen(QPen(QColor("#475569"), 2))
+            p.drawLine(QPointF(x - 40, FLOOR_Y + 2), QPointF(x + 40, FLOOR_Y + 2))
+            draw.plate(p, QRectF(x - 12, FLOOR_Y + 8, 24, 16), str(k + 1),
+                       "#1d4ed8" if k + 1 == self.dest else ("#16a34a" if k + 1 == self.origin else "#334155"))
+            for j in range(self.stacks[k + 1]):
+                self._plate(p, x, FLOOR_Y - j * plate_px, plate_px)
+        # ponte (viga) e carro
+        bx = self._px(self.x)
+        girder = QRectF(bx - 44, RAIL_Y - 4, 88, 22)
+        draw.shadow(p, girder, 3, 3)
+        draw.metal(p, girder, "#eab308", 3)
+        draw.hazard(p, QRectF(bx - 44, RAIL_Y + 14, 88, 5))
+        for wx in (bx - 34, bx + 34):
             p.setPen(QPen(QColor("#0f172a"), 1))
-            p.setBrush(QColor("#fde68a"))
-            p.drawRect(QRectF(x - 24, 276, 48, 24))
-            draw.text(p, x, 288, f"E{k + 1}", 8, True, draw.INK, Qt.AlignHCenter | Qt.AlignVCenter, 40)
-            draw.text(p, x, 312, f"{s:.0f} mm", 7, False, draw.MUTED, Qt.AlignHCenter | Qt.AlignVCenter, 70)
-        # chave de origem
-        sens = self.sensors()
-        hx = self._px(0)
-        p.setBrush(draw.GREEN if sens["HOME"] else QColor("#64748b"))
-        p.drawRect(QRectF(hx - 4, RAIL_Y + 2, 8, 12))
-        draw.tag(p, hx - 6, RAIL_Y + 26, "I0.1 origem", sens["HOME"])
-        # carro da ponte, cabo e carga
-        cx = self._px(self.x)
-        p.setPen(QPen(QColor("#0f172a"), 1.5))
-        p.setBrush(QColor("#f59e0b"))
-        p.drawRoundedRect(QRectF(cx - 30, RAIL_Y - 4, 60, 24), 4, 4)
-        hook = QPointF(cx + 150 * math.sin(self.sway), RAIL_Y + 20 + 150 * math.cos(self.sway))
-        p.setPen(QPen(QColor("#334155"), 2))
-        p.drawLine(QPointF(cx, RAIL_Y + 20), hook)
-        p.setBrush(QColor("#7c3aed"))
-        p.drawRect(QRectF(hook.x() - 22, hook.y(), 44, 34))
-        # motor, freio, encoder
-        moving = self.out.get("DIR") or self.out.get("ESQ")
-        draw.text(p, cx, RAIL_Y + 8, "▶" if self.out.get("DIR") else ("◀" if self.out.get("ESQ") else "■"), 9, True,
-                  draw.WHITE if moving else QColor("#78350f"), Qt.AlignHCenter | Qt.AlignVCenter, 40)
-        ec = QPointF(cx + 22, RAIL_Y - 18)
-        p.setPen(QPen(QColor("#0f172a"), 1))
-        p.setBrush(QColor("#e2e8f0"))
-        p.drawEllipse(ec, 7, 7)
-        p.setBrush(draw.GREEN if sens["ENCODER"] else QColor("#475569"))
-        p.drawEllipse(ec, 3, 3)
-        # painel de estado
-        draw.tag(p, 16, 120, "I0.0 encoder", sens["ENCODER"])
-        draw.tag(p, 16, 142, "Q0.0 direita", self.out.get("DIR", False))
-        draw.tag(p, 16, 164, "Q0.1 esquerda", self.out.get("ESQ", False))
-        draw.tag(p, 16, 186, "Q0.2 lenta", self.out.get("LENTA", False))
-        draw.tag(p, 16, 208, "Q0.3 solta freio", self.out.get("FREIO", False))
-        draw.lamp(p, QPointF(560, 130), 10, self.out.get("POSICAO", False), draw.GREEN)
-        draw.text(p, 498, 154, "EM POSIÇÃO Q0.4", 8, True, w=130)
-        draw.text(p, 470, 190, f"{self.x:.0f} mm", 12, True, draw.INK, w=150, h=22)
-        draw.text(p, 470, 210, "posição real", 7, False, draw.MUTED, w=150)
-        for k, s in enumerate(STATIONS):
-            draw.push_button(p, QRectF(self._px(s) - 40, 330, 80, 28), f"E{k + 1} I0.{k + 2}", self.is_pressed(f"CH{k + 1}"),
-                             QColor("#2563eb"))
-        draw.switch(p, QRectF(16, 372, 150, 28), "EMERGÊNCIA I0.7", self.is_pressed("EMERG"))
-        draw.switch(p, QRectF(474, 372, 150, 28), "Automático", self.auto)
+            p.setBrush(QColor("#1e293b"))
+            p.drawEllipse(QPointF(wx, RAIL_Y - 6), 5, 5)
+        drum = QRectF(bx - 16, RAIL_Y + 18, 32, 16)
+        draw.metal(p, drum, "#475569", 3)
+        # cabo e gancho com balanco
+        hook_y = HOOK_TOP + span * self.h
+        length = hook_y - (RAIL_Y + 34)
+        hx = bx + math.sin(self.sway) * length * 2.5
+        p.setPen(QPen(QColor("#111827"), 2))
+        p.drawLine(QPointF(bx - 4, RAIL_Y + 34), QPointF(hx - 4, hook_y - 14))
+        p.drawLine(QPointF(bx + 4, RAIL_Y + 34), QPointF(hx + 4, hook_y - 14))
+        magnet = QRectF(hx - 30, hook_y - 14, 60, 14)
+        draw.metal(p, magnet, "#dc2626" if out.get("IMA") else "#64748b", 3)
+        if out.get("IMA"):
+            p.setPen(QPen(QColor(239, 68, 68, 120), 1.5, Qt.DashLine))
+            p.drawLine(QPointF(hx - 24, hook_y + 2), QPointF(hx + 24, hook_y + 2))
+        if self.carrying:
+            self._plate(p, hx, hook_y + plate_px, plate_px)
+        for x, h in self.drop_anim:
+            self._plate(p, self._px(x), HOOK_TOP + span * min(1.0, h) + plate_px, plate_px)
+        # setas de movimento
+        if abs(self.v) > 5:
+            draw.harrow(p, QPointF(bx + (60 if self.v > 0 else -60), RAIL_Y + 6), 12, self.v > 0, True)
+        # sensores e saidas (painel superior)
+        draw.card(p, QRectF(8, 8, 704, 44))
+        tags = [("I0.0 encoder", sens["ENCODER"]), ("I0.1 origem", sens["HOME"]), ("I0.2 topo", sens["TOPO"]),
+                ("I0.3 apoiado", sens["EMBAIXO"]), ("I0.4 presa", sens["PRESA"]), ("I0.6 chapa", sens["SOB"])]
+        for k, (label, on) in enumerate(tags):
+            draw.tag(p, 16 + k * 84, 20, label, on)
+        outs = [("Q0.0 dir", "DIR"), ("Q0.1 esq", "ESQ"), ("Q0.2 lenta", "LENTA"), ("Q0.3 freio", "FREIO"),
+                ("Q0.5 sobe", "SOBE"), ("Q0.6 desce", "DESCE"), ("Q0.7 ímã", "IMA")]
+        for k, (label, key) in enumerate(outs):
+            draw.tag(p, 16 + k * 84, 40, label, out.get(key, False))
+        draw.lamp(p, QPointF(620, 30), 8, out.get("PRONTA", False), draw.GREEN)
+        draw.text(p, 632, 30, "PRONTA Q0.4", 7, True, w=80)
+        # posicao
+        draw.lcd(p, QRectF(560, 70, 140, 34), f"{self.x:6.0f}", "#60a5fa", "posição real (mm)")
+        # tarefa
+        for key, x, label, value, word in (("ORIG", 14, "ORIGEM", self.origin, "N10"),
+                                           ("DEST", 132, "DESTINO", self.dest, "N11")):
+            r = QRectF(x, 410, 112, 40)
+            draw.shadow(p, r, 6, 2)
+            p.setPen(QPen(QColor("#2563eb"), 1.4))
+            p.setBrush(QColor("#eff6ff"))
+            p.drawRoundedRect(r, 6, 6)
+            draw.text(p, x + 8, 422, f"{label} ({word})", 7, True, QColor("#1d4ed8"), w=100)
+            draw.text(p, x + 8, 439, f"estação {value}  ▸", 9, True, draw.INK, w=100)
+        draw.push_button(p, QRectF(250, 416, 130, 28), "INICIAR I0.5", self.is_pressed("INICIAR"), draw.GREEN)
+        draw.switch(p, QRectF(390, 416, 150, 28), "EMERGÊNCIA I0.7", self.is_pressed("EMERG"))
+        draw.switch(p, QRectF(550, 416, 156, 28), "Tarefas automáticas", self.auto)

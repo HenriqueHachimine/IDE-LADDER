@@ -606,17 +606,44 @@ def test_greenhouse_irrigation_respects_noon_and_dry_tank():
     assert any("sol forte" in a for a in alarms) and any("a seco" in a for a in alarms)
 
 
-def test_overhead_crane_homes_counts_encoder_and_stops_at_stations():
-    calls = [(15000, "CH3"), (30000, "CH5"), (45000, "CH1"), (60000, "CH4"), (75000, "CH2")]
-    acts = [a for t, k in calls for a in ((t, k, True), (t + 200, k, False))]
-    env, alarms, sim = closed_loop(Project.load(EXAMPLES / "ponte_rolante.ladproj"), acts, 90000)
-    assert alarms == set() and env.arrivals == 5 and env.last_error <= 10       # dos dois sentidos
+def _crane_task(origin, dest):
+    env = create("ponte_rolante")
+    env.origin, env.dest = origin, dest
+    return env
+
+
+def test_overhead_crane_homes_counts_encoder_and_moves_plates():
+    p = Project.load(EXAMPLES / "ponte_rolante.ladproj")
+    result = compile_project(p)
+    env = _crane_task(1, 5)
+    sim = Simulator(result, 10)
+    sim.attach_plant(EnvironmentPlant(env))
+    sim.start()
+    for t in range(0, 60000, 10):
+        if t == 8000:
+            env.press("INICIAR", True)
+        if t == 8200:
+            env.press("INICIAR", False)
+        sim.scan_once()
+    assert env.alarms() == [] and env.delivered == 1 and env.stacks[5] == 1 and env.stacks[1] == 0
     assert abs(sim.vm.n[0] * 10 - env.x) <= 10                                   # contagem = posicao real
+    env, alarms, _ = closed_loop(p, [(0, "AUTO", True)], 300000)                 # tarefas nos dois sentidos
+    assert alarms == set() and env.delivered >= 8
     runaway = Project(environment="ponte_rolante", rungs=[
-        Rung([Contact("XIC", "I0.6")], [Coil("OTL", "Q0.0"), Coil("OTL", "Q0.3")]),
-        Rung([Contact("XIC", "Q0.0")], [Coil("OTE", "Q0.4")])])
-    _, alarms, _ = closed_loop(runaway, [(100, "CH5", True), (300, "CH5", False)], 15000)
-    assert any("batente" in a for a in alarms) and any("andando" in a for a in alarms)
+        Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.3"), Coil("OTE", "Q0.6")])])
+    _, alarms, _ = closed_loop(runaway, total_ms=15000)
+    assert any("batente" in a for a in alarms) and any("gancho baixo" in a for a in alarms)
+
+
+def test_overhead_crane_needs_sway_wait():
+    from ladderide.model import TimerBox as Timer
+    no_wait = Project.load(EXAMPLES / "ponte_rolante.ladproj")
+    for r in no_wait.rungs:
+        for o in r.outputs:
+            if isinstance(o, Timer) and o.operand == "Assenta":
+                o.preset = 10
+    _, alarms, _ = closed_loop(no_wait, [(0, "AUTO", True)], 120000)
+    assert any("balançando" in a for a in alarms)
 
 
 def test_vending_machine_charges_gives_change_and_refunds():

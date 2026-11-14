@@ -977,22 +977,44 @@ def greenhouse() -> Project:
 
 
 def overhead_crane() -> Project:
-    p = env_project("ponte_rolante", "Ponte rolante", (
-        "Posicionamento por encoder: conta as duas bordas do encoder (cada uma = 10 mm) somando ou subtraindo "
-        "conforme o sentido do ultimo movimento. Ao ligar, anda para a esquerda ate a chave de origem e zera a "
-        "posicao (referenciamento). Cada botao carrega o destino (MOV); Diferenca = Destino - Posicao decide o "
-        "sentido, e a menos de 200 mm passa para a velocidade lenta. Antes de partir ou inverter espera 0,4 s "
-        "parada, senao a contagem erra o sentido."))
-    p.symbols += [Symbol("Posicao", "N0", "posicao em passos de 10 mm"), Symbol("Destino", "N1", "estacao chamada"),
-                  Symbol("Diferenca", "N2", "Destino - Posicao"), Symbol("Referenciado", "M0.0", "origem encontrada"),
+    p = env_project("ponte_rolante", "Ponte rolante com guincho", (
+        "Posicionamento por encoder mais sequencia de transporte. Conta as duas bordas do encoder (10 mm cada) pelo "
+        "sentido do ultimo movimento; ao ligar, referencia na chave de origem. Tarefa: E1 vai a estacao de origem "
+        "(N10 convertido em posicao), E2 espera 3 s o balanco e desce ate apoiar, E3 liga o eletroima ate a carga "
+        "prender, E4 sobe ao topo, E5 vai ao destino (N11), E6 espera e desce, E7 solta, E8 sobe vazio. A translacao "
+        "so anda nas etapas E1/E5 (gancho no topo). Sem chapa na origem a tarefa aborta e a lampada pisca."))
+    p.symbols += [Symbol("Posicao", "N0", "posicao em passos de 10 mm"), Symbol("Destino", "N1", "posicao da estacao alvo"),
+                  Symbol("Diferenca", "N2", "Destino - Posicao"),
+                  Symbol("Estacao_Origem", "N10", "1 a 5, escolhida no painel"),
+                  Symbol("Estacao_Destino", "N11", "1 a 5, escolhida no painel"),
+                  Symbol("Referenciado", "M0.0", "origem encontrada"),
                   Symbol("Encoder_Anterior", "M0.1", "encoder na varredura anterior"),
                   Symbol("Pulso", "M0.2", "borda do encoder (subida ou descida)"),
                   Symbol("Sentido_Direita", "M0.3", "ultimo movimento para a direita"),
-                  Symbol("Parada", "T0", "0,4 s com o motor desligado")]
+                  Symbol("Erro", "M0.4", "tarefa abortada"), Symbol("Andar", "M0.5", "translacao liberada"),
+                  Symbol("No_Alvo", "M0.6", "parada na estacao alvo"),
+                  Symbol("Parada", "T0", "0,4 s com o motor desligado"), Symbol("Assenta", "T1", "3 s de espera do balanco"),
+                  Symbol("Prende", "T2", "0,5 s de eletroima"), Symbol("Solta", "T3", "0,5 s sem eletroima")]
+    steps = [("E0_Livre", "M1.0"), ("E1_Ir_Origem", "M1.1"), ("E2_Descer_Pegar", "M1.2"), ("E3_Pegar", "M1.3"),
+             ("E4_Subir_Carga", "M1.4"), ("E5_Ir_Destino", "M1.5"), ("E6_Descer_Pousar", "M1.6"), ("E7_Soltar", "M1.7"),
+             ("E8_Subir_Vazio", "M2.0")]
+    p.symbols += [Symbol(n, a, "etapa da tarefa") for n, a in steps]
+    e = [n for n, _ in steps]
+
+    def go(cond, frm, to, comment="", extra=()):
+        return Rung([Contact("XIC", frm), *cond], [*extra, Coil("OTL", to), Coil("OTU", frm)], comment)
+
+    def table(step, word, comment):
+        rungs = []
+        for k, pos in enumerate((40, 120, 200, 280, 360)):
+            rungs.append(Rung([Contact("XIC", step), CompareBox("EQU", [word, str(k + 1)])],
+                              [MathBox("MOV", [str(pos), "Destino"])], comment if k == 0 else ""))
+        return rungs
+
     p.rungs = [
         Rung([Parallel([[Contact("XIC", "Encoder"), Contact("XIO", "Encoder_Anterior")],
                         [Contact("XIO", "Encoder"), Contact("XIC", "Encoder_Anterior")]])], [Coil("OTE", "Pulso")],
-             "Borda de subida ou de descida do encoder: 10 mm"),
+             "ENCODER: borda de subida ou de descida = 10 mm"),
         Rung([Contact("XIC", "Encoder")], [Coil("OTE", "Encoder_Anterior")]),
         Rung([Contact("XIC", "Motor_Direita")], [Coil("OTL", "Sentido_Direita")], "Lembra o sentido do movimento"),
         Rung([Contact("XIC", "Motor_Esquerda")], [Coil("OTU", "Sentido_Direita")]),
@@ -1000,31 +1022,55 @@ def overhead_crane() -> Project:
              "Conta a posicao"),
         Rung([Contact("XIC", "Pulso"), Contact("XIO", "Sentido_Direita")], [MathBox("SUB", ["Posicao", "1", "Posicao"])]),
         Rung([Contact("XIC", "Origem"), Contact("XIO", "Referenciado")],
-             [MathBox("MOV", ["0", "Posicao"]), MathBox("MOV", ["0", "Destino"]), Coil("OTL", "Referenciado")],
-             "Referenciamento: origem = 0 mm"),
-        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_1")], [MathBox("MOV", ["40", "Destino"])],
-             "Estacoes: 400, 1200, 2000, 2800 e 3600 mm (/10)"),
-        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_2")], [MathBox("MOV", ["120", "Destino"])]),
-        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_3")], [MathBox("MOV", ["200", "Destino"])]),
-        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_4")], [MathBox("MOV", ["280", "Destino"])]),
-        Rung([Contact("XIC", "Referenciado"), Contact("XIC", "Chama_5")], [MathBox("MOV", ["360", "Destino"])]),
+             [MathBox("MOV", ["0", "Posicao"]), MathBox("MOV", ["0", "Destino"]), Coil("OTL", "Referenciado"),
+              Coil("OTL", e[0])], "Referenciamento: origem = 0 mm"),
+        go([Contact("XIC", "Iniciar"), Contact("XIC", "Referenciado"), Contact("XIC", "Gancho_Topo")], e[0], e[1],
+           "TAREFA: INICIAR com o gancho no topo", [Coil("OTU", "Erro")]),
+        go([Contact("XIC", "Gancho_Topo")], e[4], e[5],
+           "Carga no topo: vai ao destino (antes da tabela, para o alvo ja mudar nesta varredura)"),
+        *table(e[1], "Estacao_Origem", "Estacao de origem em posicao (passos de 10 mm)"),
+        *table(e[5], "Estacao_Destino", "Estacao de destino em posicao"),
         Rung([], [MathBox("SUB", ["Destino", "Posicao", "Diferenca"])], "Quanto falta"),
+        Rung([CompareBox("EQU", ["Diferenca", "0"]), Contact("XIC", "Parada.DN")], [Coil("OTE", "No_Alvo")],
+             "Parada na estacao"),
+        go([Contact("XIC", "No_Alvo")], e[1], e[2]),
+        Rung([Parallel([[Contact("XIC", e[2])], [Contact("XIC", e[6])]])], [TimerBox("TON", "Assenta", 3000)],
+             "Espera o balanco parar antes de descer"),
+        go([Contact("XIO", "Carga_Sob_Gancho")], e[2], e[0], "Sem chapa na origem: aborta", [Coil("OTL", "Erro")]),
+        go([Contact("XIC", "Gancho_Apoiado"), Contact("XIC", "Assenta.DN")], e[2], e[3], "Apoiou na chapa"),
+        Rung([Contact("XIC", e[3])], [TimerBox("TON", "Prende", 500)]),
+        go([Contact("XIC", "Prende.DN"), Contact("XIC", "Carga_Presa")], e[3], e[4], "Eletroima segurando"),
+        go([Contact("XIC", "No_Alvo")], e[5], e[6]),
+        go([Contact("XIC", "Gancho_Apoiado"), Contact("XIC", "Assenta.DN")], e[6], e[7], "Chapa apoiada no destino"),
+        Rung([Contact("XIC", e[7])], [TimerBox("TON", "Solta", 500)]),
+        go([Contact("XIC", "Solta.DN"), Contact("XIO", "Carga_Presa")], e[7], e[8]),
+        go([Contact("XIC", "Gancho_Topo")], e[8], e[0], "Fim da tarefa"),
+        Rung([Contact("XIC", "Emergencia"), Contact("XIC", "Gancho_Topo"),
+              Parallel([[Contact("XIC", e[1])], [Contact("XIC", e[5])], [Contact("XIO", "Referenciado")]])],
+             [Coil("OTE", "Andar")], "TRANSLACAO: so nas etapas de viagem e com o gancho no topo"),
         Rung([Contact("XIO", "Motor_Direita"), Contact("XIO", "Motor_Esquerda")], [TimerBox("TON", "Parada", 400)],
              "So parte (ou inverte) depois de parada"),
-        Rung([Contact("XIC", "Emergencia"), Contact("XIC", "Referenciado"), CompareBox("GRT", ["Diferenca", "0"]),
+        Rung([Contact("XIC", "Andar"), Contact("XIC", "Referenciado"), CompareBox("GRT", ["Diferenca", "0"]),
               Parallel([[Contact("XIC", "Parada.DN")], [Contact("XIC", "Motor_Direita")]]), Contact("XIO", "Motor_Esquerda")],
              [Coil("OTE", "Motor_Direita")], "Destino a direita"),
-        Rung([Contact("XIC", "Emergencia"), Contact("XIO", "Motor_Direita"),
+        Rung([Contact("XIC", "Andar"), Contact("XIO", "Motor_Direita"),
               Parallel([[Contact("XIC", "Parada.DN")], [Contact("XIC", "Motor_Esquerda")]]),
               Parallel([[Contact("XIO", "Referenciado")],
                         [Contact("XIC", "Referenciado"), CompareBox("LES", ["Diferenca", "0"])]])],
              [Coil("OTE", "Motor_Esquerda")], "Destino a esquerda ou procurando a origem"),
-        Rung([Contact("XIC", "Referenciado"), CompareBox("LIM", ["-20", "Diferenca", "20"])], [Coil("OTE", "Velocidade_Lenta")],
-             "A menos de 200 mm: lenta"),
+        Rung([Contact("XIC", "Referenciado"), CompareBox("LIM", ["-20", "Diferenca", "20"])],
+             [Coil("OTE", "Velocidade_Lenta")], "A menos de 200 mm: lenta"),
         Rung([Parallel([[Contact("XIC", "Motor_Direita")], [Contact("XIC", "Motor_Esquerda")]])],
              [Coil("OTE", "Libera_Freio")], "Freio solto so com o motor ligado"),
-        Rung([Contact("XIC", "Referenciado"), CompareBox("EQU", ["Diferenca", "0"]), Contact("XIC", "Parada.DN")],
-             [Coil("OTE", "Lampada_Em_Posicao")], "Chegou e parou"),
+        Rung([Contact("XIC", "Emergencia"), Parallel([[Contact("XIC", e[2])], [Contact("XIC", e[6])]]),
+              Contact("XIC", "Assenta.DN"), Contact("XIO", "Gancho_Apoiado")], [Coil("OTE", "Guincho_Desce")],
+             "GUINCHO: desce ate apoiar"),
+        Rung([Contact("XIC", "Emergencia"), Parallel([[Contact("XIC", e[4])], [Contact("XIC", e[8])]]),
+              Contact("XIO", "Gancho_Topo")], [Coil("OTE", "Guincho_Sobe")], "sobe ate o topo"),
+        Rung([Parallel([[Contact("XIC", e[3])], [Contact("XIC", e[4])], [Contact("XIC", e[5])], [Contact("XIC", e[6])]])],
+             [Coil("OTE", "Eletroima")], "Eletroima de pegar ate pousar"),
+        Rung([Contact("XIC", e[0]), Parallel([[Contact("XIO", "Erro")], [Contact("XIC", "S0.3")]])],
+             [Coil("OTE", "Lampada_Pronta")], "Pronta (pisca depois de um erro)"),
     ]
     return p
 
