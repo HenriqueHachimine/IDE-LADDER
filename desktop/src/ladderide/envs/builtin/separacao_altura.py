@@ -20,7 +20,8 @@ DIV_X0, DIV_X1 = 432.0, 498.0
 UP_LEN = 150.0                # esteira das altas (sobe na tela)
 STEP = 10.0                   # o encoder muda a cada 10 px (um pulso a cada 20 px)
 BOX_L = 50.0
-REG_BITS = 12                 # bits de N5 desenhados sob a esteira
+REG_BITS = 13                 # bits de N5 desenhados sob a esteira (bit 0 na estacao)
+PULSE_PX = 2 * STEP            # um pulso do encoder a cada 20 px
 TRACK_WORD = 5
 JAM_S = 4.0
 
@@ -32,7 +33,8 @@ class HeightSortingEnvironment(Environment):
     description = ("Caixas baixas e altas chegam misturadas. Na estação de altura (I0.1 vê toda caixa, I0.2 só as "
                    "altas) o programa descobre o tipo, mas o desviador de rodas fica 245 px adiante e entre os dois "
                    "cabem até 3 caixas: é preciso rastrear. O encoder da esteira (I0.3) dá um pulso a cada 20 px; um "
-                   "registrador de deslocamento em N5 (cada pulso desloca um bit) leva a informação junto com a caixa. "
+                   "registrador de deslocamento em N5 leva a informação junto com a caixa: o bit 0 é marcado quando a caixa "
+                   "termina de passar pela estação e cada pulso multiplica N5 por 2 (o bit anda 20 px). "
                    "Com o desviador (Q0.1) ligado quando a caixa passa pelo centro dele, ela vai para a esteira das "
                    "altas; desligado, segue reto. O registrador N5 aparece sob a esteira.")
     example = "ambientes/separacao_altura.ladproj"
@@ -203,16 +205,15 @@ class HeightSortingEnvironment(Environment):
         draw.tag(p, 590, top - 18, "I0.5 fim", sens["FIM_B"])
         # registrador N5 sob a esteira: bit k fica onde a informacao esta agora
         y = top + BELT_W + 46
-        draw.text(p, SENSOR_X, y - 14, "N5: bit 11 na estação ... bit 0 no desviador", 7, True, draw.MUTED, w=260)
-        span = (DECIDE_X - 25 - SENSOR_X) / (REG_BITS - 1)
+        draw.text(p, SENSOR_X, y - 14, "N5: bit 0 na estação → cada pulso anda um bit (20 px)", 7, True, draw.MUTED, w=300)
         for k in range(REG_BITS):
-            x = SENSOR_X + (REG_BITS - 1 - k) * span
+            x = SENSOR_X + BOX_L / 2 + k * PULSE_PX
             bit = self.track >> k & 1
-            r = QRectF(x - 9, y, 18, 16)
+            r = QRectF(x - 8.5, y, 17, 16)
             p.setPen(QPen(QColor("#334155"), 1))
             p.setBrush(QColor("#7c3aed") if bit else QColor("#f8fafc"))
             p.drawRoundedRect(r, 3, 3)
-            draw.ctext(p, r.center().x(), r.center().y(), str(bit), 7, True, draw.WHITE if bit else draw.MUTED, w=18)
+            draw.ctext(p, r.center().x(), r.center().y(), str(bit), 7, True, draw.WHITE if bit else draw.MUTED, w=17)
         # vista lateral da estacao
         side = QRectF(16, 336, 330, 70)
         draw.card(p, side, "Estação de altura (vista lateral)")

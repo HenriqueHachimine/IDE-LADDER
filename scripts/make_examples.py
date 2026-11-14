@@ -1587,34 +1587,52 @@ def car_wash() -> Project:
 
 def height_sorting() -> Project:
     p = env_project("separacao_altura", "Separacao por altura", (
-        "Rastreamento com registrador de deslocamento sincronizado pelo encoder. Cada pulso do encoder (20 px de "
-        "esteira) desloca o registro N5 um bit para a direita (DIV por 2); se o sensor alto ve caixa nesse pulso, o "
-        "bit 11 entra em 1 (ADD 2048). Onze pulsos depois a informacao chega ao bit 0, que fica no desviador: MEQ "
-        "Registro 1 1 liga o desviador enquanto a parte alta da caixa passa. Assim varias caixas cabem entre a "
-        "estacao de altura e o desviador sem misturar a informacao."))
-    p.symbols += [Symbol("Registro", "N5", "registrador de deslocamento (bit 11 na estacao, bit 0 no desviador)"),
-                  Symbol("Pulso", "M0.0", "borda de subida do encoder"),
-                  Symbol("Encoder_Anterior", "M0.1", "encoder na varredura anterior"),
-                  Symbol("Altas", "C0", "caixas altas entregues"), Symbol("Baixas", "C1", "caixas baixas entregues"),
-                  Symbol("Fim_Altas_Ant", "M0.2", "borda do fim das altas"),
-                  Symbol("Fim_Baixas_Ant", "M0.3", "borda do fim das baixas")]
+        "Rastreamento com registrador de deslocamento sincronizado pelo encoder. Enquanto a caixa passa pela "
+        "estacao, o sensor alto memoriza se ela e alta; quando ela termina de passar (borda de descida do sensor "
+        "baixo), uma caixa alta marca o bit 0 de N5. Cada pulso do encoder (20 px de esteira) multiplica N5 por 2 "
+        "(so 13 bits: acima de 8191 subtrai 8192), e a marcacao vem depois do deslocamento. Com a caixa no centro "
+        "do desviador a marca esta perto do bit 11: a janela dos bits 9, 10 e 11 liga o desviador um pouco antes "
+        "da caixa chegar e so desliga depois que ela passou."))
+    p.symbols += [Symbol("Registro", "N5", "rastreamento: bit k = caixa alta k pulsos depois da estacao"),
+                  Symbol("Pulso", "M0.5", "borda de subida do encoder"),
+                  Symbol("Alta_Lida", "M0.0", "caixa alta em leitura"),
+                  Symbol("Baixo_Anterior", "M0.1", "sensor baixo na varredura anterior"),
+                  Symbol("Encoder_Anterior", "M0.2", "encoder na varredura anterior"),
+                  Symbol("Fim_Leitura", "M0.6", "borda de descida do sensor baixo"),
+                  Symbol("Altas_Lidas", "N6", "altas identificadas"), Symbol("Baixas_Lidas", "N7", "baixas identificadas"),
+                  Symbol("Altas_Fim", "N8", "altas no fim"), Symbol("Baixas_Fim", "N9", "baixas no fim"),
+                  Symbol("Fim_Altas_Ant", "M1.0", "borda do fim das altas"),
+                  Symbol("Fim_Baixas_Ant", "M1.1", "borda do fim das baixas")]
     p.rungs = [
         Rung([Contact("XIC", "Liga")],
              [Coil("OTE", "Esteira_Entrada"), Coil("OTE", "Esteira_Altas"), Coil("OTE", "Esteira_Baixas"),
               Coil("OTE", "Emissor"), Coil("OTE", "Luz_Operando")], "Liga a linha"),
+        Rung([Contact("XIC", "Sensor_Baixo"), Contact("XIC", "Sensor_Alto")], [Coil("OTL", "Alta_Lida")],
+             "LEITURA: o sensor alto viu a caixa em algum momento"),
+        Rung([Contact("XIO", "Sensor_Baixo"), Contact("XIC", "Baixo_Anterior")], [Coil("OTE", "Fim_Leitura")],
+             "A caixa terminou de passar pela estacao"),
         Rung([Contact("XIC", "Encoder"), Contact("XIO", "Encoder_Anterior")], [Coil("OTE", "Pulso")],
              "Borda de subida do encoder: um pulso a cada 20 px"),
+        Rung([Contact("XIC", "Pulso")], [MathBox("MUL", ["Registro", "2", "Registro"])],
+             "DESLOCAMENTO: a marca anda um bit junto com a caixa"),
+        Rung([Contact("XIC", "Pulso"), CompareBox("GEQ", ["Registro", "8192"])],
+             [MathBox("SUB", ["Registro", "8192", "Registro"])], "So 13 bits"),
+        Rung([Contact("XIC", "Fim_Leitura"), Contact("XIC", "Alta_Lida")],
+             [MathBox("ADD", ["Registro", "1", "Registro"]), MathBox("ADD", ["Altas_Lidas", "1", "Altas_Lidas"]),
+              Coil("OTU", "Alta_Lida")], "Caixa alta: marca o bit 0 (depois do deslocamento)"),
+        Rung([Contact("XIC", "Fim_Leitura"), Contact("XIO", "Alta_Lida")],
+             [MathBox("ADD", ["Baixas_Lidas", "1", "Baixas_Lidas"])], "Caixa baixa"),
+        Rung([Parallel([[CompareBox("MEQ", ["Registro", "1024", "1024"])],
+                        [CompareBox("MEQ", ["Registro", "2048", "2048"])],
+                        [CompareBox("MEQ", ["Registro", "512", "512"])]])],
+             [Coil("OTE", "Desviador")], "JANELA do desviador: bits 9, 10 e 11"),
+        Rung([Contact("XIC", "Sensor_Baixo")], [Coil("OTE", "Baixo_Anterior")], "Imagens anteriores"),
         Rung([Contact("XIC", "Encoder")], [Coil("OTE", "Encoder_Anterior")]),
-        Rung([Contact("XIC", "Pulso")], [MathBox("DIV", ["Registro", "2", "Registro"])],
-             "DESLOCAMENTO: tudo anda um bit em direcao ao desviador"),
-        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Sensor_Alto")], [MathBox("ADD", ["Registro", "2048", "Registro"])],
-             "Caixa alta na estacao: bit 11 em 1"),
-        Rung([CompareBox("MEQ", ["Registro", "1", "1"])], [Coil("OTE", "Desviador")],
-             "Bit 0 chegou ao desviador: caixa alta passando"),
-        Rung([Contact("XIC", "Fim_Altas"), Contact("XIO", "Fim_Altas_Ant")], [CounterBox("CTU", "Altas", 9999)],
-             "CONTAGEM das entregas"),
+        Rung([Contact("XIC", "Fim_Altas"), Contact("XIO", "Fim_Altas_Ant")],
+             [MathBox("ADD", ["Altas_Fim", "1", "Altas_Fim"])], "VERIFICACAO: chegadas no fim de cada esteira"),
         Rung([Contact("XIC", "Fim_Altas")], [Coil("OTE", "Fim_Altas_Ant")]),
-        Rung([Contact("XIC", "Fim_Baixas"), Contact("XIO", "Fim_Baixas_Ant")], [CounterBox("CTU", "Baixas", 9999)]),
+        Rung([Contact("XIC", "Fim_Baixas"), Contact("XIO", "Fim_Baixas_Ant")],
+             [MathBox("ADD", ["Baixas_Fim", "1", "Baixas_Fim"])]),
         Rung([Contact("XIC", "Fim_Baixas")], [Coil("OTE", "Fim_Baixas_Ant")]),
     ]
     return p

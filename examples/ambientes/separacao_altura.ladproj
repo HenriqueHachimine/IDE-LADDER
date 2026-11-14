@@ -2,10 +2,10 @@
   "format": "ladderide-project",
   "format_version": 2,
   "name": "Separacao por altura",
-  "description": "Rastreamento com registrador de deslocamento sincronizado pelo encoder. Cada pulso do encoder (20 px de esteira) desloca o registro N5 um bit para a direita (DIV por 2); se o sensor alto ve caixa nesse pulso, o bit 11 entra em 1 (ADD 2048). Onze pulsos depois a informacao chega ao bit 0, que fica no desviador: MEQ Registro 1 1 liga o desviador enquanto a parte alta da caixa passa. Assim varias caixas cabem entre a estacao de altura e o desviador sem misturar a informacao.",
+  "description": "Rastreamento com registrador de deslocamento sincronizado pelo encoder. Enquanto a caixa passa pela estacao, o sensor alto memoriza se ela e alta; quando ela termina de passar (borda de descida do sensor baixo), uma caixa alta marca o bit 0 de N5. Cada pulso do encoder (20 px de esteira) multiplica N5 por 2 (so 13 bits: acima de 8191 subtrai 8192), e a marcacao vem depois do deslocamento. Com a caixa no centro do desviador a marca esta perto do bit 11: a janela dos bits 9, 10 e 11 liga o desviador um pouco antes da caixa chegar e so desliga depois que ela passou.",
   "version": "0.1.0",
-  "created": "2026-11-14T07:12:02",
-  "modified": "2026-11-14T07:12:02",
+  "created": "2026-11-14T07:30:49",
+  "modified": "2026-11-14T07:30:49",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -87,36 +87,61 @@
     {
       "name": "Registro",
       "address": "N5",
-      "comment": "registrador de deslocamento (bit 11 na estacao, bit 0 no desviador)"
+      "comment": "rastreamento: bit k = caixa alta k pulsos depois da estacao"
     },
     {
       "name": "Pulso",
-      "address": "M0.0",
+      "address": "M0.5",
       "comment": "borda de subida do encoder"
     },
     {
-      "name": "Encoder_Anterior",
+      "name": "Alta_Lida",
+      "address": "M0.0",
+      "comment": "caixa alta em leitura"
+    },
+    {
+      "name": "Baixo_Anterior",
       "address": "M0.1",
+      "comment": "sensor baixo na varredura anterior"
+    },
+    {
+      "name": "Encoder_Anterior",
+      "address": "M0.2",
       "comment": "encoder na varredura anterior"
     },
     {
-      "name": "Altas",
-      "address": "C0",
-      "comment": "caixas altas entregues"
+      "name": "Fim_Leitura",
+      "address": "M0.6",
+      "comment": "borda de descida do sensor baixo"
     },
     {
-      "name": "Baixas",
-      "address": "C1",
-      "comment": "caixas baixas entregues"
+      "name": "Altas_Lidas",
+      "address": "N6",
+      "comment": "altas identificadas"
+    },
+    {
+      "name": "Baixas_Lidas",
+      "address": "N7",
+      "comment": "baixas identificadas"
+    },
+    {
+      "name": "Altas_Fim",
+      "address": "N8",
+      "comment": "altas no fim"
+    },
+    {
+      "name": "Baixas_Fim",
+      "address": "N9",
+      "comment": "baixas no fim"
     },
     {
       "name": "Fim_Altas_Ant",
-      "address": "M0.2",
+      "address": "M1.0",
       "comment": "borda do fim das altas"
     },
     {
       "name": "Fim_Baixas_Ant",
-      "address": "M0.3",
+      "address": "M1.1",
       "comment": "borda do fim das baixas"
     }
   ],
@@ -160,6 +185,50 @@
       ]
     },
     {
+      "comment": "LEITURA: o sensor alto viu a caixa em algum momento",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Baixo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Alto"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Alta_Lida"
+        }
+      ]
+    },
+    {
+      "comment": "A caixa terminou de passar pela estacao",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sensor_Baixo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Baixo_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Fim_Leitura"
+        }
+      ]
+    },
+    {
       "comment": "Borda de subida do encoder: um pulso a cada 20 px",
       "condition": [
         {
@@ -182,6 +251,189 @@
       ]
     },
     {
+      "comment": "DESLOCAMENTO: a marca anda um bit junto com a caixa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Registro",
+            "2",
+            "Registro"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "So 13 bits",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Registro",
+            "8192"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Registro",
+            "8192",
+            "Registro"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Caixa alta: marca o bit 0 (depois do deslocamento)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fim_Leitura"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Alta_Lida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Registro",
+            "1",
+            "Registro"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Altas_Lidas",
+            "1",
+            "Altas_Lidas"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Alta_Lida"
+        }
+      ]
+    },
+    {
+      "comment": "Caixa baixa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Fim_Leitura"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Alta_Lida"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Baixas_Lidas",
+            "1",
+            "Baixas_Lidas"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "JANELA do desviador: bits 9, 10 e 11",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "MEQ",
+                "operands": [
+                  "Registro",
+                  "1024",
+                  "1024"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "MEQ",
+                "operands": [
+                  "Registro",
+                  "2048",
+                  "2048"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "MEQ",
+                "operands": [
+                  "Registro",
+                  "512",
+                  "512"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Desviador"
+        }
+      ]
+    },
+    {
+      "comment": "Imagens anteriores",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Baixo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Baixo_Anterior"
+        }
+      ]
+    },
+    {
       "comment": "",
       "condition": [
         {
@@ -199,75 +451,7 @@
       ]
     },
     {
-      "comment": "DESLOCAMENTO: tudo anda um bit em direcao ao desviador",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Pulso"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "math",
-          "kind": "DIV",
-          "operands": [
-            "Registro",
-            "2",
-            "Registro"
-          ]
-        }
-      ]
-    },
-    {
-      "comment": "Caixa alta na estacao: bit 11 em 1",
-      "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Pulso"
-        },
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Sensor_Alto"
-        }
-      ],
-      "outputs": [
-        {
-          "type": "math",
-          "kind": "ADD",
-          "operands": [
-            "Registro",
-            "2048",
-            "Registro"
-          ]
-        }
-      ]
-    },
-    {
-      "comment": "Bit 0 chegou ao desviador: caixa alta passando",
-      "condition": [
-        {
-          "type": "compare",
-          "kind": "MEQ",
-          "operands": [
-            "Registro",
-            "1",
-            "1"
-          ]
-        }
-      ],
-      "outputs": [
-        {
-          "type": "coil",
-          "kind": "OTE",
-          "operand": "Desviador"
-        }
-      ]
-    },
-    {
-      "comment": "CONTAGEM das entregas",
+      "comment": "VERIFICACAO: chegadas no fim de cada esteira",
       "condition": [
         {
           "type": "contact",
@@ -282,10 +466,13 @@
       ],
       "outputs": [
         {
-          "type": "counter",
-          "kind": "CTU",
-          "operand": "Altas",
-          "preset": 9999
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Altas_Fim",
+            "1",
+            "Altas_Fim"
+          ]
         }
       ]
     },
@@ -322,10 +509,13 @@
       ],
       "outputs": [
         {
-          "type": "counter",
-          "kind": "CTU",
-          "operand": "Baixas",
-          "preset": 9999
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Baixas_Fim",
+            "1",
+            "Baixas_Fim"
+          ]
         }
       ]
     },
@@ -349,18 +539,18 @@
   ],
   "history": [
     {
-      "date": "2026-11-14T07:12:02",
+      "date": "2026-11-14T07:30:49",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 10
+      "rungs": 15
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x779504fd",
-    "size": 308,
-    "instructions": 60,
-    "date": "2026-11-14T07:12:02"
+    "build_id": "0xc7923600",
+    "size": 508,
+    "instructions": 111,
+    "date": "2026-11-14T07:30:49"
   },
   "environment": "separacao_altura"
 }
