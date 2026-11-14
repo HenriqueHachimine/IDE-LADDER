@@ -1336,6 +1336,77 @@ def furnace() -> Project:
     return p
 
 
+def demand_control() -> Project:
+    p = env_project("demanda_energia", "Controle de demanda", (
+        "Projecao e corte por estagios. Projecao = (Energia + Potencia x Restante) / 120 = media que a janela vai "
+        "fechar se nada mudar. A cada 4 s o estagio de corte (N5) sobe se a projecao passar de 97% do contrato e "
+        "desce abaixo de 88%. Estagio 1 corta o aquecedor, 2 e 3 os ar-condicionados (rodizio: a cada janela muda "
+        "qual sai primeiro) e 4 o compressor; a bomba nunca e cortada. Cada carga cortada tem tempo maximo "
+        "desligada e tempo minimo ligada (ar 25 s / 12 s, compressor 20 s / 10 s, aquecedor 100 s / 15 s): ela "
+        "volta por pouco tempo e e cortada de novo, ficando perto do limite de conforto sem recarregar tudo."))
+    p.symbols += [Symbol("Potencia", "N0", "kW agora"), Symbol("Energia", "N1", "kW.s na janela"),
+                  Symbol("Restante", "N2", "s ate o fim da janela"), Symbol("Contrato", "N3", "kW contratados"),
+                  Symbol("Projecao", "N4", "media prevista para o fim da janela"), Symbol("Estagio", "N5", "0 a 4"),
+                  Symbol("Limite_Alto", "N6", "97% do contrato"), Symbol("Limite_Baixo", "N7", "88% do contrato"),
+                  Symbol("Calculo", "N8", "auxiliar"),
+                  Symbol("Vez_AC2", "M0.0", "nesta janela o AC2 sai primeiro"), Symbol("Sinc_Anterior", "M0.1", ""),
+                  Symbol("Troca_Rodizio", "M0.2", "auxiliar da troca do rodizio"),
+                  Symbol("Passo", "T0", "4 s entre mudancas de estagio")]
+    loads = [("AC1", "Pede_AC1", "Ar_Cond_1", 25000, 12000, "M1"), ("AC2", "Pede_AC2", "Ar_Cond_2", 25000, 12000, "M2"),
+             ("Comp", "Pede_Compressor", "Compressor", 20000, 10000, "M3"),
+             ("Aq", "Pede_Aquecedor", "Aquecedor", 100000, 15000, "M4")]
+    timer = 1
+    for name, _, _, off_ms, on_ms, byte in loads:
+        p.symbols += [Symbol(f"Corta_{name}", f"{byte}.0", f"estagio pede o corte de {name}"),
+                      Symbol(f"Devolve_{name}", f"{byte}.1", f"{name} de volta pelo tempo minimo"),
+                      Symbol(f"Max_{name}", f"T{timer}", f"{off_ms // 1000} s no maximo desligado"),
+                      Symbol(f"Min_{name}", f"T{timer + 1}", f"{on_ms // 1000} s no minimo ligado")]
+        timer += 2
+    rungs = [
+        Rung([], [MathBox("MUL", ["Potencia", "Restante", "Calculo"]), MathBox("ADD", ["Calculo", "Energia", "Calculo"]),
+                  MathBox("DIV", ["Calculo", "120", "Projecao"])], "PROJECAO da media no fim da janela"),
+        Rung([], [MathBox("MUL", ["Contrato", "97", "Limite_Alto"]), MathBox("DIV", ["Limite_Alto", "100", "Limite_Alto"]),
+                  MathBox("MUL", ["Contrato", "88", "Limite_Baixo"]), MathBox("DIV", ["Limite_Baixo", "100", "Limite_Baixo"])],
+             "Faixa de atuacao: 88% a 97% do contrato"),
+        Rung([Contact("XIO", "Passo.DN")], [TimerBox("TON", "Passo", 4000)], "ESTAGIOS: um passo a cada 4 s"),
+        Rung([Contact("XIC", "Passo.DN"), CompareBox("GRT", ["Projecao", "Limite_Alto"]), CompareBox("LES", ["Estagio", "4"])],
+             [MathBox("ADD", ["Estagio", "1", "Estagio"])], "Projecao alta: corta mais uma carga"),
+        Rung([Contact("XIC", "Passo.DN"), CompareBox("LES", ["Projecao", "Limite_Baixo"]), CompareBox("GRT", ["Estagio", "0"])],
+             [MathBox("SUB", ["Estagio", "1", "Estagio"])], "Projecao baixa: devolve uma carga"),
+        Rung([Contact("XIC", "Pulso_Sincronismo"), Contact("XIO", "Sinc_Anterior")], [Coil("OTL", "Troca_Rodizio")],
+             "RODIZIO: troca qual ar-condicionado sai primeiro a cada janela"),
+        Rung([Contact("XIC", "Troca_Rodizio"), Contact("XIC", "Vez_AC2")], [Coil("OTU", "Vez_AC2"), Coil("OTU", "Troca_Rodizio")]),
+        Rung([Contact("XIC", "Troca_Rodizio"), Contact("XIO", "Vez_AC2")], [Coil("OTL", "Vez_AC2"), Coil("OTU", "Troca_Rodizio")]),
+        Rung([Contact("XIC", "Pulso_Sincronismo")], [Coil("OTE", "Sinc_Anterior")]),
+        Rung([CompareBox("GEQ", ["Estagio", "1"])], [Coil("OTE", "Corta_Aq")], "PRIORIDADES de corte"),
+        Rung([Parallel([[CompareBox("GEQ", ["Estagio", "3"])],
+                        [CompareBox("GEQ", ["Estagio", "2"]), Contact("XIO", "Vez_AC2")]])], [Coil("OTE", "Corta_AC1")]),
+        Rung([Parallel([[CompareBox("GEQ", ["Estagio", "3"])],
+                        [CompareBox("GEQ", ["Estagio", "2"]), Contact("XIC", "Vez_AC2")]])], [Coil("OTE", "Corta_AC2")]),
+        Rung([CompareBox("GEQ", ["Estagio", "4"])], [Coil("OTE", "Corta_Comp")]),
+    ]
+    for k, (name, req, out, _, _, _) in enumerate(loads):
+        off_ms, on_ms = loads[k][3], loads[k][4]
+        first = k == 0
+        rungs += [
+            Rung([Contact("XIC", req), Contact("XIC", f"Corta_{name}"), Contact("XIO", f"Devolve_{name}")],
+                 [TimerBox("TON", f"Max_{name}", off_ms)],
+                 "TEMPO MAXIMO desligada e MINIMO ligada (a carga volta um pouco e sai de novo)" if first else ""),
+            Rung([Contact("XIC", f"Max_{name}.DN")], [Coil("OTL", f"Devolve_{name}")]),
+            Rung([Contact("XIC", f"Devolve_{name}")], [TimerBox("TON", f"Min_{name}", on_ms)]),
+            Rung([Contact("XIC", f"Min_{name}.DN")], [Coil("OTU", f"Devolve_{name}")]),
+            Rung([Contact("XIC", req), Parallel([[Contact("XIO", f"Corta_{name}")], [Contact("XIC", f"Devolve_{name}")]])],
+                 [Coil("OTE", out)], "SAIDA: pedido do termostato e nao cortada" if first else ""),
+        ]
+    rungs += [
+        Rung([Contact("XIC", "Pede_Bomba")], [Coil("OTE", "Bomba")], "Bomba nunca e cortada"),
+        Rung([CompareBox("GRT", ["Projecao", "Contrato"])], [Coil("OTE", "Lampada_Demanda")], "Sinalizacao"),
+        Rung([CompareBox("GRT", ["Estagio", "0"])], [Coil("OTE", "Lampada_Corte")]),
+    ]
+    p.rungs = rungs
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1445,7 +1516,8 @@ def main() -> int:
                "ambientes/venda.ladproj": vending,
                "ambientes/nivel_pi.ladproj": level_pi,
                "ambientes/paletizador.ladproj": palletizer,
-               "ambientes/forno_rampa.ladproj": furnace}
+               "ambientes/forno_rampa.ladproj": furnace,
+               "ambientes/demanda_energia.ladproj": demand_control}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

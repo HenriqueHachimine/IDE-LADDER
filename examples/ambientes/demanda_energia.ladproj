@@ -1,0 +1,1162 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Controle de demanda",
+  "description": "Projecao e corte por estagios. Projecao = (Energia + Potencia x Restante) / 120 = media que a janela vai fechar se nada mudar. A cada 4 s o estagio de corte (N5) sobe se a projecao passar de 97% do contrato e desce abaixo de 88%. Estagio 1 corta o aquecedor, 2 e 3 os ar-condicionados (rodizio: a cada janela muda qual sai primeiro) e 4 o compressor; a bomba nunca e cortada. Cada carga cortada tem tempo maximo desligada e tempo minimo ligada (ar 25 s / 12 s, compressor 20 s / 10 s, aquecedor 100 s / 15 s): ela volta por pouco tempo e e cortada de novo, ficando perto do limite de conforto sem recarregar tudo.",
+  "version": "0.1.0",
+  "created": "2026-11-14T06:44:15",
+  "modified": "2026-11-14T06:44:15",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Pulso_Sincronismo",
+      "address": "I0.0",
+      "comment": "Pulso do medidor no fim da janela de demanda"
+    },
+    {
+      "name": "Pede_AC1",
+      "address": "I0.1",
+      "comment": "Termostato da sala 1 pede frio"
+    },
+    {
+      "name": "Pede_AC2",
+      "address": "I0.2",
+      "comment": "Termostato da sala 2 pede frio"
+    },
+    {
+      "name": "Pede_Compressor",
+      "address": "I0.3",
+      "comment": "Pressostato: pressão de ar baixa (pede o compressor)"
+    },
+    {
+      "name": "Pede_Aquecedor",
+      "address": "I0.4",
+      "comment": "Termostato da água pede aquecimento"
+    },
+    {
+      "name": "Pede_Bomba",
+      "address": "I0.5",
+      "comment": "Boia da caixa d'água pede a bomba"
+    },
+    {
+      "name": "Ar_Cond_1",
+      "address": "Q0.0",
+      "comment": "Ar-condicionado 1 (50 kW)"
+    },
+    {
+      "name": "Ar_Cond_2",
+      "address": "Q0.1",
+      "comment": "Ar-condicionado 2 (50 kW)"
+    },
+    {
+      "name": "Compressor",
+      "address": "Q0.2",
+      "comment": "Compressor de ar (75 kW)"
+    },
+    {
+      "name": "Aquecedor",
+      "address": "Q0.3",
+      "comment": "Aquecedor de água (60 kW)"
+    },
+    {
+      "name": "Bomba",
+      "address": "Q0.4",
+      "comment": "Bomba d'água (30 kW)"
+    },
+    {
+      "name": "Lampada_Demanda",
+      "address": "Q0.5",
+      "comment": "Lâmpada DEMANDA ALTA (projeção acima do contrato)"
+    },
+    {
+      "name": "Lampada_Corte",
+      "address": "Q0.6",
+      "comment": "Lâmpada CORTE DE CARGA ATIVO"
+    },
+    {
+      "name": "Potencia",
+      "address": "N0",
+      "comment": "kW agora"
+    },
+    {
+      "name": "Energia",
+      "address": "N1",
+      "comment": "kW.s na janela"
+    },
+    {
+      "name": "Restante",
+      "address": "N2",
+      "comment": "s ate o fim da janela"
+    },
+    {
+      "name": "Contrato",
+      "address": "N3",
+      "comment": "kW contratados"
+    },
+    {
+      "name": "Projecao",
+      "address": "N4",
+      "comment": "media prevista para o fim da janela"
+    },
+    {
+      "name": "Estagio",
+      "address": "N5",
+      "comment": "0 a 4"
+    },
+    {
+      "name": "Limite_Alto",
+      "address": "N6",
+      "comment": "97% do contrato"
+    },
+    {
+      "name": "Limite_Baixo",
+      "address": "N7",
+      "comment": "88% do contrato"
+    },
+    {
+      "name": "Calculo",
+      "address": "N8",
+      "comment": "auxiliar"
+    },
+    {
+      "name": "Vez_AC2",
+      "address": "M0.0",
+      "comment": "nesta janela o AC2 sai primeiro"
+    },
+    {
+      "name": "Sinc_Anterior",
+      "address": "M0.1",
+      "comment": ""
+    },
+    {
+      "name": "Troca_Rodizio",
+      "address": "M0.2",
+      "comment": "auxiliar da troca do rodizio"
+    },
+    {
+      "name": "Passo",
+      "address": "T0",
+      "comment": "4 s entre mudancas de estagio"
+    },
+    {
+      "name": "Corta_AC1",
+      "address": "M1.0",
+      "comment": "estagio pede o corte de AC1"
+    },
+    {
+      "name": "Devolve_AC1",
+      "address": "M1.1",
+      "comment": "AC1 de volta pelo tempo minimo"
+    },
+    {
+      "name": "Max_AC1",
+      "address": "T1",
+      "comment": "25 s no maximo desligado"
+    },
+    {
+      "name": "Min_AC1",
+      "address": "T2",
+      "comment": "12 s no minimo ligado"
+    },
+    {
+      "name": "Corta_AC2",
+      "address": "M2.0",
+      "comment": "estagio pede o corte de AC2"
+    },
+    {
+      "name": "Devolve_AC2",
+      "address": "M2.1",
+      "comment": "AC2 de volta pelo tempo minimo"
+    },
+    {
+      "name": "Max_AC2",
+      "address": "T3",
+      "comment": "25 s no maximo desligado"
+    },
+    {
+      "name": "Min_AC2",
+      "address": "T4",
+      "comment": "12 s no minimo ligado"
+    },
+    {
+      "name": "Corta_Comp",
+      "address": "M3.0",
+      "comment": "estagio pede o corte de Comp"
+    },
+    {
+      "name": "Devolve_Comp",
+      "address": "M3.1",
+      "comment": "Comp de volta pelo tempo minimo"
+    },
+    {
+      "name": "Max_Comp",
+      "address": "T5",
+      "comment": "20 s no maximo desligado"
+    },
+    {
+      "name": "Min_Comp",
+      "address": "T6",
+      "comment": "10 s no minimo ligado"
+    },
+    {
+      "name": "Corta_Aq",
+      "address": "M4.0",
+      "comment": "estagio pede o corte de Aq"
+    },
+    {
+      "name": "Devolve_Aq",
+      "address": "M4.1",
+      "comment": "Aq de volta pelo tempo minimo"
+    },
+    {
+      "name": "Max_Aq",
+      "address": "T7",
+      "comment": "100 s no maximo desligado"
+    },
+    {
+      "name": "Min_Aq",
+      "address": "T8",
+      "comment": "15 s no minimo ligado"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "PROJECAO da media no fim da janela",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Potencia",
+            "Restante",
+            "Calculo"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Calculo",
+            "Energia",
+            "Calculo"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Calculo",
+            "120",
+            "Projecao"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Faixa de atuacao: 88% a 97% do contrato",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Contrato",
+            "97",
+            "Limite_Alto"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Limite_Alto",
+            "100",
+            "Limite_Alto"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Contrato",
+            "88",
+            "Limite_Baixo"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "DIV",
+          "operands": [
+            "Limite_Baixo",
+            "100",
+            "Limite_Baixo"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "ESTAGIOS: um passo a cada 4 s",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Passo.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Passo",
+          "preset": 4000
+        }
+      ]
+    },
+    {
+      "comment": "Projecao alta: corta mais uma carga",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Passo.DN"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Projecao",
+            "Limite_Alto"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Estagio",
+            "4"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Estagio",
+            "1",
+            "Estagio"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Projecao baixa: devolve uma carga",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Passo.DN"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Projecao",
+            "Limite_Baixo"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Estagio",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Estagio",
+            "1",
+            "Estagio"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "RODIZIO: troca qual ar-condicionado sai primeiro a cada janela",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso_Sincronismo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Sinc_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Troca_Rodizio"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Troca_Rodizio"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vez_AC2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vez_AC2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Troca_Rodizio"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Troca_Rodizio"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vez_AC2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vez_AC2"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Troca_Rodizio"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso_Sincronismo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Sinc_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "PRIORIDADES de corte",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Estagio",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Corta_Aq"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Estagio",
+                  "3"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Estagio",
+                  "2"
+                ]
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Vez_AC2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Corta_AC1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Estagio",
+                  "3"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Estagio",
+                  "2"
+                ]
+              },
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Vez_AC2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Corta_AC2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Estagio",
+            "4"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Corta_Comp"
+        }
+      ]
+    },
+    {
+      "comment": "TEMPO MAXIMO desligada e MINIMO ligada (a carga volta um pouco e sai de novo)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_AC1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Corta_AC1"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Devolve_AC1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Max_AC1",
+          "preset": 25000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Max_AC1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolve_AC1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Devolve_AC1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Min_AC1",
+          "preset": 12000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Min_AC1.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Devolve_AC1"
+        }
+      ]
+    },
+    {
+      "comment": "SAIDA: pedido do termostato e nao cortada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_AC1"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Corta_AC1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Devolve_AC1"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ar_Cond_1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_AC2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Corta_AC2"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Devolve_AC2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Max_AC2",
+          "preset": 25000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Max_AC2.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolve_AC2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Devolve_AC2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Min_AC2",
+          "preset": 12000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Min_AC2.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Devolve_AC2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_AC2"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Corta_AC2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Devolve_AC2"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ar_Cond_2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_Compressor"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Corta_Comp"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Devolve_Comp"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Max_Comp",
+          "preset": 20000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Max_Comp.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolve_Comp"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Devolve_Comp"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Min_Comp",
+          "preset": 10000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Min_Comp.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Devolve_Comp"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_Compressor"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Corta_Comp"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Devolve_Comp"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Compressor"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_Aquecedor"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Corta_Aq"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Devolve_Aq"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Max_Aq",
+          "preset": 100000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Max_Aq.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolve_Aq"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Devolve_Aq"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Min_Aq",
+          "preset": 15000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Min_Aq.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Devolve_Aq"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_Aquecedor"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Corta_Aq"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Devolve_Aq"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Aquecedor"
+        }
+      ]
+    },
+    {
+      "comment": "Bomba nunca e cortada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pede_Bomba"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Bomba"
+        }
+      ]
+    },
+    {
+      "comment": "Sinalizacao",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Projecao",
+            "Contrato"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Demanda"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Estagio",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Corte"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T06:44:15",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 36
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x981b9f54",
+    "size": 1104,
+    "instructions": 239,
+    "date": "2026-11-14T06:44:15"
+  },
+  "environment": "demanda_energia"
+}

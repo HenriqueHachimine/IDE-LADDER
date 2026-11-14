@@ -743,3 +743,13 @@ def test_furnace_follows_ramp_and_soak_profile():
     unlocked = Project(environment="forno_rampa", rungs=[Rung([CompareBox("LES", ["N0", "500"])], [Coil("OTE", "Q0.0")])])
     env, alarms, _ = closed_loop(unlocked, [(40000, "PORTA", True)], 45000)
     assert any("acima de 200" in a for a in alarms)
+
+
+def test_demand_control_sheds_loads_in_heavy_windows():
+    p = Project.load(EXAMPLES / "demanda_energia.ladproj")
+    env, alarms, _ = closed_loop(p, total_ms=960000)                       # 8 janelas, 4 pesadas
+    assert alarms == set() and env.windows_over == 0 and max(env.windows) < 400
+    naive = Project(environment="demanda_energia",
+                    rungs=[Rung([Contact("XIC", f"I0.{k + 1}")], [Coil("OTE", f"Q0.{k}")]) for k in range(5)])
+    env, alarms, _ = closed_loop(naive, total_ms=480000)
+    assert any("Ultrapassagem" in a for a in alarms) and env.windows_over >= 2
