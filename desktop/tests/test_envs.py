@@ -455,3 +455,21 @@ def test_overhead_crane_homes_counts_encoder_and_stops_at_stations():
         Rung([Contact("XIC", "Q0.0")], [Coil("OTE", "Q0.4")])])
     _, alarms, _ = closed_loop(runaway, [(100, "CH5", True), (300, "CH5", False)], 15000)
     assert any("batente" in a for a in alarms) and any("andando" in a for a in alarms)
+
+
+def test_vending_machine_charges_gives_change_and_refunds():
+    p = Project.load(EXAMPLES / "venda.ladproj")
+    buy = [(500, "C100", True), (700, "C100", True), (900, "C100", True), (3000, "BOT_A", True), (3100, "BOT_A", False)]
+    env, alarms, sim = closed_loop(p, buy, 9000)                      # R$ 3,00 por uma lata de R$ 2,50
+    assert alarms == set() and env.sales == 1 and env.returned == 50 and sim.vm.n[0] == 0
+    sold_out = []
+    for k in range(3):                                                # o suco tem 2 no estoque
+        t = 500 + k * 8000
+        sold_out += [(t + d, "C100", True) for d in (0, 200, 400, 600)] + [(t + 2500, "BOT_B", True),
+                                                                          (t + 2600, "BOT_B", False)]
+    env, alarms, sim = closed_loop(p, sold_out, 30000)
+    assert alarms == set() and env.sales == 2 and env.stock["B"] == 0
+    assert sim.vm.n[0] == env.inserted - env.returned - env.delivered > 0    # tubo vazio: o resto fica no credito
+    no_stop = Project(environment="venda", rungs=[Rung([Contact("XIC", "I0.3")], [Coil("OTL", "Q0.0")])])
+    _, alarms, _ = closed_loop(no_stop, [(500, "BOT_A", True), (600, "BOT_A", False)], 8000)
+    assert any("dois produtos" in a for a in alarms) and any("prejuízo" in a for a in alarms)

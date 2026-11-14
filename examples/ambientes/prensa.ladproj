@@ -4,8 +4,8 @@
   "name": "Prensa com comando bimanual",
   "description": "Logica de seguranca: os dois botoes precisam ser acionados em ate 0,5 s (T0 conta desde o primeiro), mantidos durante a descida e soltos antes do proximo golpe (anti-repeticao, M0.0). Soltar uma mao, chegar ao PMI ou interromper a cortina faz o martelo subir.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:34:03",
-  "modified": "2026-11-13T20:34:03",
+  "created": "2026-11-13T20:58:09",
+  "modified": "2026-11-13T20:58:09",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -396,7 +396,7 @@
   ],
   "history": [
     {
-      "date": "2026-11-13T20:34:03",
+      "date": "2026-11-13T20:58:09",
       "action": "gerado por scripts/make_examples.py",
       "rungs": 8
     }
@@ -407,7 +407,7 @@
     "build_id": "0x60d9effd",
     "size": 348,
     "instructions": 75,
-    "date": "2026-11-13T20:34:03"
+    "date": "2026-11-13T20:58:09"
   },
   "environment": "prensa"
 }

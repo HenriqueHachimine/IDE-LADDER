@@ -441,20 +441,22 @@ def two_hand_press() -> Project:
                   Symbol("Ciclo", "M0.1", "golpe em andamento (descida)"),
                   Symbol("Retorno", "M0.2", "martelo voltando ao PMS"),
                   Symbol("Simultaneidade", "T0", "0,5 s desde o primeiro botao")]
-    both = [Contact("XIC", "Botao_Esquerdo"), Contact("XIC", "Botao_Direito")]
+    def both():
+        return [Contact("XIC", "Botao_Esquerdo"), Contact("XIC", "Botao_Direito")]
+
     p.rungs = [
         Rung([Parallel([[Contact("XIC", "Botao_Esquerdo")], [Contact("XIC", "Botao_Direito")]])],
              [TimerBox("TON", "Simultaneidade", 500)], "Conta o tempo desde que a primeira mao apertou"),
         Rung([Contact("XIO", "Botao_Esquerdo"), Contact("XIO", "Botao_Direito")], [Coil("OTL", "Rearmado")],
              "Anti-repeticao: so rearma com as duas maos soltas"),
-        Rung([*both, Contact("XIO", "Simultaneidade.DN"), Contact("XIC", "Rearmado"), Contact("XIC", "PMS"),
+        Rung([*both(), Contact("XIO", "Simultaneidade.DN"), Contact("XIC", "Rearmado"), Contact("XIC", "PMS"),
               Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"), Contact("XIO", "Retorno")],
              [Coil("OTL", "Ciclo"), Coil("OTU", "Rearmado")], "Inicio do golpe: simultaneo, rearmado e no PMS"),
         Rung([Contact("XIC", "Ciclo"),
               Parallel([[Contact("XIC", "PMI")], [Contact("XIO", "Botao_Esquerdo")], [Contact("XIO", "Botao_Direito")],
                         [Contact("XIO", "Cortina_Luz")], [Contact("XIO", "Emergencia")]])],
              [Coil("OTL", "Retorno"), Coil("OTU", "Ciclo")], "Fim do golpe ou condicao insegura: volta"),
-        Rung([Contact("XIC", "Ciclo"), *both, Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"),
+        Rung([Contact("XIC", "Ciclo"), *both(), Contact("XIC", "Cortina_Luz"), Contact("XIC", "Emergencia"),
               Contact("XIO", "PMI")], [Coil("OTE", "Valvula_Desce")], "Desce so com as duas maos e zona livre"),
         Rung([Contact("XIC", "Retorno"), Contact("XIC", "Emergencia"), Contact("XIO", "PMS")],
              [Coil("OTE", "Valvula_Sobe")], "Sobe ate o PMS"),
@@ -809,6 +811,72 @@ def overhead_crane() -> Project:
     return p
 
 
+def vending() -> Project:
+    p = env_project("venda", "Maquina de venda", (
+        "Maquina de estados com dinheiro: cada pulso de moeda soma ao credito (N0, centavos). A venda so comeca com "
+        "credito suficiente (e com troco no tubo, ou valor exato); a espiral para no sensor de queda, o preco e "
+        "descontado e o troco sai moeda a moeda (gerador de pulsos com dois temporizadores, SUB 25 a cada pulso) "
+        "ate o credito zerar ou o tubo esvaziar - o que faltar continua no display. Sem queda em 3 s o produto "
+        "esta esgotado: o credito volta e a lampada ESGOTADO acende por 5 s."))
+    p.symbols += [Symbol("Credito", "N0", "credito em centavos (display)"),
+                  Symbol("M25_Anterior", "M0.0", ""), Symbol("M50_Anterior", "M0.1", ""), Symbol("M100_Anterior", "M0.2", ""),
+                  Symbol("Vendendo_A", "M0.3", "espiral A entregando"), Symbol("Vendendo_B", "M0.4", "espiral B entregando"),
+                  Symbol("Devolvendo", "M0.5", "pagando o troco"), Symbol("Queda_Anterior", "M0.6", ""),
+                  Symbol("Troco_Anterior", "M0.7", ""), Symbol("Esgotou", "M1.0", "a espiral girou vazia"),
+                  Symbol("Tempo_Espiral", "T0", "3 s esperando o produto cair"),
+                  Symbol("Pulso_Troco", "T1", "150 ms com o ejetor desligado"),
+                  Symbol("Pausa_Troco", "T2", "150 ms com o ejetor ligado"),
+                  Symbol("Aviso_Esgotado", "T3", "5 s com a lampada ESGOTADO")]
+
+    def idle():
+        return [Contact("XIO", "Vendendo_A"), Contact("XIO", "Vendendo_B"), Contact("XIO", "Devolvendo")]
+
+    rungs = []
+    for coin, prev, value in (("Moeda_25", "M25_Anterior", "25"), ("Moeda_50", "M50_Anterior", "50"),
+                              ("Moeda_100", "M100_Anterior", "100")):
+        rungs += [Rung([Contact("XIC", coin), Contact("XIO", prev)], [MathBox("ADD", ["Credito", value, "Credito"])],
+                       "Cada moeda soma ao credito (borda do sensor)" if value == "25" else ""),
+                  Rung([Contact("XIC", coin)], [Coil("OTE", prev)])]
+    for prod, price in (("A", "250"), ("B", "375")):
+        rungs.append(Rung([Contact("XIC", f"Botao_{prod}"), CompareBox("GEQ", ["Credito", price]), *idle(),
+                           Parallel([[Contact("XIO", "Tubo_Troco_Vazio")], [CompareBox("EQU", ["Credito", price])]])],
+                          [Coil("OTL", f"Vendendo_{prod}")],
+                          "Venda: credito suficiente, maquina livre e troco garantido" if prod == "A" else ""))
+    for prod, price in (("A", "250"), ("B", "375")):
+        rungs.append(Rung([Contact("XIC", "Sensor_Queda"), Contact("XIO", "Queda_Anterior"),
+                           Contact("XIC", f"Vendendo_{prod}")],
+                          [MathBox("SUB", ["Credito", price, "Credito"]), Coil("OTU", f"Vendendo_{prod}"),
+                           Coil("OTL", "Devolvendo")], "O produto caiu: desconta e paga o troco" if prod == "A" else ""))
+    rungs += [
+        Rung([Contact("XIC", "Sensor_Queda")], [Coil("OTE", "Queda_Anterior")]),
+        Rung([Contact("XIC", "Vendendo_A")], [Coil("OTE", "Espiral_A")], "Espirais"),
+        Rung([Contact("XIC", "Vendendo_B")], [Coil("OTE", "Espiral_B")]),
+        Rung([Parallel([[Contact("XIC", "Vendendo_A")], [Contact("XIC", "Vendendo_B")]])],
+             [TimerBox("TON", "Tempo_Espiral", 3000)], "Sem queda em 3 s: esgotado, devolve o credito"),
+        Rung([Contact("XIC", "Tempo_Espiral.DN")],
+             [Coil("OTU", "Vendendo_A"), Coil("OTU", "Vendendo_B"), Coil("OTL", "Devolvendo"), Coil("OTL", "Esgotou")]),
+        Rung([Contact("XIC", "Esgotou")], [TimerBox("TON", "Aviso_Esgotado", 5000)]),
+        Rung([Contact("XIC", "Aviso_Esgotado.DN")], [Coil("OTU", "Esgotou")]),
+        Rung([Contact("XIC", "Devolver"), Contact("XIO", "Vendendo_A"), Contact("XIO", "Vendendo_B")],
+             [Coil("OTL", "Devolvendo")], "Devolver: paga todo o credito"),
+        Rung([Contact("XIC", "Devolvendo"), CompareBox("GRT", ["Credito", "0"]), Contact("XIO", "Tubo_Troco_Vazio"),
+              Contact("XIO", "Pausa_Troco.DN")], [TimerBox("TON", "Pulso_Troco", 150)],
+             "Gerador de pulsos para o ejetor de troco"),
+        Rung([Contact("XIC", "Pulso_Troco.DN")], [Coil("OTE", "Ejetor_Troco"), TimerBox("TON", "Pausa_Troco", 150)]),
+        Rung([Contact("XIC", "Ejetor_Troco"), Contact("XIO", "Troco_Anterior")],
+             [MathBox("SUB", ["Credito", "25", "Credito"])], "Cada moeda de troco: menos 25 centavos"),
+        Rung([Contact("XIC", "Ejetor_Troco")], [Coil("OTE", "Troco_Anterior")]),
+        Rung([Contact("XIC", "Devolvendo"), Contact("XIO", "Ejetor_Troco"),
+              Parallel([[CompareBox("LEQ", ["Credito", "0"])], [Contact("XIC", "Tubo_Troco_Vazio")]])],
+             [Coil("OTU", "Devolvendo")], "Troco pago (ou tubo vazio: o resto fica no credito)"),
+        Rung(idle(), [Coil("OTE", "Lampada_Pronto")]),
+        Rung([Contact("XIC", "Esgotou")], [Coil("OTE", "Lampada_Esgotado")]),
+        Rung([Contact("XIC", "Tubo_Troco_Vazio")], [Coil("OTE", "Lampada_Sem_Troco")]),
+    ]
+    p.rungs = rungs
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -914,7 +982,8 @@ def main() -> int:
                "ambientes/furadeira.ladproj": drill, "ambientes/passagem_nivel.ladproj": level_crossing,
                "ambientes/estacionamento.ladproj": parking, "ambientes/seletor_pecas.ladproj": sorter,
                "ambientes/detector_gas.ladproj": gas_detection, "ambientes/balanca.ladproj": scale,
-               "ambientes/estufa.ladproj": greenhouse, "ambientes/ponte_rolante.ladproj": overhead_crane}
+               "ambientes/estufa.ladproj": greenhouse, "ambientes/ponte_rolante.ladproj": overhead_crane,
+               "ambientes/venda.ladproj": vending}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

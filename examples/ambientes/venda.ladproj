@@ -1,0 +1,906 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Maquina de venda",
+  "description": "Maquina de estados com dinheiro: cada pulso de moeda soma ao credito (N0, centavos). A venda so comeca com credito suficiente (e com troco no tubo, ou valor exato); a espiral para no sensor de queda, o preco e descontado e o troco sai moeda a moeda (gerador de pulsos com dois temporizadores, SUB 25 a cada pulso) ate o credito zerar ou o tubo esvaziar - o que faltar continua no display. Sem queda em 3 s o produto esta esgotado: o credito volta e a lampada ESGOTADO acende por 5 s.",
+  "version": "0.1.0",
+  "created": "2026-11-13T21:00:01",
+  "modified": "2026-11-13T21:00:01",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Moeda_25",
+      "address": "I0.0",
+      "comment": "Sensor de moeda de R$ 0,25 (pulso)"
+    },
+    {
+      "name": "Moeda_50",
+      "address": "I0.1",
+      "comment": "Sensor de moeda de R$ 0,50 (pulso)"
+    },
+    {
+      "name": "Moeda_100",
+      "address": "I0.2",
+      "comment": "Sensor de moeda de R$ 1,00 (pulso)"
+    },
+    {
+      "name": "Botao_A",
+      "address": "I0.3",
+      "comment": "Botão produto A (lata, R$ 2,50)"
+    },
+    {
+      "name": "Botao_B",
+      "address": "I0.4",
+      "comment": "Botão produto B (suco, R$ 3,75)"
+    },
+    {
+      "name": "Devolver",
+      "address": "I0.5",
+      "comment": "Botão DEVOLVER MOEDAS"
+    },
+    {
+      "name": "Sensor_Queda",
+      "address": "I0.6",
+      "comment": "Sensor de queda do produto"
+    },
+    {
+      "name": "Tubo_Troco_Vazio",
+      "address": "I0.7",
+      "comment": "Tubo de troco vazio"
+    },
+    {
+      "name": "Espiral_A",
+      "address": "Q0.0",
+      "comment": "Motor da espiral A"
+    },
+    {
+      "name": "Espiral_B",
+      "address": "Q0.1",
+      "comment": "Motor da espiral B"
+    },
+    {
+      "name": "Ejetor_Troco",
+      "address": "Q0.2",
+      "comment": "Ejetor de troco (uma moeda de R$ 0,25 por pulso)"
+    },
+    {
+      "name": "Lampada_Pronto",
+      "address": "Q0.3",
+      "comment": "Lâmpada PRONTO"
+    },
+    {
+      "name": "Lampada_Esgotado",
+      "address": "Q0.4",
+      "comment": "Lâmpada PRODUTO ESGOTADO"
+    },
+    {
+      "name": "Lampada_Sem_Troco",
+      "address": "Q0.5",
+      "comment": "Lâmpada SEM TROCO (só valor exato)"
+    },
+    {
+      "name": "Credito",
+      "address": "N0",
+      "comment": "credito em centavos (display)"
+    },
+    {
+      "name": "M25_Anterior",
+      "address": "M0.0",
+      "comment": ""
+    },
+    {
+      "name": "M50_Anterior",
+      "address": "M0.1",
+      "comment": ""
+    },
+    {
+      "name": "M100_Anterior",
+      "address": "M0.2",
+      "comment": ""
+    },
+    {
+      "name": "Vendendo_A",
+      "address": "M0.3",
+      "comment": "espiral A entregando"
+    },
+    {
+      "name": "Vendendo_B",
+      "address": "M0.4",
+      "comment": "espiral B entregando"
+    },
+    {
+      "name": "Devolvendo",
+      "address": "M0.5",
+      "comment": "pagando o troco"
+    },
+    {
+      "name": "Queda_Anterior",
+      "address": "M0.6",
+      "comment": ""
+    },
+    {
+      "name": "Troco_Anterior",
+      "address": "M0.7",
+      "comment": ""
+    },
+    {
+      "name": "Esgotou",
+      "address": "M1.0",
+      "comment": "a espiral girou vazia"
+    },
+    {
+      "name": "Tempo_Espiral",
+      "address": "T0",
+      "comment": "3 s esperando o produto cair"
+    },
+    {
+      "name": "Pulso_Troco",
+      "address": "T1",
+      "comment": "150 ms com o ejetor desligado"
+    },
+    {
+      "name": "Pausa_Troco",
+      "address": "T2",
+      "comment": "150 ms com o ejetor ligado"
+    },
+    {
+      "name": "Aviso_Esgotado",
+      "address": "T3",
+      "comment": "5 s com a lampada ESGOTADO"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "Cada moeda soma ao credito (borda do sensor)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Moeda_25"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "M25_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Credito",
+            "25",
+            "Credito"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Moeda_25"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "M25_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Moeda_50"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "M50_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Credito",
+            "50",
+            "Credito"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Moeda_50"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "M50_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Moeda_100"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "M100_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Credito",
+            "100",
+            "Credito"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Moeda_100"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "M100_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Venda: credito suficiente, maquina livre e troco garantido",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_A"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Credito",
+            "250"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Devolvendo"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Tubo_Troco_Vazio"
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "EQU",
+                "operands": [
+                  "Credito",
+                  "250"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vendendo_A"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Botao_B"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Credito",
+            "375"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Devolvendo"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Tubo_Troco_Vazio"
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "EQU",
+                "operands": [
+                  "Credito",
+                  "375"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Vendendo_B"
+        }
+      ]
+    },
+    {
+      "comment": "O produto caiu: desconta e paga o troco",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Queda"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Queda_Anterior"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vendendo_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Credito",
+            "250",
+            "Credito"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vendendo_A"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolvendo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Queda"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Queda_Anterior"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vendendo_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Credito",
+            "375",
+            "Credito"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vendendo_B"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolvendo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Sensor_Queda"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Queda_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Espirais",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vendendo_A"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Espiral_A"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Vendendo_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Espiral_B"
+        }
+      ]
+    },
+    {
+      "comment": "Sem queda em 3 s: esgotado, devolve o credito",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Vendendo_A"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Vendendo_B"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Espiral",
+          "preset": 3000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Espiral.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vendendo_A"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Vendendo_B"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolvendo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Esgotou"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Esgotou"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Aviso_Esgotado",
+          "preset": 5000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Aviso_Esgotado.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Esgotou"
+        }
+      ]
+    },
+    {
+      "comment": "Devolver: paga todo o credito",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Devolver"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_B"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Devolvendo"
+        }
+      ]
+    },
+    {
+      "comment": "Gerador de pulsos para o ejetor de troco",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Devolvendo"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Credito",
+            "0"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Tubo_Troco_Vazio"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Pausa_Troco.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Pulso_Troco",
+          "preset": 150
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pulso_Troco.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ejetor_Troco"
+        },
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Pausa_Troco",
+          "preset": 150
+        }
+      ]
+    },
+    {
+      "comment": "Cada moeda de troco: menos 25 centavos",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ejetor_Troco"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Troco_Anterior"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Credito",
+            "25",
+            "Credito"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ejetor_Troco"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Troco_Anterior"
+        }
+      ]
+    },
+    {
+      "comment": "Troco pago (ou tubo vazio: o resto fica no credito)",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Devolvendo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ejetor_Troco"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LEQ",
+                "operands": [
+                  "Credito",
+                  "0"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Tubo_Troco_Vazio"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Devolvendo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Vendendo_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Devolvendo"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Pronto"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Esgotou"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Esgotado"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tubo_Troco_Vazio"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Lampada_Sem_Troco"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-13T21:00:01",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 26
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0xe6f4c5c4",
+    "size": 852,
+    "instructions": 189,
+    "date": "2026-11-13T21:00:01"
+  },
+  "environment": "venda"
+}
