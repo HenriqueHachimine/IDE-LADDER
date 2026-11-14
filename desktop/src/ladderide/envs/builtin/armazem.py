@@ -13,9 +13,9 @@ from ..registry import register
 from ..transport import Belt, Item, carton, emitter_box, remover_box
 
 COLS, LEVELS = 5, 3
-CELL_W, CELL_H = 92.0, 92.0
+CELL_W, CELL_H = 92.0, 84.0
 RACK_X0 = 124.0               # borda esquerda da coluna 1
-FLOOR = 352.0                 # piso da fileira de baixo
+FLOOR = 326.0                 # piso da fileira de baixo
 ENTRY_X, EXIT_X = 70.0, 650.0
 SPEED_X, SPEED_Z = 170.0, 95.0
 FORK_S, LIFT_S = 0.8, 0.4
@@ -282,8 +282,8 @@ class WarehouseEnvironment(Environment):
         # transelevador
         rail_y = FLOOR + 32
         draw.metal(p, QRectF(30, rail_y, 660, 6), "#475569", 2)
-        draw.metal(p, QRectF(30, 40, 660, 6), "#475569", 2)
-        draw.metal(p, QRectF(self.x - 4, 44, 8, rail_y - 44), "#facc15", 2, vertical=True)
+        draw.metal(p, QRectF(30, 50, 660, 6), "#475569", 2)
+        draw.metal(p, QRectF(self.x - 4, 54, 8, rail_y - 54), "#facc15", 2, vertical=True)
         draw.metal(p, QRectF(self.x - 26, rail_y - 10, 52, 12), "#334155", 3)
         car_floor = FLOOR - self.z + 2 - self.lift * LIFT_PX
         car = QRectF(self.x - 34, car_floor, 68, 8)
@@ -297,14 +297,13 @@ class WarehouseEnvironment(Environment):
         draw.tag(p, 16, 74, "I0.4 caixa", sens["ENTRADA"])
         draw.tag(p, 610, 52, "Q0.3 saída", out.get("ESTEIRA_S", False))
         draw.tag(p, 610, 74, "I0.5 livre", sens["SAIDA"])
-        tx = min(max(self.x - 60, 14), 590)
-        draw.tag(p, tx, rail_y + 20, "I0.1 em posição", sens["POS"])
-        draw.tag(p, tx + 96, rail_y + 20, "Q0.1", out.get("AVANCA", False))
-        draw.tag(p, tx + 132, rail_y + 20, "Q0.2", out.get("SOBE", False))
-        draw.tag(p, tx - 2, rail_y + 42, "I0.2 centro", sens["CENTRO"])
-        draw.tag(p, tx + 70, rail_y + 42, "I0.3 estendido", sens["ESTENDIDO"])
-        draw.tag(p, tx + 162, rail_y + 42, "I0.6 alto", sens["ALTO"])
-        draw.tag(p, tx + 162, rail_y + 20, "I0.7 baixo", sens["BAIXO"])
+        row = [("I0.1 em posição", sens["POS"]), ("I0.2 centro", sens["CENTRO"]),
+               ("I0.3 estendido", sens["ESTENDIDO"]), ("I0.6 alto", sens["ALTO"]), ("I0.7 baixo", sens["BAIXO"]),
+               ("Q0.1 avança", out.get("AVANCA", False)), ("Q0.2 sobe", out.get("SOBE", False))]
+        x = 20.0
+        for label, on in row:
+            draw.tag(p, x, rail_y + 22, label, on)
+            x += 12 + 6.2 * len(label)
         # painel
         draw.switch(p, QRectF(16, 412, 150, 30), "LIGA I0.0", self.is_pressed("LIGA"))
         draw.switch(p, QRectF(176, 412, 170, 30), "Pedidos automáticos", self.operator.get("AUTO", True))
@@ -314,4 +313,4 @@ class WarehouseEnvironment(Environment):
         draw.stack_light(p, 600, 410, [(bool(out.get("CHEIO")), draw.AMBER), (bool(out.get("LUZ")), draw.GREEN)], 12)
         draw.text(p, 614, 418, "Q0.4 cheio", 7, True, draw.MUTED, w=90)
         draw.text(p, 614, 432, "Q0.5 operando", 7, True, draw.MUTED, w=90)
-        draw.text(p, 140, 38, "Clique numa caixa para pedir a retirada", 7.5, True, draw.MUTED, w=300)
+        draw.text(p, 200, 39, "Clique numa caixa para pedir a retirada", 7.5, True, draw.MUTED, w=300)
