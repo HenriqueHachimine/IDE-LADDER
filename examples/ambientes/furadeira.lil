@@ -4,15 +4,27 @@
 .markers 64
 .words 32
 .safe_outputs 0x0000
-.build_id 0x29bcf9d9
+.build_id 0x28cf9c87
 .timer T0 TON 500
 .timer T1 TON 600
+.counter C0 UP 25
 SOR ; rede 0
+NEQ N1
+ARG N3
+BST
+RES C0
+NXB
+MOV N1
+ARG N3
+BND
+EOR
+SOR ; rede 1
 XIC I0.0
 XIC I0.1
 XIC I0.2
 XIC I0.4
 XIC I0.6
+XIO C0.DN
 XIO M0.1
 XIO M0.2
 XIO M0.3
@@ -20,9 +32,15 @@ XIO M0.4
 XIO M0.5
 XIO M0.6
 XIO M0.7
+XIO M1.0
+BST
+MOV 690
+ARG N2
+NXB
 OTL M0.1
+BND
 EOR
-SOR ; rede 1
+SOR ; rede 2
 XIC M0.1
 XIC I0.3
 BST
@@ -31,7 +49,7 @@ NXB
 OTU M0.1
 BND
 EOR
-SOR ; rede 2
+SOR ; rede 3
 XIC M0.2
 XIC I0.5
 BST
@@ -40,11 +58,40 @@ NXB
 OTU M0.2
 BND
 EOR
-SOR ; rede 3
-XIC M0.3
-TON T0
-EOR
 SOR ; rede 4
+XIC M0.2
+GEQ N0
+ARG N2
+XIO I0.5
+BST
+ADD N2
+ARG 140
+ARG N2
+NXB
+OTL M1.0
+NXB
+OTU M0.2
+BND
+EOR
+SOR ; rede 5
+XIC M1.0
+LEQ N0
+ARG 500
+BST
+OTL M0.2
+NXB
+OTU M1.0
+BND
+EOR
+SOR ; rede 6
+XIC M0.3
+BST
+TON T0
+NXB
+CTU C0
+BND
+EOR
+SOR ; rede 7
 XIC M0.3
 XIC T0.DN
 BST
@@ -53,7 +100,7 @@ NXB
 OTU M0.3
 BND
 EOR
-SOR ; rede 5
+SOR ; rede 8
 XIC M0.4
 XIC I0.4
 BST
@@ -62,11 +109,11 @@ NXB
 OTU M0.4
 BND
 EOR
-SOR ; rede 6
+SOR ; rede 9
 XIC M0.5
 TON T1
 EOR
-SOR ; rede 7
+SOR ; rede 10
 XIC M0.5
 XIC T1.DN
 BST
@@ -75,7 +122,7 @@ NXB
 OTU M0.5
 BND
 EOR
-SOR ; rede 8
+SOR ; rede 11
 XIC M0.6
 XIC I0.7
 BST
@@ -84,12 +131,12 @@ NXB
 OTU M0.6
 BND
 EOR
-SOR ; rede 9
+SOR ; rede 12
 XIC M0.7
 XIC I0.6
 OTU M0.7
 EOR
-SOR ; rede 10
+SOR ; rede 13
 BST
 XIC M0.1
 NXB
@@ -98,35 +145,54 @@ NXB
 XIC M0.3
 NXB
 XIC M0.4
+NXB
+XIC M1.0
 BND
 OTE Q0.0
 EOR
-SOR ; rede 11
+SOR ; rede 14
 BST
 XIC M0.2
 NXB
 XIC M0.3
 NXB
 XIC M0.4
+NXB
+XIC M1.0
 BND
 XIC I0.1
 OTE Q0.3
 EOR
-SOR ; rede 12
+SOR ; rede 15
+BST
+XIC M0.2
+NXB
+XIC M0.3
+NXB
+XIC M1.0
+BND
+XIC I0.1
+OTE Q0.6
+EOR
+SOR ; rede 16
 XIC M0.2
 XIC I0.1
 OTE Q0.1
 EOR
-SOR ; rede 13
+SOR ; rede 17
+BST
 XIC M0.4
+NXB
+XIC M1.0
+BND
 OTE Q0.2
 EOR
-SOR ; rede 14
+SOR ; rede 18
 XIC M0.6
 XIC I0.1
 OTE Q0.4
 EOR
-SOR ; rede 15
+SOR ; rede 19
 BST
 XIC M0.1
 NXB
@@ -141,6 +207,12 @@ NXB
 XIC M0.6
 NXB
 XIC M0.7
+NXB
+XIC M1.0
 BND
 OTE Q0.5
+EOR
+SOR ; rede 20
+XIC C0.DN
+OTE Q0.7
 EOR

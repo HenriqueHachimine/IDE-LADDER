@@ -522,42 +522,61 @@ def two_hand_press() -> Project:
 
 def drill() -> Project:
     p = env_project("furadeira", "Furadeira automatica", (
-        "Sequencia por etapas (estilo Grafcet): cada etapa e um bit M ligado com OTL e desligado pela "
-        "transicao seguinte (OTU). E1 fixa, E2 desce com o mandril, E3 espera 0,5 s no fundo, E4 sobe, E5 "
-        "solta e espera 0,6 s, E6 ejeta, E7 recua o ejetor. As saidas sao combinacoes das etapas; a emergencia "
-        "corta mandril, descida e ejetor, mas mantem a peca presa."))
+        "Sequencia por etapas (estilo Grafcet) com laco: cada etapa e um bit M ligado com OTL e desligado pela "
+        "transicao seguinte. E2 desce ate o alvo do quebra-cavaco (N2, comeca 14 mm abaixo da superficie: 690); "
+        "ao chegar, E8 sobe acima da peca (N0 <= 500), soma 140 ao alvo e volta para E2, ate o fim de curso B1. "
+        "Mandril e refrigeracao ligados nas etapas de corte. Vida da ferramenta: C0 conta os furos; com 25 acende "
+        "TROCAR BROCA e nao parte mais. Uma broca nova muda N1 (diferente da copia N3): zera C0."))
     steps = [("Etapa_1_Fixar", "M0.1"), ("Etapa_2_Descer", "M0.2"), ("Etapa_3_Fundo", "M0.3"),
              ("Etapa_4_Subir", "M0.4"), ("Etapa_5_Soltar", "M0.5"), ("Etapa_6_Ejetar", "M0.6"),
-             ("Etapa_7_Recuar", "M0.7")]
+             ("Etapa_7_Recuar", "M0.7"), ("Etapa_8_Cavaco", "M1.0")]
     p.symbols += [Symbol(n, a, "etapa da sequencia") for n, a in steps]
-    p.symbols += [Symbol("Tempo_Fundo", "T0", "0,5 s no fundo do furo"),
-                  Symbol("Tempo_Soltar", "T1", "0,6 s para o fixador recuar (sem sensor)")]
+    p.symbols += [Symbol("Posicao_Broca", "N0", "ponta da broca em decimos de mm (escrito pela maquina)"),
+                  Symbol("Broca_Montada", "N1", "numero da broca montada (escrito pela maquina)"),
+                  Symbol("Alvo", "N2", "proxima profundidade do quebra-cavaco"),
+                  Symbol("Broca_Contada", "N3", "broca cujos furos o C0 esta contando"),
+                  Symbol("Tempo_Fundo", "T0", "0,5 s no fundo do furo"),
+                  Symbol("Tempo_Soltar", "T1", "0,6 s para o fixador recuar (sem sensor)"),
+                  Symbol("Furos", "C0", "furos feitos com a broca atual")]
     e = [n for n, _ in steps]
 
-    def go(cond, frm, to, comment=""):
-        return Rung([Contact("XIC", frm), *cond], [Coil("OTL", to), Coil("OTU", frm)], comment)
+    def go(cond, frm, to, comment="", extra=()):
+        return Rung([Contact("XIC", frm), *cond], [*extra, Coil("OTL", to), Coil("OTU", frm)], comment)
 
     p.rungs = [
+        Rung([CompareBox("NEQ", ["Broca_Montada", "Broca_Contada"])],
+             [ResetBox("Furos"), MathBox("MOV", ["Broca_Montada", "Broca_Contada"])],
+             "Broca nova (N1 mudou): zera a contagem de furos"),
         Rung([Contact("XIC", "Partida"), Contact("XIC", "Emergencia"), Contact("XIC", "Peca_Presente"),
-              Contact("XIC", "Broca_Em_Cima"), Contact("XIC", "Ejetor_Recuado"), *[Contact("XIO", n) for n in e]],
-             [Coil("OTL", e[0])], "Etapa inicial: partida com a maquina em repouso"),
-        go([Contact("XIC", "Fixador_Avancado")], e[0], e[1], "Transicoes: sensor de fim de curso de cada cilindro"),
-        go([Contact("XIC", "Broca_Embaixo")], e[1], e[2]),
-        Rung([Contact("XIC", e[2])], [TimerBox("TON", "Tempo_Fundo", 500)], "Espera no fundo (tira a rebarba)"),
+              Contact("XIC", "Broca_Em_Cima"), Contact("XIC", "Ejetor_Recuado"), Contact("XIO", "Furos.DN"),
+              *[Contact("XIO", n) for n in e]],
+             [MathBox("MOV", ["690", "Alvo"]), Coil("OTL", e[0])],
+             "Etapa inicial: maquina em repouso e broca com vida; primeiro alvo 14 mm abaixo da peca"),
+        go([Contact("XIC", "Fixador_Avancado")], e[0], e[1], "Transicoes: sensores dos cilindros e posicao N0"),
+        go([Contact("XIC", "Broca_Embaixo")], e[1], e[2], "Furo pronto: fim de curso B1"),
+        go([CompareBox("GEQ", ["Posicao_Broca", "Alvo"]), Contact("XIO", "Broca_Embaixo")], e[1], e[7],
+           "Chegou ao alvo: sobe para tirar o cavaco e aprofunda o alvo",
+           [MathBox("ADD", ["Alvo", "140", "Alvo"])]),
+        go([CompareBox("LEQ", ["Posicao_Broca", "500"])], e[7], e[1], "Acima da peca: volta a descer"),
+        Rung([Contact("XIC", e[2])], [TimerBox("TON", "Tempo_Fundo", 500), CounterBox("CTU", "Furos", 25)],
+             "Espera no fundo e conta o furo"),
         go([Contact("XIC", "Tempo_Fundo.DN")], e[2], e[3]),
         go([Contact("XIC", "Broca_Em_Cima")], e[3], e[4]),
         Rung([Contact("XIC", e[4])], [TimerBox("TON", "Tempo_Soltar", 600)], "Fixador recua pela mola"),
         go([Contact("XIC", "Tempo_Soltar.DN")], e[4], e[5]),
         go([Contact("XIC", "Ejetor_Avancado")], e[5], e[6]),
         Rung([Contact("XIC", e[6]), Contact("XIC", "Ejetor_Recuado")], [Coil("OTU", e[6])], "Fim do ciclo"),
-        Rung([Parallel([[Contact("XIC", e[k])] for k in range(4)])], [Coil("OTE", "Fixador")],
+        Rung([Parallel([[Contact("XIC", e[k])] for k in (0, 1, 2, 3, 7)])], [Coil("OTE", "Fixador")],
              "Saidas a partir das etapas"),
-        Rung([Parallel([[Contact("XIC", e[k])] for k in (1, 2, 3)]), Contact("XIC", "Emergencia")],
+        Rung([Parallel([[Contact("XIC", e[k])] for k in (1, 2, 3, 7)]), Contact("XIC", "Emergencia")],
              [Coil("OTE", "Motor_Mandril")]),
+        Rung([Parallel([[Contact("XIC", e[k])] for k in (1, 2, 7)]), Contact("XIC", "Emergencia")],
+             [Coil("OTE", "Refrigeracao")]),
         Rung([Contact("XIC", e[1]), Contact("XIC", "Emergencia")], [Coil("OTE", "Broca_Desce")]),
-        Rung([Contact("XIC", e[3])], [Coil("OTE", "Broca_Sobe")]),
+        Rung([Parallel([[Contact("XIC", e[3])], [Contact("XIC", e[7])]])], [Coil("OTE", "Broca_Sobe")]),
         Rung([Contact("XIC", e[5]), Contact("XIC", "Emergencia")], [Coil("OTE", "Ejetor")]),
         Rung([Parallel([[Contact("XIC", n)] for n in e])], [Coil("OTE", "Lampada_Ciclo")]),
+        Rung([Contact("XIC", "Furos.DN")], [Coil("OTE", "Lampada_Trocar_Broca")], "Vida da ferramenta"),
     ]
     return p
 

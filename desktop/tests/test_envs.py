@@ -419,7 +419,28 @@ def test_drill_sequence_makes_good_parts_and_breaks_bit_without_spindle():
     assert env.good == 2 and env.defects == 0 and alarms == set()
     bad = Project(environment="furadeira", rungs=[Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.1")])])
     _, alarms, _ = closed_loop(bad, [(100, "PARTIDA", True), (200, "PARTIDA", False)], 3000)
-    assert any("broca quebrou" in a for a in alarms)
+    assert any("mandril parado" in a for a in alarms)
+    no_peck = Project(environment="furadeira", rungs=[
+        Rung([Contact("XIC", "I0.0")], [Coil("OTL", "Q0.0"), Coil("OTL", "Q0.3"), Coil("OTL", "Q0.6")]),
+        Rung([Contact("XIC", "I0.3")], [Coil("OTE", "Q0.1")])])
+    _, alarms, _ = closed_loop(no_peck, [(100, "PARTIDA", True), (200, "PARTIDA", False)], 5000)
+    assert any("cavaco entupiu" in a for a in alarms)
+
+
+def test_drill_counts_tool_life_and_resets_on_new_bit():
+    p = Project.load(EXAMPLES / "furadeira.ladproj")
+    acts = [a for k in range(27) for a in ((100 + k * 13000, "PARTIDA", True), (200 + k * 13000, "PARTIDA", False))]
+    t = 100 + 27 * 13000
+    acts += [(t, "EMERG", True), (t + 200, "TROCAR_BROCA", True), (t + 400, "EMERG", True),
+             (t + 1000, "PARTIDA", True), (t + 1100, "PARTIDA", False)]
+    env, alarms, sim = closed_loop(p, acts, t + 14000)
+    assert env.good == 26 and env.defects == 0 and env.tool_no == 2 and alarms == set()   # 25, troca, mais 1
+    assert sim.vm.n[3] == 2
+    dry = Project.load(EXAMPLES / "furadeira.ladproj")                     # sem fluido de corte
+    dry.rungs = [r for r in dry.rungs if not any(getattr(c, "operand", "") == "Refrigeracao" for c in r.outputs)]
+    acts = [a for k in range(12) for a in ((100 + k * 13000, "PARTIDA", True), (200 + k * 13000, "PARTIDA", False))]
+    env, alarms, _ = closed_loop(dry, acts, 12 * 13000)
+    assert any("broca cega" in a for a in alarms) and env.defects >= 1
 
 
 def test_level_crossing_handles_both_directions_and_ignores_leaving_train():
