@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Dosagem por balanca",
-  "description": "Aritmetica com setpoint: a balanca escreve o peso (N0) e o alvo (N1). Grossa ate N1-200, fina ate N1-Preacao. Com o peso estavel, Erro = Peso - Setpoint e Preacao += Erro (corte antecipado adaptativo, limitado de 0 a 60 g). OK se o erro estiver dentro de +-2% (LIM); depois de 1 s a esteira troca o recipiente.",
+  "name": "Dosagem por receita",
+  "description": "Aritmetica com setpoint e tara. Com o recipiente vazio parado, guarda a tara (N3) e calcula o alvo bruto de A (N4 = tara + N1). A: grossa ate 150 g antes, fina ate o corte antecipado (N6). Assentado, mede o erro de A, corrige o corte e calcula o alvo bruto de B (peso atual + N2). B: uma valvula ate o seu corte (N10). Erros dentro de 2% (minimo 3 g, LIM) acendem OK; senao REJEITO e o rejeitador empurra o recipiente quando ele passa por I0.4.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:46:19",
-  "modified": "2026-11-13T20:46:19",
+  "created": "2026-11-13T23:31:58",
+  "modified": "2026-11-13T23:31:58",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -37,7 +37,7 @@
     {
       "name": "Recipiente_Posicionado",
       "address": "I0.2",
-      "comment": "Recipiente sob o bico"
+      "comment": "Recipiente sob os bicos"
     },
     {
       "name": "Peso_Estavel",
@@ -45,14 +45,19 @@
       "comment": "Balança estável (peso parado)"
     },
     {
-      "name": "Valvula_Grossa",
-      "address": "Q0.0",
-      "comment": "Válvula de enchimento grossa (rápida)"
+      "name": "Recipiente_Rejeito",
+      "address": "I0.4",
+      "comment": "Recipiente na estação de rejeito"
     },
     {
-      "name": "Valvula_Fina",
+      "name": "Valvula_A_Grossa",
+      "address": "Q0.0",
+      "comment": "Ingrediente A: válvula grossa (rápida)"
+    },
+    {
+      "name": "Valvula_A_Fina",
       "address": "Q0.1",
-      "comment": "Válvula de enchimento fina (lenta)"
+      "comment": "Ingrediente A: válvula fina (lenta)"
     },
     {
       "name": "Esteira",
@@ -70,44 +75,99 @@
       "comment": "Lâmpada FORA DA TOLERÂNCIA"
     },
     {
-      "name": "Peso",
-      "address": "N0",
-      "comment": "peso na balanca (g), escrito pela balanca"
+      "name": "Valvula_B",
+      "address": "Q0.5",
+      "comment": "Ingrediente B: válvula do líquido"
     },
     {
-      "name": "Setpoint",
+      "name": "Rejeitador",
+      "address": "Q0.6",
+      "comment": "Cilindro rejeitador"
+    },
+    {
+      "name": "Peso",
+      "address": "N0",
+      "comment": "peso bruto (g), escrito pela balanca"
+    },
+    {
+      "name": "Alvo_A",
       "address": "N1",
-      "comment": "alvo (g), escrito pela balanca"
+      "comment": "alvo de A (g), da receita"
+    },
+    {
+      "name": "Alvo_B",
+      "address": "N2",
+      "comment": "alvo de B (g), da receita"
+    },
+    {
+      "name": "Tara",
+      "address": "N3",
+      "comment": "peso do recipiente vazio"
+    },
+    {
+      "name": "Alvo_A_Bruto",
+      "address": "N4",
+      "comment": "tara + alvo de A"
     },
     {
       "name": "Corte_Grossa",
-      "address": "N2",
-      "comment": "Setpoint - 200"
+      "address": "N5",
+      "comment": "150 g antes do alvo de A"
     },
     {
-      "name": "Preacao",
-      "address": "N3",
-      "comment": "produto ainda no ar (g)"
+      "name": "Preacao_A",
+      "address": "N6",
+      "comment": "A ainda no ar (g)"
     },
     {
       "name": "Corte_Fina",
-      "address": "N4",
-      "comment": "Setpoint - Preacao"
-    },
-    {
-      "name": "Erro",
-      "address": "N5",
-      "comment": "Peso final - Setpoint"
-    },
-    {
-      "name": "Tolerancia",
-      "address": "N6",
-      "comment": "2% do setpoint"
-    },
-    {
-      "name": "Tolerancia_Neg",
       "address": "N7",
-      "comment": "-2% do setpoint"
+      "comment": "alvo bruto de A - preacao"
+    },
+    {
+      "name": "Erro_A",
+      "address": "N8",
+      "comment": "erro de A"
+    },
+    {
+      "name": "Alvo_B_Bruto",
+      "address": "N9",
+      "comment": "peso depois de A + alvo de B"
+    },
+    {
+      "name": "Preacao_B",
+      "address": "N10",
+      "comment": "B ainda no ar (g)"
+    },
+    {
+      "name": "Corte_B",
+      "address": "N11",
+      "comment": "alvo bruto de B - preacao"
+    },
+    {
+      "name": "Erro_B",
+      "address": "N12",
+      "comment": "erro de B"
+    },
+    {
+      "name": "Tol_A",
+      "address": "N13",
+      "comment": "2% de A, min 3 g"
+    },
+    {
+      "name": "Tol_B",
+      "address": "N14",
+      "comment": "2% de B, min 3 g"
+    },
+    {
+      "name": "Tol_A_Neg",
+      "address": "N15",
+      "comment": ""
+    },
+    {
+      "name": "Tol_B_Neg",
+      "address": "N16",
+      "comment": ""
     },
     {
       "name": "Automatico",
@@ -115,19 +175,39 @@
       "comment": "ciclo automatico ligado"
     },
     {
-      "name": "Dosando",
+      "name": "Dosando_A",
       "address": "M0.1",
-      "comment": "enchendo"
+      "comment": ""
+    },
+    {
+      "name": "Dosando_B",
+      "address": "M0.2",
+      "comment": ""
     },
     {
       "name": "Pesado",
-      "address": "M0.2",
+      "address": "M0.3",
       "comment": "recipiente pesado e avaliado"
+    },
+    {
+      "name": "Rejeitar",
+      "address": "M0.4",
+      "comment": "o recipiente avaliado precisa ser rejeitado"
+    },
+    {
+      "name": "Empurrando",
+      "address": "M0.5",
+      "comment": "rejeitador acionado"
     },
     {
       "name": "Exibe",
       "address": "T0",
       "comment": "1 s mostrando o resultado"
+    },
+    {
+      "name": "Tempo_Empurra",
+      "address": "T1",
+      "comment": "0,4 s de rejeitador"
     }
   ],
   "variables": [],
@@ -169,7 +249,7 @@
       ]
     },
     {
-      "comment": "Primeira varredura: corte inicial de 8 g",
+      "comment": "Primeira varredura: cortes iniciais",
       "condition": [
         {
           "type": "contact",
@@ -183,54 +263,113 @@
           "kind": "MOV",
           "operands": [
             "8",
-            "Preacao"
+            "Preacao_A"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "8",
+            "Preacao_B"
           ]
         }
       ]
     },
     {
-      "comment": "Pontos de corte e tolerancia",
+      "comment": "Tolerancias: 2% (minimo 3 g)",
       "condition": [],
       "outputs": [
         {
           "type": "math",
-          "kind": "SUB",
+          "kind": "DIV",
           "operands": [
-            "Setpoint",
-            "200",
-            "Corte_Grossa"
-          ]
-        },
-        {
-          "type": "math",
-          "kind": "SUB",
-          "operands": [
-            "Setpoint",
-            "Preacao",
-            "Corte_Fina"
+            "Alvo_A",
+            "50",
+            "Tol_A"
           ]
         },
         {
           "type": "math",
           "kind": "DIV",
           "operands": [
-            "Setpoint",
+            "Alvo_B",
             "50",
-            "Tolerancia"
+            "Tol_B"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Tol_A",
+            "3"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3",
+            "Tol_A"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Tol_B",
+            "3"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "3",
+            "Tol_B"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "NEG",
+          "operands": [
+            "Tol_A",
+            "Tol_A_Neg"
           ]
         },
         {
           "type": "math",
           "kind": "NEG",
           "operands": [
-            "Tolerancia",
-            "Tolerancia_Neg"
+            "Tol_B",
+            "Tol_B_Neg"
           ]
         }
       ]
     },
     {
-      "comment": "Recipiente vazio parado sob o bico",
+      "comment": "TARA: recipiente vazio parado; alvo bruto e cortes de A",
       "condition": [
         {
           "type": "contact",
@@ -255,32 +394,97 @@
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Dosando"
+          "operand": "Dosando_A"
         },
         {
-          "type": "compare",
-          "kind": "LES",
-          "operands": [
-            "Peso",
-            "5"
-          ]
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Dosando_B"
         }
       ],
       "outputs": [
         {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Peso",
+            "Tara"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Tara",
+            "Alvo_A",
+            "Alvo_A_Bruto"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Alvo_A_Bruto",
+            "150",
+            "Corte_Grossa"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Alvo_A_Bruto",
+            "Preacao_A",
+            "Corte_Fina"
+          ]
+        },
+        {
           "type": "coil",
           "kind": "OTL",
-          "operand": "Dosando"
+          "operand": "Dosando_A"
         }
       ]
     },
     {
-      "comment": "Grossa ate 200 g antes do alvo",
+      "comment": "Pontos de corte",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Alvo_A_Bruto",
+            "150",
+            "Corte_Grossa"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Alvo_A_Bruto",
+            "Preacao_A",
+            "Corte_Fina"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Alvo_B_Bruto",
+            "Preacao_B",
+            "Corte_B"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "INGREDIENTE A: grossa e fina",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Dosando"
+          "operand": "Dosando_A"
         },
         {
           "type": "contact",
@@ -300,17 +504,17 @@
         {
           "type": "coil",
           "kind": "OTE",
-          "operand": "Valvula_Grossa"
+          "operand": "Valvula_A_Grossa"
         }
       ]
     },
     {
-      "comment": "Fina ate o corte antecipado",
+      "comment": "",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Dosando"
+          "operand": "Dosando_A"
         },
         {
           "type": "contact",
@@ -330,17 +534,17 @@
         {
           "type": "coil",
           "kind": "OTE",
-          "operand": "Valvula_Fina"
+          "operand": "Valvula_A_Fina"
         }
       ]
     },
     {
-      "comment": "Produto assentado: mede o erro e corrige o corte",
+      "comment": "A assentado: erro, novo corte e alvo bruto de B (o corte de B ja nesta varredura)",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Dosando"
+          "operand": "Dosando_A"
         },
         {
           "type": "compare",
@@ -362,39 +566,140 @@
           "kind": "SUB",
           "operands": [
             "Peso",
-            "Setpoint",
-            "Erro"
+            "Alvo_A_Bruto",
+            "Erro_A"
           ]
         },
         {
           "type": "math",
           "kind": "ADD",
           "operands": [
-            "Preacao",
-            "Erro",
-            "Preacao"
+            "Preacao_A",
+            "Erro_A",
+            "Preacao_A"
           ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Peso",
+            "Alvo_B",
+            "Alvo_B_Bruto"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Alvo_B_Bruto",
+            "Preacao_B",
+            "Corte_B"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Dosando_A"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Dosando_B"
+        }
+      ]
+    },
+    {
+      "comment": "INGREDIENTE B",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Dosando_B"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Automatico"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Peso",
+            "Corte_B"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Valvula_B"
+        }
+      ]
+    },
+    {
+      "comment": "B assentado: erro e novo corte",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Dosando_B"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Peso",
+            "Corte_B"
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Peso_Estavel"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Peso",
+            "Alvo_B_Bruto",
+            "Erro_B"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Preacao_B",
+            "Erro_B",
+            "Preacao_B"
+          ]
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Dosando_B"
         },
         {
           "type": "coil",
           "kind": "OTL",
           "operand": "Pesado"
-        },
-        {
-          "type": "coil",
-          "kind": "OTU",
-          "operand": "Dosando"
         }
       ]
     },
     {
-      "comment": "Corte entre 0 e 60 g",
+      "comment": "Cortes entre 0 e 60 / 30 g",
       "condition": [
         {
           "type": "compare",
           "kind": "LES",
           "operands": [
-            "Preacao",
+            "Preacao_A",
             "0"
           ]
         }
@@ -405,7 +710,7 @@
           "kind": "MOV",
           "operands": [
             "0",
-            "Preacao"
+            "Preacao_A"
           ]
         }
       ]
@@ -417,7 +722,7 @@
           "type": "compare",
           "kind": "GRT",
           "operands": [
-            "Preacao",
+            "Preacao_A",
             "60"
           ]
         }
@@ -428,13 +733,59 @@
           "kind": "MOV",
           "operands": [
             "60",
-            "Preacao"
+            "Preacao_A"
           ]
         }
       ]
     },
     {
-      "comment": "Dentro de +-2%",
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Preacao_B",
+            "0"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Preacao_B"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Preacao_B",
+            "30"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "30",
+            "Preacao_B"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "AVALIACAO: os dois ingredientes dentro da tolerancia",
       "condition": [
         {
           "type": "contact",
@@ -445,9 +796,18 @@
           "type": "compare",
           "kind": "LIM",
           "operands": [
-            "Tolerancia_Neg",
-            "Erro",
-            "Tolerancia"
+            "Tol_A_Neg",
+            "Erro_A",
+            "Tol_A"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "Tol_B_Neg",
+            "Erro_B",
+            "Tol_B"
           ]
         }
       ],
@@ -478,6 +838,11 @@
           "type": "coil",
           "kind": "OTE",
           "operand": "Lampada_Rejeito"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Rejeitar"
         }
       ]
     },
@@ -510,7 +875,12 @@
         {
           "type": "contact",
           "kind": "XIO",
-          "operand": "Dosando"
+          "operand": "Dosando_A"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Dosando_B"
         },
         {
           "type": "parallel",
@@ -541,7 +911,7 @@
       ]
     },
     {
-      "comment": "O recipiente saiu",
+      "comment": "O recipiente saiu da balanca",
       "condition": [
         {
           "type": "contact",
@@ -556,22 +926,89 @@
           "operand": "Pesado"
         }
       ]
+    },
+    {
+      "comment": "REJEITO: empurra quando ele chega a I0.4",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rejeitar"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Recipiente_Rejeito"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Empurrando"
+        },
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rejeitar"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Empurrando"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Rejeitador"
+        },
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Tempo_Empurra",
+          "preset": 400
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Tempo_Empurra.DN"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Empurrando"
+        }
+      ]
     }
   ],
   "history": [
     {
-      "date": "2026-11-13T20:46:19",
+      "date": "2026-11-13T23:31:58",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 14
+      "rungs": 25
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x700ac970",
-    "size": 540,
-    "instructions": 117,
-    "date": "2026-11-13T20:46:19"
+    "build_id": "0xa8533b6a",
+    "size": 1052,
+    "instructions": 242,
+    "date": "2026-11-13T23:31:58"
   },
   "environment": "balanca"
 }

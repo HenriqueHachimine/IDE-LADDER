@@ -562,13 +562,32 @@ def test_gas_detection_strict_two_of_three_fails_with_a_dead_detector():
 
 def test_scale_doses_within_tolerance_with_adaptive_preact():
     p = Project.load(EXAMPLES / "balanca.ladproj")
-    for key, target in (("SP_250", 250), ("SP_1000", 1000)):
-        env, alarms, sim = closed_loop(p, [(0, key, True), (100, "PARTIDA", True), (200, "PARTIDA", False)], 60000)
-        assert alarms == set() and env.setpoint == target and env.ok >= 5 and env.bad == 0
-        assert abs(env.last_error) <= 0.02 * target and sim.vm.n[3] > 8          # corte antecipado se ajustou
+    for key, (a, b) in (("R1", (400, 100)), ("R2", (250, 250)), ("R3", (800, 50))):
+        env, alarms, sim = closed_loop(p, [(0, key, True), (100, "PARTIDA", True), (200, "PARTIDA", False)], 90000)
+        assert alarms == set() and env.targets() == (a, b) and env.ok >= 5 and env.bad <= 1
+        assert env.rejected_bad == env.bad and env.shipped_bad == 0                 # so o primeiro, rejeitado
+        assert abs(env.last[0]) <= 0.02 * a and sim.vm.n[6] > 8                      # corte antecipado de A
+    acts = [(100, "PARTIDA", True), (200, "PARTIDA", False), (30000, "R3", True), (60000, "R2", True)]
+    env, alarms, _ = closed_loop(p, acts, 90000)                                    # troca de receita
+    assert alarms == set() and env.ok >= 6
     spill = Project(environment="balanca", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.2")])])
     _, alarms, _ = closed_loop(spill, total_ms=5000)
     assert any("derramado" in a for a in alarms)
+
+
+def test_scale_needs_tare_and_reject_station():
+    no_tare = Project.load(EXAMPLES / "balanca.ladproj")
+    for r in no_tare.rungs:
+        for o in r.outputs:
+            if getattr(o, "operands", None) == ["Peso", "Tara"]:
+                o.operands = ["0", "Tara"]
+    _, alarms, _ = closed_loop(no_tare, [(100, "PARTIDA", True), (200, "PARTIDA", False)], 60000)
+    assert any("tara" in a for a in alarms)
+    no_reject = Project.load(EXAMPLES / "balanca.ladproj")
+    for r in no_reject.rungs:
+        r.outputs = [c for c in r.outputs if getattr(c, "operand", "") != "Rejeitador"]
+    _, alarms, _ = closed_loop(no_reject, [(100, "PARTIDA", True), (200, "PARTIDA", False)], 20000)
+    assert any("expedição" in a for a in alarms)
 
 
 def test_greenhouse_bands_keep_climate_for_days_with_rain_and_wind():

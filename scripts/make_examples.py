@@ -843,45 +843,77 @@ def gas_detection() -> Project:
 
 
 def scale() -> Project:
-    p = env_project("balanca", "Dosagem por balanca", (
-        "Aritmetica com setpoint: a balanca escreve o peso (N0) e o alvo (N1). Grossa ate N1-200, fina ate "
-        "N1-Preacao. Com o peso estavel, Erro = Peso - Setpoint e Preacao += Erro (corte antecipado adaptativo, "
-        "limitado de 0 a 60 g). OK se o erro estiver dentro de +-2% (LIM); depois de 1 s a esteira troca o "
-        "recipiente."))
-    p.symbols += [Symbol("Peso", "N0", "peso na balanca (g), escrito pela balanca"),
-                  Symbol("Setpoint", "N1", "alvo (g), escrito pela balanca"),
-                  Symbol("Corte_Grossa", "N2", "Setpoint - 200"), Symbol("Preacao", "N3", "produto ainda no ar (g)"),
-                  Symbol("Corte_Fina", "N4", "Setpoint - Preacao"), Symbol("Erro", "N5", "Peso final - Setpoint"),
-                  Symbol("Tolerancia", "N6", "2% do setpoint"), Symbol("Tolerancia_Neg", "N7", "-2% do setpoint"),
-                  Symbol("Automatico", "M0.0", "ciclo automatico ligado"), Symbol("Dosando", "M0.1", "enchendo"),
-                  Symbol("Pesado", "M0.2", "recipiente pesado e avaliado"), Symbol("Exibe", "T0", "1 s mostrando o resultado")]
+    p = env_project("balanca", "Dosagem por receita", (
+        "Aritmetica com setpoint e tara. Com o recipiente vazio parado, guarda a tara (N3) e calcula o alvo bruto "
+        "de A (N4 = tara + N1). A: grossa ate 150 g antes, fina ate o corte antecipado (N6). Assentado, mede o erro "
+        "de A, corrige o corte e calcula o alvo bruto de B (peso atual + N2). B: uma valvula ate o seu corte (N10). "
+        "Erros dentro de 2% (minimo 3 g, LIM) acendem OK; senao REJEITO e o rejeitador empurra o recipiente quando "
+        "ele passa por I0.4."))
+    words = [("Tara", "peso do recipiente vazio"), ("Alvo_A_Bruto", "tara + alvo de A"),
+             ("Corte_Grossa", "150 g antes do alvo de A"), ("Preacao_A", "A ainda no ar (g)"),
+             ("Corte_Fina", "alvo bruto de A - preacao"), ("Erro_A", "erro de A"),
+             ("Alvo_B_Bruto", "peso depois de A + alvo de B"), ("Preacao_B", "B ainda no ar (g)"),
+             ("Corte_B", "alvo bruto de B - preacao"), ("Erro_B", "erro de B"), ("Tol_A", "2% de A, min 3 g"),
+             ("Tol_B", "2% de B, min 3 g"), ("Tol_A_Neg", ""), ("Tol_B_Neg", "")]
+    p.symbols += [Symbol("Peso", "N0", "peso bruto (g), escrito pela balanca"),
+                  Symbol("Alvo_A", "N1", "alvo de A (g), da receita"), Symbol("Alvo_B", "N2", "alvo de B (g), da receita")]
+    p.symbols += [Symbol(n, f"N{3 + k}", c) for k, (n, c) in enumerate(words)]
+    p.symbols += [Symbol("Automatico", "M0.0", "ciclo automatico ligado"), Symbol("Dosando_A", "M0.1", ""),
+                  Symbol("Dosando_B", "M0.2", ""), Symbol("Pesado", "M0.3", "recipiente pesado e avaliado"),
+                  Symbol("Rejeitar", "M0.4", "o recipiente avaliado precisa ser rejeitado"),
+                  Symbol("Empurrando", "M0.5", "rejeitador acionado"),
+                  Symbol("Exibe", "T0", "1 s mostrando o resultado"), Symbol("Tempo_Empurra", "T1", "0,4 s de rejeitador")]
     p.rungs = [
         Rung([Parallel([[Contact("XIC", "Partida")], [Contact("XIC", "Automatico")]]), Contact("XIC", "Parada")],
              [Coil("OTE", "Automatico")], "Liga/desliga (selo); PARADA e NF"),
-        Rung([Contact("XIC", "S0.0")], [MathBox("MOV", ["8", "Preacao"])], "Primeira varredura: corte inicial de 8 g"),
-        Rung([], [MathBox("SUB", ["Setpoint", "200", "Corte_Grossa"]), MathBox("SUB", ["Setpoint", "Preacao", "Corte_Fina"]),
-                  MathBox("DIV", ["Setpoint", "50", "Tolerancia"]), MathBox("NEG", ["Tolerancia", "Tolerancia_Neg"])],
-             "Pontos de corte e tolerancia"),
+        Rung([Contact("XIC", "S0.0")], [MathBox("MOV", ["8", "Preacao_A"]), MathBox("MOV", ["8", "Preacao_B"])],
+             "Primeira varredura: cortes iniciais"),
+        Rung([], [MathBox("DIV", ["Alvo_A", "50", "Tol_A"]), MathBox("DIV", ["Alvo_B", "50", "Tol_B"])],
+             "Tolerancias: 2% (minimo 3 g)"),
+        Rung([CompareBox("LES", ["Tol_A", "3"])], [MathBox("MOV", ["3", "Tol_A"])]),
+        Rung([CompareBox("LES", ["Tol_B", "3"])], [MathBox("MOV", ["3", "Tol_B"])]),
+        Rung([], [MathBox("NEG", ["Tol_A", "Tol_A_Neg"]), MathBox("NEG", ["Tol_B", "Tol_B_Neg"])]),
         Rung([Contact("XIC", "Automatico"), Contact("XIC", "Recipiente_Posicionado"), Contact("XIC", "Peso_Estavel"),
-              Contact("XIO", "Pesado"), Contact("XIO", "Dosando"), CompareBox("LES", ["Peso", "5"])],
-             [Coil("OTL", "Dosando")], "Recipiente vazio parado sob o bico"),
-        Rung([Contact("XIC", "Dosando"), Contact("XIC", "Automatico"), CompareBox("LES", ["Peso", "Corte_Grossa"])],
-             [Coil("OTE", "Valvula_Grossa")], "Grossa ate 200 g antes do alvo"),
-        Rung([Contact("XIC", "Dosando"), Contact("XIC", "Automatico"), CompareBox("LES", ["Peso", "Corte_Fina"])],
-             [Coil("OTE", "Valvula_Fina")], "Fina ate o corte antecipado"),
-        Rung([Contact("XIC", "Dosando"), CompareBox("GEQ", ["Peso", "Corte_Fina"]), Contact("XIC", "Peso_Estavel")],
-             [MathBox("SUB", ["Peso", "Setpoint", "Erro"]), MathBox("ADD", ["Preacao", "Erro", "Preacao"]),
-              Coil("OTL", "Pesado"), Coil("OTU", "Dosando")], "Produto assentado: mede o erro e corrige o corte"),
-        Rung([CompareBox("LES", ["Preacao", "0"])], [MathBox("MOV", ["0", "Preacao"])], "Corte entre 0 e 60 g"),
-        Rung([CompareBox("GRT", ["Preacao", "60"])], [MathBox("MOV", ["60", "Preacao"])]),
-        Rung([Contact("XIC", "Pesado"), CompareBox("LIM", ["Tolerancia_Neg", "Erro", "Tolerancia"])],
-             [Coil("OTE", "Lampada_OK")], "Dentro de +-2%"),
-        Rung([Contact("XIC", "Pesado"), Contact("XIO", "Lampada_OK")], [Coil("OTE", "Lampada_Rejeito")]),
+              Contact("XIO", "Pesado"), Contact("XIO", "Dosando_A"), Contact("XIO", "Dosando_B")],
+             [MathBox("MOV", ["Peso", "Tara"]), MathBox("ADD", ["Tara", "Alvo_A", "Alvo_A_Bruto"]),
+              MathBox("SUB", ["Alvo_A_Bruto", "150", "Corte_Grossa"]),
+              MathBox("SUB", ["Alvo_A_Bruto", "Preacao_A", "Corte_Fina"]), Coil("OTL", "Dosando_A")],
+             "TARA: recipiente vazio parado; alvo bruto e cortes de A"),
+        Rung([], [MathBox("SUB", ["Alvo_A_Bruto", "150", "Corte_Grossa"]),
+                  MathBox("SUB", ["Alvo_A_Bruto", "Preacao_A", "Corte_Fina"]),
+                  MathBox("SUB", ["Alvo_B_Bruto", "Preacao_B", "Corte_B"])], "Pontos de corte"),
+        Rung([Contact("XIC", "Dosando_A"), Contact("XIC", "Automatico"), CompareBox("LES", ["Peso", "Corte_Grossa"])],
+             [Coil("OTE", "Valvula_A_Grossa")], "INGREDIENTE A: grossa e fina"),
+        Rung([Contact("XIC", "Dosando_A"), Contact("XIC", "Automatico"), CompareBox("LES", ["Peso", "Corte_Fina"])],
+             [Coil("OTE", "Valvula_A_Fina")]),
+        Rung([Contact("XIC", "Dosando_A"), CompareBox("GEQ", ["Peso", "Corte_Fina"]), Contact("XIC", "Peso_Estavel")],
+             [MathBox("SUB", ["Peso", "Alvo_A_Bruto", "Erro_A"]), MathBox("ADD", ["Preacao_A", "Erro_A", "Preacao_A"]),
+              MathBox("ADD", ["Peso", "Alvo_B", "Alvo_B_Bruto"]),
+              MathBox("SUB", ["Alvo_B_Bruto", "Preacao_B", "Corte_B"]), Coil("OTU", "Dosando_A"), Coil("OTL", "Dosando_B")],
+             "A assentado: erro, novo corte e alvo bruto de B (o corte de B ja nesta varredura)"),
+        Rung([Contact("XIC", "Dosando_B"), Contact("XIC", "Automatico"), CompareBox("LES", ["Peso", "Corte_B"])],
+             [Coil("OTE", "Valvula_B")], "INGREDIENTE B"),
+        Rung([Contact("XIC", "Dosando_B"), CompareBox("GEQ", ["Peso", "Corte_B"]), Contact("XIC", "Peso_Estavel")],
+             [MathBox("SUB", ["Peso", "Alvo_B_Bruto", "Erro_B"]), MathBox("ADD", ["Preacao_B", "Erro_B", "Preacao_B"]),
+              Coil("OTU", "Dosando_B"), Coil("OTL", "Pesado")], "B assentado: erro e novo corte"),
+        Rung([CompareBox("LES", ["Preacao_A", "0"])], [MathBox("MOV", ["0", "Preacao_A"])], "Cortes entre 0 e 60 / 30 g"),
+        Rung([CompareBox("GRT", ["Preacao_A", "60"])], [MathBox("MOV", ["60", "Preacao_A"])]),
+        Rung([CompareBox("LES", ["Preacao_B", "0"])], [MathBox("MOV", ["0", "Preacao_B"])]),
+        Rung([CompareBox("GRT", ["Preacao_B", "30"])], [MathBox("MOV", ["30", "Preacao_B"])]),
+        Rung([Contact("XIC", "Pesado"), CompareBox("LIM", ["Tol_A_Neg", "Erro_A", "Tol_A"]),
+              CompareBox("LIM", ["Tol_B_Neg", "Erro_B", "Tol_B"])], [Coil("OTE", "Lampada_OK")],
+             "AVALIACAO: os dois ingredientes dentro da tolerancia"),
+        Rung([Contact("XIC", "Pesado"), Contact("XIO", "Lampada_OK")], [Coil("OTE", "Lampada_Rejeito"),
+                                                                        Coil("OTL", "Rejeitar")]),
         Rung([Contact("XIC", "Pesado")], [TimerBox("TON", "Exibe", 1000)]),
-        Rung([Contact("XIC", "Automatico"), Contact("XIO", "Dosando"),
+        Rung([Contact("XIC", "Automatico"), Contact("XIO", "Dosando_A"), Contact("XIO", "Dosando_B"),
               Parallel([[Contact("XIC", "Exibe.DN")], [Contact("XIO", "Recipiente_Posicionado")]])],
              [Coil("OTE", "Esteira")], "Troca o recipiente"),
-        Rung([Contact("XIO", "Recipiente_Posicionado")], [Coil("OTU", "Pesado")], "O recipiente saiu"),
+        Rung([Contact("XIO", "Recipiente_Posicionado")], [Coil("OTU", "Pesado")], "O recipiente saiu da balanca"),
+        Rung([Contact("XIC", "Rejeitar"), Contact("XIC", "Recipiente_Rejeito")],
+             [Coil("OTL", "Empurrando"), Coil("OTU", "Rejeitar")], "REJEITO: empurra quando ele chega a I0.4"),
+        Rung([Contact("XIC", "Empurrando")], [Coil("OTE", "Rejeitador"), TimerBox("TON", "Tempo_Empurra", 400)]),
+        Rung([Contact("XIC", "Tempo_Empurra.DN")], [Coil("OTU", "Empurrando")]),
     ]
     return p
 
