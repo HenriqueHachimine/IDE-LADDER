@@ -1,0 +1,806 @@
+{
+  "format": "ladderide-project",
+  "format_version": 2,
+  "name": "Lava-rapido de portico",
+  "description": "Receita como mascara de bits. No pagamento a tabela converte o programa (N0) na receita (N1): Simples = 7 (passadas 1, 2, 3), Completo = 23 (1, 2, 3, 5), Premium = 63 (todas). N2 guarda o bit da passada atual (1, 2, 4 ... 32): MEQ Receita Passo Passo diz se ela faz parte da receita; se nao fizer, MUL por 2 pula para a proxima. Cada passada leva o portico de uma ponta a outra (o sentido alterna) com as acoes daquele bit; ao chegar, Passo dobra. Passo acima de 32: volta o portico a origem e o verde libera a saida.",
+  "version": "0.1.0",
+  "created": "2026-11-14T06:55:58",
+  "modified": "2026-11-14T06:55:58",
+  "io": {
+    "n_inputs": 8,
+    "n_outputs": 8,
+    "n_markers": 64,
+    "n_words": 32,
+    "safe_outputs": 0,
+    "scan_period_ms": 10
+  },
+  "target": {
+    "device": "esp32-relay-x8",
+    "transport": "serial",
+    "port": "",
+    "baudrate": 115200,
+    "host": "",
+    "tcp_port": 5020,
+    "expansions": []
+  },
+  "symbols": [
+    {
+      "name": "Pagamento_OK",
+      "address": "I0.0",
+      "comment": "Pulso: pagamento aprovado (programa em N0)"
+    },
+    {
+      "name": "Carro_Posicionado",
+      "address": "I0.1",
+      "comment": "Carro parado na posição de lavagem"
+    },
+    {
+      "name": "Portico_Origem",
+      "address": "I0.2",
+      "comment": "Pórtico na origem (frente do carro)"
+    },
+    {
+      "name": "Portico_Fim",
+      "address": "I0.3",
+      "comment": "Pórtico no fim (traseira do carro)"
+    },
+    {
+      "name": "Emergencia",
+      "address": "I0.4",
+      "comment": "Emergência com trava (NF)"
+    },
+    {
+      "name": "Portico_Avanca",
+      "address": "Q0.0",
+      "comment": "Pórtico: avança (para a traseira)"
+    },
+    {
+      "name": "Portico_Recua",
+      "address": "Q0.1",
+      "comment": "Pórtico: recua (para a frente)"
+    },
+    {
+      "name": "Agua",
+      "address": "Q0.2",
+      "comment": "Bomba de água de alta pressão"
+    },
+    {
+      "name": "Shampoo",
+      "address": "Q0.3",
+      "comment": "Dosador de shampoo"
+    },
+    {
+      "name": "Escovas",
+      "address": "Q0.4",
+      "comment": "Motor das escovas"
+    },
+    {
+      "name": "Cera",
+      "address": "Q0.5",
+      "comment": "Aplicação de cera"
+    },
+    {
+      "name": "Secador",
+      "address": "Q0.6",
+      "comment": "Ventiladores de secagem"
+    },
+    {
+      "name": "Semaforo_Verde",
+      "address": "Q0.7",
+      "comment": "Semáforo verde (vermelho desligado)"
+    },
+    {
+      "name": "Programa",
+      "address": "N0",
+      "comment": "1 Simples, 2 Completo, 3 Premium (do terminal)"
+    },
+    {
+      "name": "Receita",
+      "address": "N1",
+      "comment": "mascara das passadas"
+    },
+    {
+      "name": "Passo",
+      "address": "N2",
+      "comment": "bit da passada atual"
+    },
+    {
+      "name": "Rodando",
+      "address": "M0.0",
+      "comment": "lavagem em andamento"
+    },
+    {
+      "name": "Indo",
+      "address": "M0.1",
+      "comment": "passada avancando"
+    },
+    {
+      "name": "Voltando",
+      "address": "M0.2",
+      "comment": "passada recuando"
+    },
+    {
+      "name": "Terminou",
+      "address": "M0.3",
+      "comment": "todas as passadas feitas"
+    },
+    {
+      "name": "Ativo",
+      "address": "M0.4",
+      "comment": "a passada atual faz parte da receita"
+    },
+    {
+      "name": "Movendo",
+      "address": "M0.5",
+      "comment": "portico numa passada"
+    }
+  ],
+  "variables": [],
+  "rungs": [
+    {
+      "comment": "INICIO: pago, carro na posicao, portico na origem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pagamento_OK"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Carro_Posicionado"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Portico_Origem"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rodando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Terminou"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Rodando"
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Passo"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "RECEITAS como mascara de bits",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rodando"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Programa",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "7",
+            "Receita"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rodando"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Programa",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "23",
+            "Receita"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rodando"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Programa",
+            "3"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "63",
+            "Receita"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "A passada atual esta na receita?",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "MEQ",
+          "operands": [
+            "Receita",
+            "Passo",
+            "Passo"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Ativo"
+        }
+      ]
+    },
+    {
+      "comment": "Nao esta: pula",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rodando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Ativo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Indo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Voltando"
+        },
+        {
+          "type": "compare",
+          "kind": "LEQ",
+          "operands": [
+            "Passo",
+            "32"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Passo",
+            "2",
+            "Passo"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "PASSADAS: o sentido depende de onde esta",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rodando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ativo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Indo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Voltando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Portico_Origem"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Indo"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rodando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Ativo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Indo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Voltando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Portico_Fim"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Voltando"
+        }
+      ]
+    },
+    {
+      "comment": "Chegou: proxima passada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Indo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Portico_Fim"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Indo"
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Passo",
+            "2",
+            "Passo"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Voltando"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Portico_Origem"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Voltando"
+        },
+        {
+          "type": "math",
+          "kind": "MUL",
+          "operands": [
+            "Passo",
+            "2",
+            "Passo"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Todas as passadas da receita",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rodando"
+        },
+        {
+          "type": "compare",
+          "kind": "GRT",
+          "operands": [
+            "Passo",
+            "32"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Rodando"
+        },
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Terminou"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Indo"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Voltando"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Movendo"
+        }
+      ]
+    },
+    {
+      "comment": "MOVIMENTO",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Indo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Portico_Avanca"
+        }
+      ]
+    },
+    {
+      "comment": "Recua na passada ou para voltar a origem",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Voltando"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Terminou"
+              },
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Portico_Origem"
+              }
+            ]
+          ]
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Emergencia"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Portico_Recua"
+        }
+      ]
+    },
+    {
+      "comment": "ACOES de cada passada",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Movendo"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "EQU",
+                "operands": [
+                  "Passo",
+                  "1"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "EQU",
+                "operands": [
+                  "Passo",
+                  "2"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "EQU",
+                "operands": [
+                  "Passo",
+                  "4"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Agua"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Movendo"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Passo",
+            "2"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Shampoo"
+        },
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Escovas"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Movendo"
+        },
+        {
+          "type": "compare",
+          "kind": "EQU",
+          "operands": [
+            "Passo",
+            "8"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Cera"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Movendo"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Passo",
+            "16"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Secador"
+        }
+      ]
+    },
+    {
+      "comment": "SEMAFORO: entra ou sai com o portico na origem",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Portico_Origem"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Rodando"
+        },
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIO",
+                "operand": "Carro_Posicionado"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Terminou"
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Semaforo_Verde"
+        }
+      ]
+    },
+    {
+      "comment": "Carro saiu",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Terminou"
+        },
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Carro_Posicionado"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Terminou"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "date": "2026-11-14T06:55:58",
+      "action": "gerado por scripts/make_examples.py",
+      "rungs": 20
+    }
+  ],
+  "build": {
+    "compiler_version": "1.0.0",
+    "format": "LDRB 2.1",
+    "build_id": "0x714c4dc0",
+    "size": 772,
+    "instructions": 173,
+    "date": "2026-11-14T06:55:58"
+  },
+  "environment": "lava_rapido"
+}

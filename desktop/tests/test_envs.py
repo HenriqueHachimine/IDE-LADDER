@@ -782,3 +782,19 @@ def test_canal_lock_equalizes_levels_and_serves_both_sides():
         Rung([Contact("XIC", "I0.6")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.6")])])
     _, alarms, _ = closed_loop(no_permissive, [(0, "AUTO", True), (1000, "BARCO_M", True)], 20000)
     assert any("desnível" in a for a in alarms) and any("bateu" in a for a in alarms)
+
+
+def test_car_wash_runs_the_paid_recipe():
+    p = Project.load(EXAMPLES / "lava_rapido.ladproj")
+    env, alarms, _ = closed_loop(p, total_ms=300000)
+    assert alarms == set() and env.washed >= 5 and env.wrong == 0
+    fixed = Project.load(EXAMPLES / "lava_rapido.ladproj")                  # ignora a receita: sempre Premium
+    for r in fixed.rungs:
+        for o in r.outputs:
+            if getattr(o, "operands", None) in (["7", "Receita"], ["23", "Receita"]):
+                o.operands = ["63", "Receita"]
+    env, alarms, _ = closed_loop(fixed, total_ms=150000)
+    assert any("programa pago" in a for a in alarms)
+    dry = Project(environment="lava_rapido", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.4")])])
+    _, alarms, _ = closed_loop(dry, total_ms=20000)
+    assert any("sem água" in a for a in alarms)

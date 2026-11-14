@@ -1532,6 +1532,59 @@ def canal_lock() -> Project:
     return p
 
 
+def car_wash() -> Project:
+    p = env_project("lava_rapido", "Lava-rapido de portico", (
+        "Receita como mascara de bits. No pagamento a tabela converte o programa (N0) na receita (N1): Simples = 7 "
+        "(passadas 1, 2, 3), Completo = 23 (1, 2, 3, 5), Premium = 63 (todas). N2 guarda o bit da passada atual "
+        "(1, 2, 4 ... 32): MEQ Receita Passo Passo diz se ela faz parte da receita; se nao fizer, MUL por 2 pula para "
+        "a proxima. Cada passada leva o portico de uma ponta a outra (o sentido alterna) com as acoes daquele bit; ao "
+        "chegar, Passo dobra. Passo acima de 32: volta o portico a origem e o verde libera a saida."))
+    p.symbols += [Symbol("Programa", "N0", "1 Simples, 2 Completo, 3 Premium (do terminal)"),
+                  Symbol("Receita", "N1", "mascara das passadas"), Symbol("Passo", "N2", "bit da passada atual"),
+                  Symbol("Rodando", "M0.0", "lavagem em andamento"), Symbol("Indo", "M0.1", "passada avancando"),
+                  Symbol("Voltando", "M0.2", "passada recuando"), Symbol("Terminou", "M0.3", "todas as passadas feitas"),
+                  Symbol("Ativo", "M0.4", "a passada atual faz parte da receita"),
+                  Symbol("Movendo", "M0.5", "portico numa passada")]
+    p.rungs = [
+        Rung([Contact("XIC", "Pagamento_OK"), Contact("XIC", "Carro_Posicionado"), Contact("XIC", "Portico_Origem"),
+              Contact("XIO", "Rodando"), Contact("XIO", "Terminou")],
+             [Coil("OTL", "Rodando"), MathBox("MOV", ["1", "Passo"])], "INICIO: pago, carro na posicao, portico na origem"),
+        Rung([Contact("XIC", "Rodando"), CompareBox("EQU", ["Programa", "1"])], [MathBox("MOV", ["7", "Receita"])],
+             "RECEITAS como mascara de bits"),
+        Rung([Contact("XIC", "Rodando"), CompareBox("EQU", ["Programa", "2"])], [MathBox("MOV", ["23", "Receita"])]),
+        Rung([Contact("XIC", "Rodando"), CompareBox("EQU", ["Programa", "3"])], [MathBox("MOV", ["63", "Receita"])]),
+        Rung([CompareBox("MEQ", ["Receita", "Passo", "Passo"])], [Coil("OTE", "Ativo")],
+             "A passada atual esta na receita?"),
+        Rung([Contact("XIC", "Rodando"), Contact("XIO", "Ativo"), Contact("XIO", "Indo"), Contact("XIO", "Voltando"),
+              CompareBox("LEQ", ["Passo", "32"])], [MathBox("MUL", ["Passo", "2", "Passo"])], "Nao esta: pula"),
+        Rung([Contact("XIC", "Rodando"), Contact("XIC", "Ativo"), Contact("XIO", "Indo"), Contact("XIO", "Voltando"),
+              Contact("XIC", "Portico_Origem")], [Coil("OTL", "Indo")], "PASSADAS: o sentido depende de onde esta"),
+        Rung([Contact("XIC", "Rodando"), Contact("XIC", "Ativo"), Contact("XIO", "Indo"), Contact("XIO", "Voltando"),
+              Contact("XIC", "Portico_Fim")], [Coil("OTL", "Voltando")]),
+        Rung([Contact("XIC", "Indo"), Contact("XIC", "Portico_Fim")],
+             [Coil("OTU", "Indo"), MathBox("MUL", ["Passo", "2", "Passo"])], "Chegou: proxima passada"),
+        Rung([Contact("XIC", "Voltando"), Contact("XIC", "Portico_Origem")],
+             [Coil("OTU", "Voltando"), MathBox("MUL", ["Passo", "2", "Passo"])]),
+        Rung([Contact("XIC", "Rodando"), CompareBox("GRT", ["Passo", "32"])],
+             [Coil("OTU", "Rodando"), Coil("OTL", "Terminou")], "Todas as passadas da receita"),
+        Rung([Parallel([[Contact("XIC", "Indo")], [Contact("XIC", "Voltando")]])], [Coil("OTE", "Movendo")]),
+        Rung([Contact("XIC", "Indo"), Contact("XIC", "Emergencia")], [Coil("OTE", "Portico_Avanca")], "MOVIMENTO"),
+        Rung([Parallel([[Contact("XIC", "Voltando")], [Contact("XIC", "Terminou"), Contact("XIO", "Portico_Origem")]]),
+              Contact("XIC", "Emergencia")], [Coil("OTE", "Portico_Recua")], "Recua na passada ou para voltar a origem"),
+        Rung([Contact("XIC", "Movendo"), Parallel([[CompareBox("EQU", ["Passo", "1"])], [CompareBox("EQU", ["Passo", "2"])],
+                                                   [CompareBox("EQU", ["Passo", "4"])]])],
+             [Coil("OTE", "Agua")], "ACOES de cada passada"),
+        Rung([Contact("XIC", "Movendo"), CompareBox("EQU", ["Passo", "2"])], [Coil("OTE", "Shampoo"), Coil("OTE", "Escovas")]),
+        Rung([Contact("XIC", "Movendo"), CompareBox("EQU", ["Passo", "8"])], [Coil("OTE", "Cera")]),
+        Rung([Contact("XIC", "Movendo"), CompareBox("GEQ", ["Passo", "16"])], [Coil("OTE", "Secador")]),
+        Rung([Contact("XIC", "Portico_Origem"), Contact("XIO", "Rodando"),
+              Parallel([[Contact("XIO", "Carro_Posicionado")], [Contact("XIC", "Terminou")]])],
+             [Coil("OTE", "Semaforo_Verde")], "SEMAFORO: entra ou sai com o portico na origem"),
+        Rung([Contact("XIC", "Terminou"), Contact("XIO", "Carro_Posicionado")], [Coil("OTU", "Terminou")], "Carro saiu"),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1644,7 +1697,8 @@ def main() -> int:
                "ambientes/forno_rampa.ladproj": furnace,
                "ambientes/demanda_energia.ladproj": demand_control,
                "ambientes/gerador_qta.ladproj": transfer_switch,
-               "ambientes/eclusa.ladproj": canal_lock}
+               "ambientes/eclusa.ladproj": canal_lock,
+               "ambientes/lava_rapido.ladproj": car_wash}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue
