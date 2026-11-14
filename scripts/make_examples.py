@@ -767,45 +767,78 @@ def sorter() -> Project:
 
 
 def gas_detection() -> Project:
-    p = env_project("detector_gas", "Deteccao de gas 2 de 3", (
-        "Votacao 2 de 3 em logica combinacional (tres ramos em paralelo) e gestao de alarme: o disparo fica "
-        "travado (OTL), a sirene toca ate RECONHECER, a lampada pisca enquanto nao reconhecido e fica fixa depois, "
-        "e a valvula so reabre com REARMAR quando menos de 2 detectores estiverem em alarme. Um detector sozinho so "
-        "liga o exaustor (pre-alarme); discordancia por 10 s acende FALHA DE DETECTOR."))
-    p.symbols += [Symbol("Voto_2de3", "M0.0", "dois ou mais detectores em alarme"),
-                  Symbol("Disparo", "M0.1", "disparo travado ate o rearme"),
-                  Symbol("Reconhecido", "M0.2", "alarme reconhecido pelo operador"),
-                  Symbol("Discordancia", "T0", "10 s com detectores discordando"),
-                  Symbol("Sem_Fluxo", "T1", "4 s com o exaustor ligado e sem fluxo")]
-    d = ["Detector_1", "Detector_2", "Detector_3"]
-    any_det = Parallel([[Contact("XIC", n)] for n in d])
-    p.rungs = [
-        Rung([Parallel([[Contact("XIC", d[0]), Contact("XIC", d[1])], [Contact("XIC", d[0]), Contact("XIC", d[2])],
-                        [Contact("XIC", d[1]), Contact("XIC", d[2])]])], [Coil("OTE", "Voto_2de3")],
-             "Votacao 2 de 3"),
-        Rung([Contact("XIC", "Voto_2de3"), Contact("XIO", "Disparo")], [Coil("OTL", "Disparo"), Coil("OTU", "Reconhecido")],
-             "Novo disparo: trava e pede reconhecimento"),
+    p = env_project("detector_gas", "Deteccao de gas analogica 2 de 3", (
+        "Votacao analogica degradavel e gestao de alarme. Mediana dos tres detectores (N3) por comparacoes; um "
+        "detector com leitura abaixo da faixa (laco aberto) ou a mais de 10% do LIE da mediana por 10 s e marcado "
+        "com defeito e sai da votacao. Votos contam os detectores bons acima de 10% (pre-alarme) e 20% (alarme); "
+        "sao precisos 2 votos, ou 1 se houver detector com defeito (2 de 3 vira 1 de 2). Pre-alarme liga a "
+        "exaustao alta por pelo menos 60 s (TOF). Disparo trava, fecha a valvula, toca a sirene ate RECONHECER; "
+        "REARMAR so depois de 30 s de purga em alta com o gas abaixo de 10%."))
+    names = ["Mediana", "Dif_D1", "Dif_D2", "Dif_D3", "Votos_Alarme", "Votos_Pre", "Votos_Necessarios", "Num_Falhas"]
+    p.symbols += [Symbol("Leitura_D1", "N0", "D1 em %LIE x10"), Symbol("Leitura_D2", "N1", "D2 em %LIE x10"),
+                  Symbol("Leitura_D3", "N2", "D3 em %LIE x10")]
+    p.symbols += [Symbol(n, f"N{3 + k}", "") for k, n in enumerate(names)]
+    p.symbols += [Symbol("Falha_D1", "M0.0", "D1 com defeito"), Symbol("Falha_D2", "M0.1", "D2 com defeito"),
+                  Symbol("Falha_D3", "M0.2", "D3 com defeito"), Symbol("Disparo", "M0.3", "disparo travado"),
+                  Symbol("Reconhecido", "M0.4", "alarme reconhecido"), Symbol("Pre_Alarme", "M0.5", "pre-alarme"),
+                  Symbol("Discord_D1", "T0", ""), Symbol("Discord_D2", "T1", ""), Symbol("Discord_D3", "T2", ""),
+                  Symbol("Exaustao_Pre", "T3", "TOF 60 s de exaustao alta"), Symbol("Purga", "T4", "30 s de purga"),
+                  Symbol("Sem_Fluxo", "T5", "4 s sem fluxo no duto")]
+    det = [("Leitura_D1", "Dif_D1", "Falha_D1", "Discord_D1"), ("Leitura_D2", "Dif_D2", "Falha_D2", "Discord_D2"),
+           ("Leitura_D3", "Dif_D3", "Falha_D3", "Discord_D3")]
+    r = [Rung([], [MathBox("MOV", ["Leitura_D3", "Mediana"])], "MEDIANA: comeca com D3 e troca se D1 ou D2 estiver no meio")]
+    for me, a, b in (("Leitura_D1", "Leitura_D2", "Leitura_D3"), ("Leitura_D2", "Leitura_D1", "Leitura_D3")):
+        r.append(Rung([Parallel([[CompareBox("GEQ", [me, a]), CompareBox("LEQ", [me, b])],
+                                 [CompareBox("LEQ", [me, a]), CompareBox("GEQ", [me, b])]])],
+                      [MathBox("MOV", [me, "Mediana"])]))
+    for k, (val, dif, fault, timer) in enumerate(det):
+        r += [
+            Rung([], [MathBox("SUB", [val, "Mediana", dif])], "DEFEITOS: distancia ate a mediana" if k == 0 else ""),
+            Rung([Parallel([[CompareBox("LES", [dif, "-100"])], [CompareBox("GRT", [dif, "100"])]])],
+                 [TimerBox("TON", timer, 10000)], "Longe da mediana por 10 s: descalibrado" if k == 0 else ""),
+            Rung([Parallel([[Contact("XIC", f"{timer}.DN")], [CompareBox("LES", [val, "-50"])]])],
+                 [Coil("OTL", fault)], "Abaixo da faixa: laco 4-20 mA aberto" if k == 0 else ""),
+            Rung([Contact("XIC", "Rearmar"), CompareBox("GEQ", [val, "-50"]), CompareBox("LIM", ["-100", dif, "100"])],
+                 [Coil("OTU", fault)], "Rearmar limpa o defeito que sumiu" if k == 0 else ""),
+        ]
+    r += [Rung([], [MathBox("MOV", ["0", "Votos_Alarme"]), MathBox("MOV", ["0", "Votos_Pre"]),
+                    MathBox("MOV", ["0", "Num_Falhas"])], "VOTACAO: so detectores bons votam")]
+    for k, (val, dif, fault, timer) in enumerate(det):
+        r += [Rung([Contact("XIO", fault), CompareBox("GEQ", [val, "200"])],
+                   [MathBox("ADD", ["Votos_Alarme", "1", "Votos_Alarme"])]),
+              Rung([Contact("XIO", fault), CompareBox("GEQ", [val, "100"])],
+                   [MathBox("ADD", ["Votos_Pre", "1", "Votos_Pre"])]),
+              Rung([Contact("XIC", fault)], [MathBox("ADD", ["Num_Falhas", "1", "Num_Falhas"])])]
+    r += [
+        Rung([], [MathBox("MOV", ["2", "Votos_Necessarios"])], "2 de 3; com defeito, 1 de 2"),
+        Rung([CompareBox("GEQ", ["Num_Falhas", "1"])], [MathBox("MOV", ["1", "Votos_Necessarios"])]),
+        Rung([CompareBox("GEQ", ["Votos_Pre", "Votos_Necessarios"])], [Coil("OTE", "Pre_Alarme")], "PRE-ALARME"),
+        Rung([Contact("XIC", "Pre_Alarme")], [TimerBox("TOF", "Exaustao_Pre", 60000)]),
+        Rung([CompareBox("GEQ", ["Votos_Alarme", "Votos_Necessarios"]), Contact("XIO", "Disparo")],
+             [Coil("OTL", "Disparo"), Coil("OTU", "Reconhecido")], "DISPARO: trava e pede reconhecimento"),
         Rung([Contact("XIC", "Reconhecer"), Contact("XIC", "Disparo")], [Coil("OTL", "Reconhecido")]),
-        Rung([Contact("XIC", "Rearmar"), Contact("XIO", "Voto_2de3"), Contact("XIC", "Disparo")],
-             [Coil("OTU", "Disparo"), Coil("OTU", "Reconhecido")], "Rearme so com o gas abaixo do alarme"),
-        Rung([Contact("XIO", "Disparo")], [Coil("OTE", "Valvula_Gas")], "Valvula energizada para abrir (falha segura)"),
-        Rung([Parallel([[Contact("XIC", "Disparo")], [Parallel([[Contact("XIC", n)] for n in d])]])],
-             [Coil("OTE", "Exaustor")], "Exaustor no pre-alarme (um detector) e no disparo"),
+        Rung([Contact("XIC", "Disparo"), Contact("XIC", "Exaustor_Alta"), CompareBox("LES", ["Votos_Pre", "1"])],
+             [TimerBox("TON", "Purga", 30000)], "Purga: exaustao alta com o gas abaixo de 10%"),
+        Rung([Contact("XIC", "Rearmar"), Contact("XIC", "Purga.DN"),
+              CompareBox("LES", ["Votos_Alarme", "Votos_Necessarios"])],
+             [Coil("OTU", "Disparo"), Coil("OTU", "Reconhecido")], "Rearme so depois da purga"),
+        Rung([Contact("XIO", "Disparo")], [Coil("OTE", "Valvula_Gas")], "SAIDAS: valvula energizada para abrir"),
+        Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Exaustor")], "Ventilacao continua em baixa"),
+        Rung([Parallel([[Contact("XIC", "Exaustao_Pre.DN")], [Contact("XIC", "Disparo")]])],
+             [Coil("OTE", "Exaustor_Alta")]),
         Rung([Contact("XIC", "Disparo"), Contact("XIO", "Reconhecido")], [Coil("OTE", "Sirene")]),
         Rung([Parallel([[Contact("XIC", "Disparo"), Contact("XIO", "Reconhecido"), Contact("XIC", "S0.3")],
                         [Contact("XIC", "Disparo"), Contact("XIC", "Reconhecido")], [Contact("XIC", "Teste_Lampadas")]])],
              [Coil("OTE", "Luz_Alarme")], "Pisca sem reconhecer, fixa depois"),
-        Rung([Parallel([[any_det, Contact("XIO", "Voto_2de3")],
-                        [Contact("XIC", "Voto_2de3"),
-                         Parallel([[Contact("XIO", n)] for n in d])]])],
-             [TimerBox("TON", "Discordancia", 10000)], "Um detector diferente dos outros por 10 s"),
-        Rung([Parallel([[Contact("XIC", "Discordancia.DN")], [Contact("XIC", "Teste_Lampadas")]])],
-             [Coil("OTE", "Luz_Falha_Detector")]),
-        Rung([Contact("XIC", "Exaustor"), Contact("XIO", "Fluxo_Exaustao")], [TimerBox("TON", "Sem_Fluxo", 4000)],
-             "Exaustor sem fluxo no duto"),
+        Rung([Parallel([[Contact("XIC", "Pre_Alarme")], [Contact("XIC", "Teste_Lampadas")]])],
+             [Coil("OTE", "Luz_Pre_Alarme")]),
+        Rung([Parallel([[Contact("XIC", "Falha_D1")], [Contact("XIC", "Falha_D2")], [Contact("XIC", "Falha_D3")],
+                        [Contact("XIC", "Teste_Lampadas")]])], [Coil("OTE", "Luz_Falha_Detector")]),
+        Rung([Contact("XIO", "Fluxo_Exaustao")], [TimerBox("TON", "Sem_Fluxo", 4000)], "Exaustor sem fluxo no duto"),
         Rung([Parallel([[Contact("XIC", "Sem_Fluxo.DN")], [Contact("XIC", "Teste_Lampadas")]])],
              [Coil("OTE", "Luz_Falha_Exaustor")]),
     ]
+    p.rungs = r
     return p
 
 

@@ -1,11 +1,11 @@
 {
   "format": "ladderide-project",
   "format_version": 2,
-  "name": "Deteccao de gas 2 de 3",
-  "description": "Votacao 2 de 3 em logica combinacional (tres ramos em paralelo) e gestao de alarme: o disparo fica travado (OTL), a sirene toca ate RECONHECER, a lampada pisca enquanto nao reconhecido e fica fixa depois, e a valvula so reabre com REARMAR quando menos de 2 detectores estiverem em alarme. Um detector sozinho so liga o exaustor (pre-alarme); discordancia por 10 s acende FALHA DE DETECTOR.",
+  "name": "Deteccao de gas analogica 2 de 3",
+  "description": "Votacao analogica degradavel e gestao de alarme. Mediana dos tres detectores (N3) por comparacoes; um detector com leitura abaixo da faixa (laco aberto) ou a mais de 10% do LIE da mediana por 10 s e marcado com defeito e sai da votacao. Votos contam os detectores bons acima de 10% (pre-alarme) e 20% (alarme); sao precisos 2 votos, ou 1 se houver detector com defeito (2 de 3 vira 1 de 2). Pre-alarme liga a exaustao alta por pelo menos 60 s (TOF). Disparo trava, fecha a valvula, toca a sirene ate RECONHECER; REARMAR so depois de 30 s de purga em alta com o gas abaixo de 10%.",
   "version": "0.1.0",
-  "created": "2026-11-13T20:46:19",
-  "modified": "2026-11-13T20:46:19",
+  "created": "2026-11-13T23:26:56",
+  "modified": "2026-11-13T23:26:56",
   "io": {
     "n_inputs": 8,
     "n_outputs": 8,
@@ -25,44 +25,29 @@
   },
   "symbols": [
     {
-      "name": "Detector_1",
-      "address": "I0.0",
-      "comment": "Detector de gás 1 (perto dos queimadores)"
-    },
-    {
-      "name": "Detector_2",
-      "address": "I0.1",
-      "comment": "Detector de gás 2 (centro)"
-    },
-    {
-      "name": "Detector_3",
-      "address": "I0.2",
-      "comment": "Detector de gás 3 (perto da porta)"
-    },
-    {
       "name": "Reconhecer",
-      "address": "I0.3",
+      "address": "I0.0",
       "comment": "Botão RECONHECER (silencia a sirene)"
     },
     {
       "name": "Rearmar",
-      "address": "I0.4",
-      "comment": "Botão REARMAR (reabre a válvula)"
+      "address": "I0.1",
+      "comment": "Botão REARMAR (libera a válvula depois da purga)"
     },
     {
       "name": "Fluxo_Exaustao",
-      "address": "I0.5",
+      "address": "I0.2",
       "comment": "Pressostato do duto: exaustor com fluxo"
     },
     {
       "name": "Teste_Lampadas",
-      "address": "I0.6",
+      "address": "I0.3",
       "comment": "Botão TESTE de lâmpadas"
     },
     {
       "name": "Exaustor",
       "address": "Q0.0",
-      "comment": "Exaustor da casa de caldeiras"
+      "comment": "Exaustor (velocidade baixa, ventilação contínua)"
     },
     {
       "name": "Valvula_Gas",
@@ -82,7 +67,7 @@
     {
       "name": "Luz_Falha_Detector",
       "address": "Q0.4",
-      "comment": "Lâmpada FALHA DE DETECTOR (discordância)"
+      "comment": "Lâmpada FALHA DE DETECTOR"
     },
     {
       "name": "Luz_Falha_Exaustor",
@@ -90,35 +75,314 @@
       "comment": "Lâmpada FALHA DO EXAUSTOR (sem fluxo)"
     },
     {
-      "name": "Voto_2de3",
+      "name": "Exaustor_Alta",
+      "address": "Q0.6",
+      "comment": "Exaustor em velocidade alta (pré-alarme e purga)"
+    },
+    {
+      "name": "Luz_Pre_Alarme",
+      "address": "Q0.7",
+      "comment": "Lâmpada PRÉ-ALARME"
+    },
+    {
+      "name": "Leitura_D1",
+      "address": "N0",
+      "comment": "D1 em %LIE x10"
+    },
+    {
+      "name": "Leitura_D2",
+      "address": "N1",
+      "comment": "D2 em %LIE x10"
+    },
+    {
+      "name": "Leitura_D3",
+      "address": "N2",
+      "comment": "D3 em %LIE x10"
+    },
+    {
+      "name": "Mediana",
+      "address": "N3",
+      "comment": ""
+    },
+    {
+      "name": "Dif_D1",
+      "address": "N4",
+      "comment": ""
+    },
+    {
+      "name": "Dif_D2",
+      "address": "N5",
+      "comment": ""
+    },
+    {
+      "name": "Dif_D3",
+      "address": "N6",
+      "comment": ""
+    },
+    {
+      "name": "Votos_Alarme",
+      "address": "N7",
+      "comment": ""
+    },
+    {
+      "name": "Votos_Pre",
+      "address": "N8",
+      "comment": ""
+    },
+    {
+      "name": "Votos_Necessarios",
+      "address": "N9",
+      "comment": ""
+    },
+    {
+      "name": "Num_Falhas",
+      "address": "N10",
+      "comment": ""
+    },
+    {
+      "name": "Falha_D1",
       "address": "M0.0",
-      "comment": "dois ou mais detectores em alarme"
+      "comment": "D1 com defeito"
+    },
+    {
+      "name": "Falha_D2",
+      "address": "M0.1",
+      "comment": "D2 com defeito"
+    },
+    {
+      "name": "Falha_D3",
+      "address": "M0.2",
+      "comment": "D3 com defeito"
     },
     {
       "name": "Disparo",
-      "address": "M0.1",
-      "comment": "disparo travado ate o rearme"
+      "address": "M0.3",
+      "comment": "disparo travado"
     },
     {
       "name": "Reconhecido",
-      "address": "M0.2",
-      "comment": "alarme reconhecido pelo operador"
+      "address": "M0.4",
+      "comment": "alarme reconhecido"
     },
     {
-      "name": "Discordancia",
+      "name": "Pre_Alarme",
+      "address": "M0.5",
+      "comment": "pre-alarme"
+    },
+    {
+      "name": "Discord_D1",
       "address": "T0",
-      "comment": "10 s com detectores discordando"
+      "comment": ""
+    },
+    {
+      "name": "Discord_D2",
+      "address": "T1",
+      "comment": ""
+    },
+    {
+      "name": "Discord_D3",
+      "address": "T2",
+      "comment": ""
+    },
+    {
+      "name": "Exaustao_Pre",
+      "address": "T3",
+      "comment": "TOF 60 s de exaustao alta"
+    },
+    {
+      "name": "Purga",
+      "address": "T4",
+      "comment": "30 s de purga"
     },
     {
       "name": "Sem_Fluxo",
-      "address": "T1",
-      "comment": "4 s com o exaustor ligado e sem fluxo"
+      "address": "T5",
+      "comment": "4 s sem fluxo no duto"
     }
   ],
   "variables": [],
   "rungs": [
     {
-      "comment": "Votacao 2 de 3",
+      "comment": "MEDIANA: comeca com D3 e troca se D1 ou D2 estiver no meio",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Leitura_D3",
+            "Mediana"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Leitura_D1",
+                  "Leitura_D2"
+                ]
+              },
+              {
+                "type": "compare",
+                "kind": "LEQ",
+                "operands": [
+                  "Leitura_D1",
+                  "Leitura_D3"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LEQ",
+                "operands": [
+                  "Leitura_D1",
+                  "Leitura_D2"
+                ]
+              },
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Leitura_D1",
+                  "Leitura_D3"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Leitura_D1",
+            "Mediana"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Leitura_D2",
+                  "Leitura_D1"
+                ]
+              },
+              {
+                "type": "compare",
+                "kind": "LEQ",
+                "operands": [
+                  "Leitura_D2",
+                  "Leitura_D3"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LEQ",
+                "operands": [
+                  "Leitura_D2",
+                  "Leitura_D1"
+                ]
+              },
+              {
+                "type": "compare",
+                "kind": "GEQ",
+                "operands": [
+                  "Leitura_D2",
+                  "Leitura_D3"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "Leitura_D2",
+            "Mediana"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "DEFEITOS: distancia ate a mediana",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Leitura_D1",
+            "Mediana",
+            "Dif_D1"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "Longe da mediana por 10 s: descalibrado",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Dif_D1",
+                  "-100"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Dif_D1",
+                  "100"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Discord_D1",
+          "preset": 10000
+        }
+      ]
+    },
+    {
+      "comment": "Abaixo da faixa: laco 4-20 mA aberto",
       "condition": [
         {
           "type": "parallel",
@@ -127,36 +391,17 @@
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Detector_1"
-              },
-              {
-                "type": "contact",
-                "kind": "XIC",
-                "operand": "Detector_2"
+                "operand": "Discord_D1.DN"
               }
             ],
             [
               {
-                "type": "contact",
-                "kind": "XIC",
-                "operand": "Detector_1"
-              },
-              {
-                "type": "contact",
-                "kind": "XIC",
-                "operand": "Detector_3"
-              }
-            ],
-            [
-              {
-                "type": "contact",
-                "kind": "XIC",
-                "operand": "Detector_2"
-              },
-              {
-                "type": "contact",
-                "kind": "XIC",
-                "operand": "Detector_3"
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Leitura_D1",
+                  "-50"
+                ]
               }
             ]
           ]
@@ -165,18 +410,639 @@
       "outputs": [
         {
           "type": "coil",
-          "kind": "OTE",
-          "operand": "Voto_2de3"
+          "kind": "OTL",
+          "operand": "Falha_D1"
         }
       ]
     },
     {
-      "comment": "Novo disparo: trava e pede reconhecimento",
+      "comment": "Rearmar limpa o defeito que sumiu",
       "condition": [
         {
           "type": "contact",
           "kind": "XIC",
-          "operand": "Voto_2de3"
+          "operand": "Rearmar"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D1",
+            "-50"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "-100",
+            "Dif_D1",
+            "100"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Falha_D1"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Leitura_D2",
+            "Mediana",
+            "Dif_D2"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Dif_D2",
+                  "-100"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Dif_D2",
+                  "100"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Discord_D2",
+          "preset": 10000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Discord_D2.DN"
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Leitura_D2",
+                  "-50"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Falha_D2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rearmar"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D2",
+            "-50"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "-100",
+            "Dif_D2",
+            "100"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Falha_D2"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "SUB",
+          "operands": [
+            "Leitura_D3",
+            "Mediana",
+            "Dif_D3"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Dif_D3",
+                  "-100"
+                ]
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "GRT",
+                "operands": [
+                  "Dif_D3",
+                  "100"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Discord_D3",
+          "preset": 10000
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "parallel",
+          "branches": [
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Discord_D3.DN"
+              }
+            ],
+            [
+              {
+                "type": "compare",
+                "kind": "LES",
+                "operands": [
+                  "Leitura_D3",
+                  "-50"
+                ]
+              }
+            ]
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTL",
+          "operand": "Falha_D3"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Rearmar"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D3",
+            "-50"
+          ]
+        },
+        {
+          "type": "compare",
+          "kind": "LIM",
+          "operands": [
+            "-100",
+            "Dif_D3",
+            "100"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTU",
+          "operand": "Falha_D3"
+        }
+      ]
+    },
+    {
+      "comment": "VOTACAO: so detectores bons votam",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Votos_Alarme"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Votos_Pre"
+          ]
+        },
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "0",
+            "Num_Falhas"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha_D1"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D1",
+            "200"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Votos_Alarme",
+            "1",
+            "Votos_Alarme"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha_D1"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D1",
+            "100"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Votos_Pre",
+            "1",
+            "Votos_Pre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Falha_D1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Num_Falhas",
+            "1",
+            "Num_Falhas"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha_D2"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D2",
+            "200"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Votos_Alarme",
+            "1",
+            "Votos_Alarme"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha_D2"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D2",
+            "100"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Votos_Pre",
+            "1",
+            "Votos_Pre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Falha_D2"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Num_Falhas",
+            "1",
+            "Num_Falhas"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha_D3"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D3",
+            "200"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Votos_Alarme",
+            "1",
+            "Votos_Alarme"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIO",
+          "operand": "Falha_D3"
+        },
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Leitura_D3",
+            "100"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Votos_Pre",
+            "1",
+            "Votos_Pre"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Falha_D3"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "ADD",
+          "operands": [
+            "Num_Falhas",
+            "1",
+            "Num_Falhas"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "2 de 3; com defeito, 1 de 2",
+      "condition": [],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "2",
+            "Votos_Necessarios"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Num_Falhas",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "math",
+          "kind": "MOV",
+          "operands": [
+            "1",
+            "Votos_Necessarios"
+          ]
+        }
+      ]
+    },
+    {
+      "comment": "PRE-ALARME",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Votos_Pre",
+            "Votos_Necessarios"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Pre_Alarme"
+        }
+      ]
+    },
+    {
+      "comment": "",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Pre_Alarme"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TOF",
+          "operand": "Exaustao_Pre",
+          "preset": 60000
+        }
+      ]
+    },
+    {
+      "comment": "DISPARO: trava e pede reconhecimento",
+      "condition": [
+        {
+          "type": "compare",
+          "kind": "GEQ",
+          "operands": [
+            "Votos_Alarme",
+            "Votos_Necessarios"
+          ]
         },
         {
           "type": "contact",
@@ -220,7 +1086,38 @@
       ]
     },
     {
-      "comment": "Rearme so com o gas abaixo do alarme",
+      "comment": "Purga: exaustao alta com o gas abaixo de 10%",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Disparo"
+        },
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "Exaustor_Alta"
+        },
+        {
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Votos_Pre",
+            "1"
+          ]
+        }
+      ],
+      "outputs": [
+        {
+          "type": "timer",
+          "kind": "TON",
+          "operand": "Purga",
+          "preset": 30000
+        }
+      ]
+    },
+    {
+      "comment": "Rearme so depois da purga",
       "condition": [
         {
           "type": "contact",
@@ -229,13 +1126,16 @@
         },
         {
           "type": "contact",
-          "kind": "XIO",
-          "operand": "Voto_2de3"
+          "kind": "XIC",
+          "operand": "Purga.DN"
         },
         {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Disparo"
+          "type": "compare",
+          "kind": "LES",
+          "operands": [
+            "Votos_Alarme",
+            "Votos_Necessarios"
+          ]
         }
       ],
       "outputs": [
@@ -252,7 +1152,7 @@
       ]
     },
     {
-      "comment": "Valvula energizada para abrir (falha segura)",
+      "comment": "SAIDAS: valvula energizada para abrir",
       "condition": [
         {
           "type": "contact",
@@ -269,7 +1169,24 @@
       ]
     },
     {
-      "comment": "Exaustor no pre-alarme (um detector) e no disparo",
+      "comment": "Ventilacao continua em baixa",
+      "condition": [
+        {
+          "type": "contact",
+          "kind": "XIC",
+          "operand": "S0.1"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Exaustor"
+        }
+      ]
+    },
+    {
+      "comment": "",
       "condition": [
         {
           "type": "parallel",
@@ -278,35 +1195,14 @@
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Disparo"
+                "operand": "Exaustao_Pre.DN"
               }
             ],
             [
               {
-                "type": "parallel",
-                "branches": [
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIC",
-                      "operand": "Detector_1"
-                    }
-                  ],
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIC",
-                      "operand": "Detector_2"
-                    }
-                  ],
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIC",
-                      "operand": "Detector_3"
-                    }
-                  ]
-                ]
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Disparo"
               }
             ]
           ]
@@ -316,7 +1212,7 @@
         {
           "type": "coil",
           "kind": "OTE",
-          "operand": "Exaustor"
+          "operand": "Exaustor_Alta"
         }
       ]
     },
@@ -396,75 +1292,23 @@
       ]
     },
     {
-      "comment": "Um detector diferente dos outros por 10 s",
+      "comment": "",
       "condition": [
         {
           "type": "parallel",
           "branches": [
             [
               {
-                "type": "parallel",
-                "branches": [
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIC",
-                      "operand": "Detector_1"
-                    }
-                  ],
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIC",
-                      "operand": "Detector_2"
-                    }
-                  ],
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIC",
-                      "operand": "Detector_3"
-                    }
-                  ]
-                ]
-              },
-              {
                 "type": "contact",
-                "kind": "XIO",
-                "operand": "Voto_2de3"
+                "kind": "XIC",
+                "operand": "Pre_Alarme"
               }
             ],
             [
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Voto_2de3"
-              },
-              {
-                "type": "parallel",
-                "branches": [
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIO",
-                      "operand": "Detector_1"
-                    }
-                  ],
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIO",
-                      "operand": "Detector_2"
-                    }
-                  ],
-                  [
-                    {
-                      "type": "contact",
-                      "kind": "XIO",
-                      "operand": "Detector_3"
-                    }
-                  ]
-                ]
+                "operand": "Teste_Lampadas"
               }
             ]
           ]
@@ -472,10 +1316,9 @@
       ],
       "outputs": [
         {
-          "type": "timer",
-          "kind": "TON",
-          "operand": "Discordancia",
-          "preset": 10000
+          "type": "coil",
+          "kind": "OTE",
+          "operand": "Luz_Pre_Alarme"
         }
       ]
     },
@@ -489,7 +1332,21 @@
               {
                 "type": "contact",
                 "kind": "XIC",
-                "operand": "Discordancia.DN"
+                "operand": "Falha_D1"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Falha_D2"
+              }
+            ],
+            [
+              {
+                "type": "contact",
+                "kind": "XIC",
+                "operand": "Falha_D3"
               }
             ],
             [
@@ -513,11 +1370,6 @@
     {
       "comment": "Exaustor sem fluxo no duto",
       "condition": [
-        {
-          "type": "contact",
-          "kind": "XIC",
-          "operand": "Exaustor"
-        },
         {
           "type": "contact",
           "kind": "XIO",
@@ -567,18 +1419,18 @@
   ],
   "history": [
     {
-      "date": "2026-11-13T20:46:19",
+      "date": "2026-11-13T23:26:56",
       "action": "gerado por scripts/make_examples.py",
-      "rungs": 12
+      "rungs": 42
     }
   ],
   "build": {
     "compiler_version": "1.0.0",
     "format": "LDRB 2.1",
-    "build_id": "0x501b35bb",
-    "size": 520,
-    "instructions": 116,
-    "date": "2026-11-13T20:46:19"
+    "build_id": "0x50697a28",
+    "size": 1432,
+    "instructions": 329,
+    "date": "2026-11-13T23:26:56"
   },
   "environment": "detector_gas"
 }

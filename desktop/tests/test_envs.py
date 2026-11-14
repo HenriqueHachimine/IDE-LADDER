@@ -13,7 +13,9 @@ from conftest import ROOT  # noqa: E402
 from ladderide.compiler import compile_project  # noqa: E402
 from ladderide.envs import EnvironmentPlant, available, create, discover, get  # noqa: E402
 from ladderide.envs import registry  # noqa: E402
+from ladderide.envs.builtin.detector_gas import ALARM as ALARM_LEVEL  # noqa: E402
 from ladderide.model import Coil, Contact, Parallel, Project, Rung, TimerBox  # noqa: E402
+from ladderide.model.project import CompareBox  # noqa: E402
 from ladderide.sim.simulator import Simulator  # noqa: E402
 
 EXAMPLES = ROOT / "examples" / "ambientes"
@@ -525,17 +527,37 @@ def test_sorter_bins_follow_the_operator_choice_and_stop_when_full():
 
 def test_gas_detection_votes_two_of_three_and_needs_reset():
     p = Project.load(EXAMPLES / "detector_gas.ladproj")
-    acts = [(2000, "VAZAMENTO", True), (12000, "RECONHECER", True), (12100, "RECONHECER", False),
-            (14000, "VAZAMENTO", True), (30000, "REARMAR", True), (30100, "REARMAR", False)]
-    env, alarms, sim = closed_loop(p, acts, 36000)
-    assert alarms == set() and env.trips == 1 and env.peak < 40 and sim.vm.outputs >> 1 & 1   # reabriu no rearme
-    env, alarms, sim = closed_loop(p, [(1000, "FALHA_D3", True)], 15000)       # detector em falso alarme
-    assert alarms == set() and env.trips == 0 and sim.vm.outputs == 0b10011   # produz, exaure e sinaliza
-    env, alarms, _ = closed_loop(p, [(500, "FALHA_D2", True), (1000, "VAZAMENTO", True)], 12000)
-    assert alarms == set() and env.trips == 1                                  # D1 + D3 ainda votam
-    auto_reopen = Project(environment="detector_gas", rungs=[Rung([Contact("XIO", "I0.0")], [Coil("OTE", "Q0.1")])])
-    _, alarms, _ = closed_loop(auto_reopen, [(1000, "VAZAMENTO", True)], 40000)
+    acts = [(2000, "VAZAMENTO_GRANDE", True), (10000, "RECONHECER", True), (10100, "RECONHECER", False),
+            (12000, "VAZAMENTO_GRANDE", True), (20000, "REARMAR", True), (20100, "REARMAR", False),
+            (60000, "REARMAR", True), (60100, "REARMAR", False)]
+    env, alarms, sim = closed_loop(p, acts, 64000)                 # rearme cedo recusado; depois da purga reabre
+    assert alarms == set() and env.trips == 1 and env.peak < 30 and sim.vm.outputs >> 1 & 1
+    env, alarms, _ = closed_loop(p, [(2000, "VAZAMENTO", True)], 120000)   # pre-alarme segura o vazamento pequeno
+    assert alarms == set() and env.trips == 0 and env.peak < ALARM_LEVEL
+    env, alarms, sim = closed_loop(p, [(1000, "FALHA_D3", True)], 30000)    # descalibrado: sinaliza e produz
+    assert alarms == set() and env.trips == 0 and sim.vm.outputs >> 4 & 1 and sim.vm.outputs >> 1 & 1
+    env, alarms, _ = closed_loop(p, [(500, "FALHA_D2", True), (2000, "VAZAMENTO_GRANDE", True)], 15000)
+    assert alarms == set() and env.trips == 1                       # 1 de 2 com os detectores bons
+    auto_reopen = Project(environment="detector_gas", rungs=[Rung([CompareBox("LES", ["N0", "200"])],
+                                                                  [Coil("OTE", "Q0.1")])])
+    _, alarms, _ = closed_loop(auto_reopen, [(1000, "VAZAMENTO_GRANDE", True), (6000, "VAZAMENTO_GRANDE", True)],
+                               40000)
     assert any("REARMAR" in a for a in alarms)
+
+
+def test_gas_detection_strict_two_of_three_fails_with_a_dead_detector():
+    strict = Project.load(EXAMPLES / "detector_gas.ladproj")      # sem degradar para 1 de 2
+    strict.rungs = [r for r in strict.rungs if not any(getattr(o, "operands", ["", ""])[:2] == ["1", "Votos_Necessarios"]
+                                                       for o in r.outputs)]
+    _, alarms, _ = closed_loop(strict, [(500, "FALHA_D2", True), (2000, "VAZAMENTO_GRANDE", True)], 15000)
+    assert any("mais de 25%" in a for a in alarms)
+    no_purge = Project.load(EXAMPLES / "detector_gas.ladproj")
+    for r in no_purge.rungs:
+        r.condition = [n for n in r.condition if getattr(n, "operand", "") != "Purga.DN"]
+    acts = [(2000, "VAZAMENTO_GRANDE", True), (12000, "VAZAMENTO_GRANDE", True), (20000, "REARMAR", True),
+            (20100, "REARMAR", False)]
+    _, alarms, _ = closed_loop(no_purge, acts, 24000)
+    assert any("purga" in a for a in alarms)
 
 
 def test_scale_doses_within_tolerance_with_adaptive_preact():
