@@ -797,3 +797,18 @@ def test_car_wash_runs_the_paid_recipe():
     dry = Project(environment="lava_rapido", rungs=[Rung([Contact("XIC", "S0.1")], [Coil("OTE", "Q0.4")])])
     _, alarms, _ = closed_loop(dry, total_ms=20000)
     assert any("sem água" in a for a in alarms)
+
+
+def test_height_sorting_tracks_boxes_with_encoder_shift_register():
+    p = Project.load(EXAMPLES / "separacao_altura.ladproj")
+    env, alarms, _ = closed_loop(p, [(0, "LIGA", True)], 120000)
+    assert alarms == set() and env.wrong == 0 and env.ok[0] >= 30 and env.ok[1] >= 30
+    latch = Project.load(EXAMPLES / "separacao_altura.ladproj")             # memoriza "alta" sem rastrear
+    latch.rungs = latch.rungs[:1] + [Rung([Contact("XIC", "I0.2")], [Coil("OTL", "Q0.1")]),
+                                     Rung([Contact("XIC", "I0.5")], [Coil("OTU", "Q0.1")])]
+    env, alarms, _ = closed_loop(latch, [(0, "LIGA", True)], 60000)
+    assert env.wrong > 5 and any("Caixa baixa desviada" in a for a in alarms)
+    stopped = Project(environment="separacao_altura", rungs=[
+        Rung([Contact("XIC", "I0.0")], [Coil("OTE", "Q0.0"), Coil("OTE", "Q0.1"), Coil("OTE", "Q0.4")])])
+    _, alarms, _ = closed_loop(stopped, [(0, "LIGA", True)], 20000)
+    assert any("presa no desviador" in a for a in alarms)

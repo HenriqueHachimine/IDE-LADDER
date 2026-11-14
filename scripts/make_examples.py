@@ -1585,6 +1585,41 @@ def car_wash() -> Project:
     return p
 
 
+def height_sorting() -> Project:
+    p = env_project("separacao_altura", "Separacao por altura", (
+        "Rastreamento com registrador de deslocamento sincronizado pelo encoder. Cada pulso do encoder (20 px de "
+        "esteira) desloca o registro N5 um bit para a direita (DIV por 2); se o sensor alto ve caixa nesse pulso, o "
+        "bit 11 entra em 1 (ADD 2048). Onze pulsos depois a informacao chega ao bit 0, que fica no desviador: MEQ "
+        "Registro 1 1 liga o desviador enquanto a parte alta da caixa passa. Assim varias caixas cabem entre a "
+        "estacao de altura e o desviador sem misturar a informacao."))
+    p.symbols += [Symbol("Registro", "N5", "registrador de deslocamento (bit 11 na estacao, bit 0 no desviador)"),
+                  Symbol("Pulso", "M0.0", "borda de subida do encoder"),
+                  Symbol("Encoder_Anterior", "M0.1", "encoder na varredura anterior"),
+                  Symbol("Altas", "C0", "caixas altas entregues"), Symbol("Baixas", "C1", "caixas baixas entregues"),
+                  Symbol("Fim_Altas_Ant", "M0.2", "borda do fim das altas"),
+                  Symbol("Fim_Baixas_Ant", "M0.3", "borda do fim das baixas")]
+    p.rungs = [
+        Rung([Contact("XIC", "Liga")],
+             [Coil("OTE", "Esteira_Entrada"), Coil("OTE", "Esteira_Altas"), Coil("OTE", "Esteira_Baixas"),
+              Coil("OTE", "Emissor"), Coil("OTE", "Luz_Operando")], "Liga a linha"),
+        Rung([Contact("XIC", "Encoder"), Contact("XIO", "Encoder_Anterior")], [Coil("OTE", "Pulso")],
+             "Borda de subida do encoder: um pulso a cada 20 px"),
+        Rung([Contact("XIC", "Encoder")], [Coil("OTE", "Encoder_Anterior")]),
+        Rung([Contact("XIC", "Pulso")], [MathBox("DIV", ["Registro", "2", "Registro"])],
+             "DESLOCAMENTO: tudo anda um bit em direcao ao desviador"),
+        Rung([Contact("XIC", "Pulso"), Contact("XIC", "Sensor_Alto")], [MathBox("ADD", ["Registro", "2048", "Registro"])],
+             "Caixa alta na estacao: bit 11 em 1"),
+        Rung([CompareBox("MEQ", ["Registro", "1", "1"])], [Coil("OTE", "Desviador")],
+             "Bit 0 chegou ao desviador: caixa alta passando"),
+        Rung([Contact("XIC", "Fim_Altas"), Contact("XIO", "Fim_Altas_Ant")], [CounterBox("CTU", "Altas", 9999)],
+             "CONTAGEM das entregas"),
+        Rung([Contact("XIC", "Fim_Altas")], [Coil("OTE", "Fim_Altas_Ant")]),
+        Rung([Contact("XIC", "Fim_Baixas"), Contact("XIO", "Fim_Baixas_Ant")], [CounterBox("CTU", "Baixas", 9999)]),
+        Rung([Contact("XIC", "Fim_Baixas")], [Coil("OTE", "Fim_Baixas_Ant")]),
+    ]
+    return p
+
+
 def numeric_blocks() -> Project:
     p = Project(name="Blocos numericos", version="1.0.0", description=(
         "Contagem de pecas em lotes de 6 usando os blocos de comparacao (EQU, NEQ, LES, GRT, LEQ, GEQ, LIM, "
@@ -1698,7 +1733,8 @@ def main() -> int:
                "ambientes/demanda_energia.ladproj": demand_control,
                "ambientes/gerador_qta.ladproj": transfer_switch,
                "ambientes/eclusa.ladproj": canal_lock,
-               "ambientes/lava_rapido.ladproj": car_wash}
+               "ambientes/lava_rapido.ladproj": car_wash,
+               "ambientes/separacao_altura.ladproj": height_sorting}
     for rel, make in targets.items():
         if not rel.startswith(prefix):
             continue

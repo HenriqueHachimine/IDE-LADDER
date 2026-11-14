@@ -1,0 +1,69 @@
+; Separacao por altura - gerado por LadderIDE compilador 1.0.0
+.inputs 8
+.outputs 8
+.markers 64
+.words 32
+.safe_outputs 0x0000
+.build_id 0x779504fd
+.counter C0 UP 9999
+.counter C1 UP 9999
+SOR ; rede 0
+XIC I0.0
+BST
+OTE Q0.0
+NXB
+OTE Q0.2
+NXB
+OTE Q0.3
+NXB
+OTE Q0.4
+NXB
+OTE Q0.5
+BND
+EOR
+SOR ; rede 1
+XIC I0.3
+XIO M0.1
+OTE M0.0
+EOR
+SOR ; rede 2
+XIC I0.3
+OTE M0.1
+EOR
+SOR ; rede 3
+XIC M0.0
+DIV N5
+ARG 2
+ARG N5
+EOR
+SOR ; rede 4
+XIC M0.0
+XIC I0.2
+ADD N5
+ARG 2048
+ARG N5
+EOR
+SOR ; rede 5
+MEQ N5
+ARG 1
+ARG 1
+OTE Q0.1
+EOR
+SOR ; rede 6
+XIC I0.4
+XIO M0.2
+CTU C0
+EOR
+SOR ; rede 7
+XIC I0.4
+OTE M0.2
+EOR
+SOR ; rede 8
+XIC I0.5
+XIO M0.3
+CTU C1
+EOR
+SOR ; rede 9
+XIC I0.5
+OTE M0.3
+EOR
